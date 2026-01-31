@@ -1,0 +1,593 @@
+-- SQL corrigé pour MariaDB
+-- Suppression de toutes les tables si elles existent
+DROP TABLE IF EXISTS `Stat_User`;
+
+DROP TABLE IF EXISTS `Stream_Series`;
+
+DROP TABLE IF EXISTS `Stream_Movie`;
+
+DROP TABLE IF EXISTS `Selection_Page`;
+
+DROP TABLE IF EXISTS `Selection_Media`;
+
+DROP TABLE IF EXISTS `Keyword`;
+
+DROP TABLE IF EXISTS `Media_Category`;
+
+DROP TABLE IF EXISTS `Media_Poster`;
+
+DROP TABLE IF EXISTS `Media_Staff`;
+
+DROP TABLE IF EXISTS `News_Video_Running`;
+
+DROP TABLE IF EXISTS `News`;
+
+DROP TABLE IF EXISTS `License_Selection`;
+
+DROP TABLE IF EXISTS `License_Media`;
+
+DROP TABLE IF EXISTS `License`;
+
+DROP TABLE IF EXISTS `Selection`;
+
+DROP TABLE IF EXISTS `Similar_Title`;
+
+DROP TABLE IF EXISTS `Episode`;
+
+DROP TABLE IF EXISTS `Season`;
+
+DROP TABLE IF EXISTS `Translation_Title`;
+
+DROP TABLE IF EXISTS `User_Media_List`;
+
+DROP TABLE IF EXISTS `Media`;
+
+DROP TABLE IF EXISTS `Poster`;
+
+DROP TABLE IF EXISTS `Category`;
+
+DROP TABLE IF EXISTS `Staff`;
+
+DROP TABLE IF EXISTS `User`;
+
+DROP TABLE IF EXISTS `Profil_Photo`;
+
+-- PROFIL PHOTO
+CREATE TABLE
+    `Profil_Photo` (
+        id INT NOT NULL AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        isDefaultPhoto BOOLEAN NOT NULL DEFAULT 1,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT PROFIL_PHOTO_PK PRIMARY KEY (id),
+        CONSTRAINT PROFIL_PHOTO_NAME_UNIQ UNIQUE (name)
+    );
+
+-- USER
+CREATE TABLE
+    `User` (
+        id INT NOT NULL AUTO_INCREMENT,
+        pseudo VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        firstName VARCHAR(255) NOT NULL,
+        lastName VARCHAR(255) NOT NULL,
+        dateBorn DATE NOT NULL,
+        role ENUM (
+            'ADMIN',
+            'USER',
+            'FAMILY',
+            'NOT_ACTIVATE',
+            'SUSPENDED'
+        ) NOT NULL,
+        profilPhoto INT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT USER_PK PRIMARY KEY (id),
+        CONSTRAINT USER_EMAIL_UNIQ UNIQUE (email),
+        CONSTRAINT USER_PSEUDO_UNIQ UNIQUE (pseudo),
+        INDEX IDX_USER_PROFILPHOTO (profilPhoto)
+    ) AUTO_INCREMENT = 70000;
+
+-- STAFF
+CREATE TABLE
+    `Staff` (
+        id INT NOT NULL AUTO_INCREMENT,
+        fullName VARCHAR(255) NOT NULL,
+        job ENUM ('ACTOR', 'DIRECTOR') NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT STAFF_PK PRIMARY KEY (id)
+    );
+
+-- CATEGORY
+CREATE TABLE
+    `Category` (
+        id INT NOT NULL AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        nameSelection VARCHAR(255) NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT CATEGORY_PK PRIMARY KEY (id)
+    ) AUTO_INCREMENT = 600;
+
+-- POSTER
+CREATE TABLE
+    `Poster` (
+        id INT NOT NULL AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT POSTER_PK PRIMARY KEY (id)
+    ) AUTO_INCREMENT = 100000;
+
+-- MEDIA
+CREATE TABLE
+    `Media` (
+        id INT NOT NULL AUTO_INCREMENT,
+        title VARCHAR(255) NOT NULL,
+        jellyfinId VARCHAR(255) NOT NULL,
+        description VARCHAR(1024) NULL,
+        date DATE NOT NULL,
+        time BIGINT UNSIGNED NULL,
+        quality VARCHAR(50) NULL,
+        startShow VARCHAR(10) NOT NULL,
+        endShow VARCHAR(10) NOT NULL,
+        mediaType ENUM ('MOVIE', 'SERIES') NOT NULL,
+        path VARCHAR(555) NULL,
+        srcLogo INT NULL,
+        srcBackground INT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT MEDIA_PK PRIMARY KEY (id),
+        CONSTRAINT MEDIA_TITLE_UNIQ UNIQUE (title),
+        CONSTRAINT MEDIA_JELLYFIN_UNIQ UNIQUE (jellyfinId),
+        INDEX IDX_MEDIA_SRCLOGO (srcLogo),
+        INDEX IDX_MEDIA_SRCBACKGROUND (srcBackground)
+    ) AUTO_INCREMENT = 2000000;
+
+-- TRANSLATION TITLE
+CREATE TABLE
+    `Translation_Title` (
+        id INT NOT NULL AUTO_INCREMENT,
+        title VARCHAR(255) NOT NULL,
+        iso_639_1 ENUM (
+            'VO',
+            'US',
+            'FR',
+            'ES',
+            'DE',
+            'IT',
+            'JP',
+            'RU',
+            'KR',
+            'CN',
+            'PT'
+        ) NOT NULL,
+        mediaId INT NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT TRANSLATION_TITLE_PK PRIMARY KEY (id),
+        INDEX IDX_TRANSLATION_MEDIA (mediaId)
+    );
+
+-- SEASON
+CREATE TABLE
+    `Season` (
+        id INT NOT NULL AUTO_INCREMENT,
+        seriesId INT NOT NULL,
+        jellyfinId VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        seasonNumber INT NOT NULL,
+        srcPoster INT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT SEASON_PK PRIMARY KEY (id),
+        CONSTRAINT SEASON_JELLYFIN_UNIQ UNIQUE (jellyfinId),
+        INDEX IDX_SEASON_SERIES (seriesId),
+        INDEX IDX_SEASON_SRCPOSTER (srcPoster)
+    ) AUTO_INCREMENT = 5000000;
+
+-- EPISODE
+CREATE TABLE
+    `Episode` (
+        id INT NOT NULL AUTO_INCREMENT,
+        seriesId INT NOT NULL,
+        seasonId INT NOT NULL,
+        jellyfinId VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        episodeNumber INT NOT NULL,
+        description VARCHAR(1024),
+        date DATE NOT NULL,
+        time BIGINT UNSIGNED DEFAULT 0,
+        quality VARCHAR(50) NOT NULL,
+        path VARCHAR(555) NULL,
+        srcPoster INT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT EPISODE_PK PRIMARY KEY (id),
+        CONSTRAINT EPISODE_JELLYFIN_UNIQ UNIQUE (jellyfinId),
+        INDEX IDX_EPISODE_SERIES (seriesId),
+        INDEX IDX_EPISODE_SEASON (seasonId),
+        INDEX IDX_EPISODE_SRCPOSTER (srcPoster)
+    ) AUTO_INCREMENT = 8000000;
+
+-- SIMILAR TITLE
+CREATE TABLE
+    `Similar_Title` (
+        id INT NOT NULL AUTO_INCREMENT,
+        sourceId INT NOT NULL,
+        targetId INT NOT NULL,
+        rate DECIMAL(6, 3) NOT NULL DEFAULT 0.00,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT SIMILAR_TITLE_PK PRIMARY KEY (id),
+        CONSTRAINT UQ_SIMILAR_TITLE UNIQUE (sourceId, targetId),
+        INDEX IDX_SIMILAR_SOURCE (sourceId),
+        INDEX IDX_SIMILAR_TARGET (targetId)
+    );
+
+-- SELECTION
+CREATE TABLE
+    `Selection` (
+        id INT NOT NULL AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        selectionType ENUM ('NORMAL_POSTER', 'SPECIAL_POSTER') NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT SELECTION_PK PRIMARY KEY (id)
+    ) AUTO_INCREMENT = 30000;
+
+-- LICENSE
+CREATE TABLE
+    `License` (
+        id INT NOT NULL AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        orderIndex INT NOT NULL DEFAULT 1000,
+        position BOOLEAN NOT NULL DEFAULT 0,
+        srcIcon INT NULL,
+        srcLogo INT NULL,
+        srcBackground INT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT LICENSE_PK PRIMARY KEY (id),
+        INDEX IDX_LICENSE_SRCICON (srcIcon),
+        INDEX IDX_LICENSE_SRCLOGO (srcLogo),
+        INDEX IDX_LICENSE_SRCBACKGROUND (srcBackground)
+    ) AUTO_INCREMENT = 10000;
+
+-- NEWS
+CREATE TABLE
+    `News` (
+        id INT NOT NULL AUTO_INCREMENT,
+        srcBackground INT NULL,
+        orientation INT NOT NULL,
+        mediaId INT NOT NULL,
+        orderIndex INT NOT NULL DEFAULT 100,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT NEWS_PK PRIMARY KEY (id),
+        CONSTRAINT NEWS_ORIENTATION_CHK CHECK (orientation IN (1, 2, 3)),
+        INDEX IDX_NEWS_MEDIA (mediaId),
+        INDEX IDX_NEWS_SRCBACKGROUND (srcBackground)
+    ) AUTO_INCREMENT = 90000;
+
+-- NEWS VIDEO RUNNING
+CREATE TABLE
+    `News_Video_Running` (
+        id INT NOT NULL AUTO_INCREMENT,
+        srcBackground INT NULL,
+        startShow VARCHAR(10) NOT NULL,
+        endShow VARCHAR(10) NOT NULL,
+        jellyfinId VARCHAR(255) NOT NULL,
+        mediaId INT NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT NEWS_VIDEO_RUNNING_PK PRIMARY KEY (id),
+        INDEX IDX_NVR_MEDIA (mediaId),
+        INDEX IDX_NVR_JELLYFIN (jellyfinId),
+        INDEX IDX_NVR_SRCBACKGROUND (srcBackground)
+    ) AUTO_INCREMENT = 50000;
+
+-- USER MEDIA LIST
+CREATE TABLE
+    `User_Media_List` (
+        id INT NOT NULL AUTO_INCREMENT,
+        userId INT NOT NULL,
+        mediaId INT NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT USER_MEDIA_LIST_PK PRIMARY KEY (id),
+        CONSTRAINT UQ_USER_MEDIA UNIQUE (userId, mediaId),
+        INDEX IDX_UML_USER (userId),
+        INDEX IDX_UML_MEDIA (mediaId)
+    );
+
+-- MEDIA STAFF
+CREATE TABLE
+    `Media_Staff` (
+        id INT NOT NULL AUTO_INCREMENT,
+        mediaId INT NOT NULL,
+        staffId INT NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT MEDIA_STAFF_PK PRIMARY KEY (id),
+        CONSTRAINT UQ_MEDIA_STAFF UNIQUE (mediaId, staffId),
+        INDEX IDX_MS_MEDIA (mediaId),
+        INDEX IDX_MS_STAFF (staffId)
+    );
+
+-- MEDIA POSTER
+CREATE TABLE
+    `Media_Poster` (
+        id INT NOT NULL AUTO_INCREMENT,
+        mediaId INT NOT NULL,
+        posterId INT NOT NULL,
+        type ENUM ('NORMAL', 'SPECIAL', 'LICENSE', 'HORIZONTAL') NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT MEDIA_POSTER_PK PRIMARY KEY (id),
+        INDEX IDX_MP_MEDIA (mediaId),
+        INDEX IDX_MP_POSTER (posterId)
+    );
+
+-- MEDIA CATEGORY
+CREATE TABLE
+    `Media_Category` (
+        id INT NOT NULL AUTO_INCREMENT,
+        mediaId INT NOT NULL,
+        categoryId INT NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT MEDIA_CATEGORY_PK PRIMARY KEY (id),
+        CONSTRAINT UQ_MEDIA_CATEGORY UNIQUE (mediaId, categoryId),
+        INDEX IDX_MC_MEDIA (mediaId),
+        INDEX IDX_MC_CATEGORY (categoryId)
+    );
+
+-- KEYWORD
+CREATE TABLE
+    `Keyword` (
+        id INT NOT NULL AUTO_INCREMENT,
+        name VARCHAR(100) NOT NULL,
+        mediaId INT NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT KEYWORD_PK PRIMARY KEY (id),
+        INDEX IDX_KW_MEDIA (mediaId)
+    );
+
+-- SELECTION MEDIA
+CREATE TABLE
+    `Selection_Media` (
+        id INT NOT NULL AUTO_INCREMENT,
+        selectionId INT NOT NULL,
+        mediaId INT NOT NULL,
+        orderIndex INT NOT NULL DEFAULT 1000,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT SELECTION_MEDIA_PK PRIMARY KEY (id),
+        CONSTRAINT UQ_SELECTION_MEDIA UNIQUE (selectionId, mediaId),
+        INDEX IDX_SM_SELECTION (selectionId),
+        INDEX IDX_SM_MEDIA (mediaId)
+    );
+
+-- SELECTION PAGE
+CREATE TABLE
+    `Selection_Page` (
+        id INT NOT NULL AUTO_INCREMENT,
+        selectionId INT NOT NULL,
+        orderIndex INT NOT NULL DEFAULT 100,
+        pageType ENUM ('HOME', 'MOVIES', 'SERIES') NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT SELECTION_PAGE_PK PRIMARY KEY (id),
+        INDEX IDX_SP_SELECTION (selectionId)
+    );
+
+-- LICENSE MEDIA
+CREATE TABLE
+    `License_Media` (
+        id INT NOT NULL AUTO_INCREMENT,
+        licenseId INT NOT NULL,
+        mediaId INT NOT NULL,
+        orderIndex INT NOT NULL DEFAULT 1000,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT LICENSE_MEDIA_PK PRIMARY KEY (id),
+        CONSTRAINT UQ_LICENSE_MEDIA UNIQUE (licenseId, mediaId),
+        INDEX IDX_LM_LICENSE (licenseId),
+        INDEX IDX_LM_MEDIA (mediaId)
+    );
+
+-- LICENSE SELECTION
+CREATE TABLE
+    `License_Selection` (
+        id INT NOT NULL AUTO_INCREMENT,
+        licenseId INT NOT NULL,
+        selectionId INT NOT NULL,
+        orderIndex INT NOT NULL DEFAULT 100,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT LICENSE_SELECTION_PK PRIMARY KEY (id),
+        CONSTRAINT UQ_LICENSE_SELECTION UNIQUE (licenseId, selectionId),
+        INDEX IDX_LS_LICENSE (licenseId),
+        INDEX IDX_LS_SELECTION (selectionId)
+    );
+
+-- STREAM MOVIE
+CREATE TABLE
+    `Stream_Movie` (
+        id INT NOT NULL AUTO_INCREMENT,
+        mediaId INT NOT NULL,
+        path VARCHAR(1024) NOT NULL,
+        type ENUM ('VIDEO', 'SUBTITLE'),
+        language VARCHAR(255) NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT STREAM_MOVIE_PK PRIMARY KEY (id),
+        INDEX IDX_STM_MOVIE (mediaId)
+    );
+
+-- STREAM SERIES
+CREATE TABLE
+    `Stream_Series` (
+        id INT NOT NULL AUTO_INCREMENT,
+        episodeId INT NOT NULL,
+        path VARCHAR(1024) NOT NULL,
+        type ENUM ('VIDEO', 'SUBTITLE'),
+        language VARCHAR(255) NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT STREAM_SERIES_PK PRIMARY KEY (id),
+        INDEX IDX_STS_SERIES (episodeId)
+    );
+
+-- STAT USER
+CREATE TABLE
+    `Stat_User` (
+        id INT NOT NULL AUTO_INCREMENT,
+        movieId INT NULL,
+        episodeId INT NULL,
+        userId INT NOT NULL,
+        state ENUM ('IN PROGRESS', 'FINISHED'),
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT STAT_USER_PK PRIMARY KEY (id),
+        INDEX IDX_SU_MOVIE (movieId),
+        INDEX IDX_SU_EPISODE (episodeId),
+        INDEX IDX_SU_USER (userId)
+    );
+
+-- ====================================================================
+-- AJOUT DES CLÉS ÉTRANGÈRES
+-- ====================================================================
+-- USER
+ALTER TABLE `User` ADD CONSTRAINT FK_User_ProfilPhoto FOREIGN KEY (profilPhoto) REFERENCES `Profil_Photo` (id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- USER MEDIA LIST
+ALTER TABLE `User_Media_List` ADD CONSTRAINT FK_UML_User FOREIGN KEY (userId) REFERENCES `User` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_UML_Media FOREIGN KEY (mediaId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- MEDIA
+ALTER TABLE `Media` ADD CONSTRAINT FK_Media_SrcLogo FOREIGN KEY (srcLogo) REFERENCES `Poster` (id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT FK_Media_SrcBackground FOREIGN KEY (srcBackground) REFERENCES `Poster` (id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- TRANSLATION TITLE
+ALTER TABLE `Translation_Title` ADD CONSTRAINT FK_Translation_Media FOREIGN KEY (mediaId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- SEASON
+ALTER TABLE `Season` ADD CONSTRAINT FK_Season_Media FOREIGN KEY (seriesId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_Season_Poster FOREIGN KEY (srcPoster) REFERENCES `Poster` (id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- EPISODE
+ALTER TABLE `Episode` ADD CONSTRAINT FK_Episode_Series FOREIGN KEY (seriesId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_Episode_Season FOREIGN KEY (seasonId) REFERENCES `Season` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_Episode_Poster FOREIGN KEY (srcPoster) REFERENCES `Poster` (id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- SIMILAR TITLE
+ALTER TABLE `Similar_Title` ADD CONSTRAINT FK_Similar_Source FOREIGN KEY (sourceId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_Similar_Target FOREIGN KEY (targetId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- LICENSE
+ALTER TABLE `License` ADD CONSTRAINT FK_License_SrcIcon FOREIGN KEY (srcIcon) REFERENCES `Poster` (id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT FK_License_SrcLogo FOREIGN KEY (srcLogo) REFERENCES `Poster` (id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT FK_License_SrcBackground FOREIGN KEY (srcBackground) REFERENCES `Poster` (id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- LICENSE MEDIA
+ALTER TABLE `License_Media` ADD CONSTRAINT FK_LicenseMedia_License FOREIGN KEY (licenseId) REFERENCES `License` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_LicenseMedia_Media FOREIGN KEY (mediaId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- LICENSE SELECTION
+ALTER TABLE `License_Selection` ADD CONSTRAINT FK_LicenseSelection_License FOREIGN KEY (licenseId) REFERENCES `License` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_LicenseSelection_Selection FOREIGN KEY (selectionId) REFERENCES `Selection` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- NEWS
+ALTER TABLE `News` ADD CONSTRAINT FK_News_SrcBackground FOREIGN KEY (srcBackground) REFERENCES `Poster` (id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT FK_News_Media FOREIGN KEY (mediaId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- NEWS VIDEO RUNNING
+ALTER TABLE `News_Video_Running` ADD CONSTRAINT FK_NVR_SrcBackground FOREIGN KEY (srcBackground) REFERENCES `Poster` (id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT FK_NVR_Media FOREIGN KEY (mediaId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- MEDIA STAFF
+ALTER TABLE `Media_Staff` ADD CONSTRAINT FK_MS_Media FOREIGN KEY (mediaId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_MS_Staff FOREIGN KEY (staffId) REFERENCES `Staff` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- MEDIA POSTER
+ALTER TABLE `Media_Poster` ADD CONSTRAINT FK_MP_Media FOREIGN KEY (mediaId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_MP_Poster FOREIGN KEY (posterId) REFERENCES `Poster` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- MEDIA CATEGORY
+ALTER TABLE `Media_Category` ADD CONSTRAINT FK_MC_Media FOREIGN KEY (mediaId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_MC_Category FOREIGN KEY (categoryId) REFERENCES `Category` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- KEYWORD
+ALTER TABLE `Keyword` ADD CONSTRAINT FK_KW_MEDIA FOREIGN KEY (mediaId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- SELECTION MEDIA
+ALTER TABLE `Selection_Media` ADD CONSTRAINT FK_SM_Selection FOREIGN KEY (selectionId) REFERENCES `Selection` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_SM_Media FOREIGN KEY (mediaId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- SELECTION PAGE
+ALTER TABLE `Selection_Page` ADD CONSTRAINT FK_SP_Selection FOREIGN KEY (selectionId) REFERENCES `Selection` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- STREAM MOVIE
+ALTER TABLE `Stream_Movie` ADD CONSTRAINT FK_Stream_Movie FOREIGN KEY (mediaId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- STREAM SERIES
+ALTER TABLE `Stream_Series` ADD CONSTRAINT FK_Stream_Series FOREIGN KEY (episodeId) REFERENCES `Episode` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- STAT USER
+ALTER TABLE `Stat_User` ADD CONSTRAINT FK_SU_MOVIE FOREIGN KEY (movieId) REFERENCES `Media` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_SU_EPISODE FOREIGN KEY (episodeId) REFERENCES `Episode` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_SU_USER FOREIGN KEY (userId) REFERENCES `User` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- ====================================================================
+-- INSERTIONS DE DONNÉES INITIALES
+-- ====================================================================
+-- Insertion utilisateur administrateur
+INSERT INTO
+    `User` (
+        pseudo,
+        password,
+        firstName,
+        lastName,
+        dateBorn,
+        email,
+        role,
+        profilPhoto
+    )
+VALUES
+    (
+        'ChocoPops',
+        '$2b$15$DSA3rCumcCRoMJpdCeFVbuD8EplU1MRodZJsBfI/Os57L1Afi1EoO',
+        'Nahil',
+        'Rahmani',
+        '2004-07-29',
+        'rahmaninahil@gmail.com',
+        'ADMIN',
+        NULL
+    );
+
+-- Insertion des catégories
+INSERT INTO
+    `Category` (name, nameSelection)
+VALUES
+    ('Comédie', 'Comédie'),
+    ('Animation', 'Animation'),
+    ('Drame', 'Contenue Dramatique'),
+    ('Fantastique', 'Fantastique'),
+    ('Science Fiction', 'Science Fiction'),
+    ('Action', 'Action'),
+    ('Horreur', 'Horreur'),
+    ('Guerre', 'Thriller'),
+    ('Crime', 'Crime'),
+    ('Aventure', 'Aventure'),
+    ('Romance', 'Romance'),
+    ('Histoire', 'Histoire'),
+    ('Mystère', 'Mystère'),
+    ('Musique', 'Musique'),
+    ('Western', 'Western'),
+    ('Familiale', 'Familiale');
