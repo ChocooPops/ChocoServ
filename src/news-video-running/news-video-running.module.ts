@@ -11,6 +11,7 @@ import { UserModule } from 'src/user/user.module';
 @Module({
   imports: [UserModule, MediaModule, MovieModule, SeriesModule],
   providers: [NewsVideoRunningService, FormatPathService, VerifTimerShowService],
-  controllers: [NewsVideoRunningController]
+  controllers: [NewsVideoRunningController],
+  exports: [NewsVideoRunningService]
 })
 export class NewsVideoRunningModule { }

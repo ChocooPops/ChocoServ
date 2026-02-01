@@ -29,8 +29,9 @@ export class StreamController {
     }
 
     @Public()
-    @Get('stream-episode/:episodeId')
+    @Get('stream-episode/:seasonId/:episodeId')
     async streamEpisode(
+        @Param('seasonId', ParseIntPipe) seasonId: number,
         @Param('episodeId', ParseIntPipe) episodeId: number,
         @Req() req: Request,
         @Res() res: Response,
@@ -38,7 +39,24 @@ export class StreamController {
     ) {
         try {
             if (await this.authService.verifToken(token)) {
-                await this.streamService.streamEpisode(episodeId, req, res);
+                await this.streamService.streamEpisode(seasonId, episodeId, req, res);
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    @Public()
+    @Get('stream-news/:newsId')
+    async streamNewVideoRunning(
+        @Param('newsId', ParseIntPipe) newsId: number,
+        @Req() req: Request,
+        @Res() res: Response,
+        @Query('token') token: string,
+    ) {
+        try {
+            if (await this.authService.verifToken(token)) {
+                await this.streamService.streamNewVideoRunning(newsId, req, res);
             }
         } catch (error) {
             throw error;

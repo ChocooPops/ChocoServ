@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { StreamService } from './service/stream.service';
 import { StreamController } from './controller/stream.controller';
-import { JellyfinModule } from 'src/jellyfin/jellyfin.module';
 import { MovieModule } from 'src/movie/movie.module';
 import { AuthModule } from 'src/auth/auth.module';
+import { SeriesModule } from 'src/series/series.module';
+import { NewsVideoRunningModule } from 'src/news-video-running/news-video-running.module';
 
 @Module({
-  imports: [JellyfinModule, MovieModule, AuthModule],
+  imports: [MovieModule, AuthModule, SeriesModule, NewsVideoRunningModule],
   providers: [StreamService],
   controllers: [StreamController]
 })

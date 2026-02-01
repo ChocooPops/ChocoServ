@@ -194,6 +194,44 @@ export class SeriesService extends MediaService {
         }
     }
 
+    public async getSimpleEpisodeById(episodeId: number): Promise<Episode | null> {
+        const conn = await this.pool.getConnection();
+        try {
+            const query: string = `SELECT * FROM Episode WHERE id = ?`;
+            const result: Episode[] = await conn.query(query, [episodeId]);
+            return result[0] ?? null;
+        } catch (error) {
+            throw error;
+        } finally {
+            await conn.release();
+        }
+    }
+
+    public async getFirstEpisodeBySeason(seasonId: number): Promise<Episode | null> {
+        const conn = await this.pool.getConnection();
+        try {
+            const query: string = `
+                SELECT 
+                    e.*
+                FROM Media m
+                JOIN Season s 
+                    ON s.seriesId = m.id
+                JOIN Episode e 
+                    ON e.seasonId = s.id
+                WHERE m.id = ?
+                AND s.seasonNumber = 1
+                AND e.episodeNumber = 1
+                AND m.mediaType = 'SERIES'
+                LIMIT 1;`
+            const result: Episode[] = await conn.query(query, [seasonId]);
+            return result[0] ?? null;
+        } catch (error) {
+            throw error;
+        } finally {
+            await conn.release();
+        }
+    }
+
     public async getSeriesById(id: number): Promise<Series> {
         const conn = await this.pool.getConnection();
         try {
