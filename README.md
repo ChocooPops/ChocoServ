@@ -49,8 +49,9 @@ L'API suit l'architecture modulaire de NestJS avec une structure en couches :
 └──────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────┐
-│          Database Layer (Prisma)              │
-│         MariaDB / MySQL Database              │
+│      Database Layer (MariaDB Pool)            │
+│   Direct SQL queries via mariadb driver      │
+│         MariaDB Database                      │
 └──────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────┐
@@ -69,6 +70,48 @@ Chaque module suit le pattern NestJS :
 - **Service** : Logique métier et accès aux données
 - **DTO (Data Transfer Objects)** : Interfaces pour le typage TypeScript
 - **Guards** : Protection des routes (authentification, rôles)
+
+### Gestion de la base de données
+
+L'API utilise le **driver natif MariaDB** (`mariadb` npm package) avec un **pool de connexions** pour des performances optimales :
+
+- **Module global** `DatabaseModule` qui crée un pool de connexions réutilisable
+- **Injection directe** du pool dans les services via `@Inject(DATABASE_POOL)`
+- **Requêtes SQL natives** pour un contrôle total et des performances maximales
+- **Gestion automatique** des connexions avec pool
+- **Configuration** via variables d'environnement
+
+**Exemple d'utilisation dans un service** :
+```typescript
+import { Injectable, Inject } from '@nestjs/common';
+import { DATABASE_POOL } from '../database/database.module';
+import { Pool } from 'mariadb';
+
+@Injectable()
+export class MovieService {
+  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+
+  async getMovieById(id: number): Promise<any> {
+    const conn = await this.pool.getConnection();
+    try {
+      const rows = await conn.query(
+        'SELECT * FROM Media WHERE id = ? AND mediaType = "MOVIE"',
+        [id]
+      );
+      return rows[0];
+    } finally {
+      conn.release();
+    }
+  }
+}
+```
+
+**Avantages de cette approche** :
+- ✅ Performances optimales (pas de couche d'abstraction ORM)
+- ✅ Contrôle total sur les requêtes SQL
+- ✅ Flexibilité pour les requêtes complexes avec jointures
+- ✅ Pool de connexions pour gérer la concurrence
+- ✅ Typage TypeScript avec les interfaces DTO
 
 ## 🔐 Authentification et sécurité
 
@@ -401,8 +444,13 @@ Récupération des métadonnées depuis TMDB :
 Créer un fichier `.env` à la racine :
 
 ```env
-# Database
-DATABASE_URL="mysql://user:password@localhost:3306/chocoplus"
+# Database (MariaDB)
+DB_HOST="localhost"
+DB_PORT=3306
+DB_USER="root"
+DB_PASS="votre-mot-de-passe"
+DB_NAME="chocoplus"
+DB_CONNECTION_LIMIT=10
 
 # JWT
 JWT_SECRET="votre-secret-jwt-super-securise"
@@ -428,20 +476,27 @@ PORT=3000
 NODE_ENV=development
 ```
 
-### Configuration de Prisma
+### Configuration MariaDB
 
-Le projet utilise **Prisma** comme ORM pour interagir avec la base de données MariaDB/MySQL.
+Le projet utilise le **driver natif MariaDB** avec un pool de connexions configuré dans `database.module.ts`.
 
-```bash
-# Générer le client Prisma
-npx prisma generate
-
-# Appliquer les migrations
-npx prisma migrate dev
-
-# Visualiser la base de données
-npx prisma studio
+**Configuration du pool** :
+```typescript
+// database.module.ts
+const pool = mariadb.createPool({
+  host: config.get('DB_HOST'),
+  port: config.get('DB_PORT'),
+  user: config.get('DB_USER'),
+  password: config.get('DB_PASS'),
+  database: config.get('DB_NAME'),
+  connectionLimit: config.get('DB_CONNECTION_LIMIT'), // Nombre max de connexions
+});
 ```
+
+**Recommandations** :
+- `DB_CONNECTION_LIMIT` : 10-20 pour usage standard, plus pour haute charge
+- Pool global injecté dans tous les services via `@Inject(DATABASE_POOL)`
+- Toujours libérer les connexions avec `conn.release()` dans un bloc `finally`
 
 ## 📥 Installation
 
@@ -468,13 +523,13 @@ cp .env.example .env
 # Éditer .env avec vos configurations
 
 # 4. Configurer la base de données
+# Créer la base de données
+mysql -u root -p -e "CREATE DATABASE chocoplus CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
 # Importer le schéma SQL
 mysql -u root -p chocoplus < db.sql
 
-# 5. Générer le client Prisma
-npx prisma generate
-
-# 6. Lancer en mode développement
+# 5. Lancer en mode développement
 npm run start:dev
 
 # 7. L'API est accessible sur http://localhost:3000
@@ -605,23 +660,19 @@ chocoplus-api/
 │   │   ├── password.hbs           # Nouveau mot de passe
 │   │   └── suspended.hbs          # Compte suspendu
 │   │
-│   ├── database/                   # Module Prisma
-│   │   ├── database.module.ts
-│   │   └── prisma.service.ts
+│   ├── database/                   # Module de base de données
+│   │   └── database.module.ts     # Configuration du pool MariaDB
 │   │
 │   ├── app.controller.ts           # Contrôleur principal
 │   ├── app.service.ts
 │   ├── app.module.ts               # Module racine
 │   └── main.ts                     # Point d'entrée
 │
-├── prisma/
-│   ├── schema.prisma               # Schéma Prisma
-│   └── migrations/                 # Migrations de la base
-│
 ├── test/                           # Tests
 │   ├── app.e2e-spec.ts
 │   └── jest-e2e.json
 │
+├── db.sql                          # Schéma de base de données SQL
 ├── .env                            # Variables d'environnement
 ├── .env.example                    # Exemple de configuration
 ├── nest-cli.json                   # Configuration NestJS CLI
@@ -644,8 +695,8 @@ chocoplus-api/
 
 | Technologie | Usage |
 |------------|-------|
-| MariaDB / MySQL | Base de données relationnelle |
-| Prisma | ORM moderne pour TypeScript |
+| MariaDB | Base de données relationnelle |
+| mariadb (npm) | Driver natif Node.js avec pool de connexions |
 
 ### Authentification et sécurité
 
@@ -690,10 +741,30 @@ chocoplus-api/
 
 ## 📈 Performance
 
+- **Pool de connexions** : Réutilisation des connexions pour éviter l'overhead
+- **Libération systématique** : Toujours utiliser `finally` pour `conn.release()`
+- **Requêtes préparées** : Protection contre les injections SQL via paramètres `?`
 - **Pagination** sur les listes de médias
-- **Caching** des requêtes fréquentes (à implémenter avec Redis si nécessaire)
 - **Indexation** des champs de recherche dans la base de données
 - **Streaming vidéo optimisé** avec range requests
+
+**Exemple de bonne pratique** :
+```typescript
+async getMovies(limit: number, offset: number): Promise<Movie[]> {
+  const conn = await this.pool.getConnection();
+  try {
+    // Requête paramétrée pour éviter les injections SQL
+    const rows = await conn.query(
+      'SELECT * FROM Media WHERE mediaType = ? LIMIT ? OFFSET ?',
+      ['MOVIE', limit, offset]
+    );
+    return rows;
+  } finally {
+    // TOUJOURS libérer la connexion
+    conn.release();
+  }
+}
+```
 
 ## 📝 Notes importantes
 
