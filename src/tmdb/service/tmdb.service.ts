@@ -15,6 +15,7 @@ import { MediaType } from "src/media/dto/media-type.enum";
 import { CategoryService } from "src/category/service/category.service";
 import { SearchService } from "src/common-service/search.service";
 import { JellyfinService } from "src/jellyfin/service/jellyfin.service";
+import { ConfigService } from "@nestjs/config";
 
 @Injectable()
 export class TmdbService {
@@ -23,18 +24,20 @@ export class TmdbService {
         private readonly categoryService: CategoryService,
         private readonly searchService: SearchService,
         @Inject(forwardRef(() => JellyfinService))
-        private readonly jellyfinService: JellyfinService
+        private readonly jellyfinService: JellyfinService,
+        private readonly configService: ConfigService
     ) { }
 
-    private readonly apiKeyTMDB: string = 'api_key=a1df79bb0904ed95f307b2a789bd865f';
+    private readonly apiKeyTMDB: string = `api_key=${this.configService.get<string>('TMDB_API_KEY')}`;
+    private readonly baseUrlTmdb: string = this.configService.get<string>('TMDB_BASE_URL');
+
     private readonly paramLanguage: string = 'language=fr-FR';
 
-    private readonly apiTMDBSearchMovie: string = 'https://api.themoviedb.org/3/search/movie';
-    private readonly apiTMDBMovie: string = 'https://api.themoviedb.org/3/movie';
+    private readonly apiTMDBSearchMovie: string = `${this.baseUrlTmdb}/search/movie`;
+    private readonly apiTMDBMovie: string = `${this.baseUrlTmdb}/movie`;
 
-    private readonly apiTMDBTv: string = 'https://api.themoviedb.org/3/tv';
-    private readonly apiTMDBSearchTv: string = 'https://api.themoviedb.org/3/search/tv';
-
+    private readonly apiTMDBTv: string = `${this.baseUrlTmdb}/tv`;
+    private readonly apiTMDBSearchTv: string = `${this.baseUrlTmdb}/search/tv`;
 
     public async searchMoviebByTitle(title: string): Promise<any> {
         const param: string = `&query=${title}`;

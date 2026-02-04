@@ -4,7 +4,7 @@ import { AppService } from './app.service';
 import { APP_GUARD } from '@nestjs/core';
 import { HttpModule } from '@nestjs/axios';
 import { JwtAuthGuard } from './guard/jwt-auth.guard';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MailService } from './common-service/mail.service';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
@@ -28,12 +28,21 @@ import { SimilarTitleModule } from './similar-title/similar-title.module';
 import { StreamModule } from './stream/stream.module';
 
 @Module({
-  imports: [HttpModule, ConfigModule.forRoot({ isGlobal: true }),
+  imports: [
+    HttpModule,
+    ConfigModule.forRoot({ isGlobal: true }),
     PassportModule,
-    JwtModule.register({
+    JwtModule.registerAsync({
       global: true,
-      secret: jwtConstants.secret,
-      signOptions: { expiresIn: '90d' },
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => {
+        const config = jwtConstants(configService);
+        return {
+          secret: config.secret,
+          signOptions: { expiresIn: config.expiresIn },
+        };
+      },
+      inject: [ConfigService],
     }),
     UserModule,
     AuthModule,
@@ -54,7 +63,9 @@ import { StreamModule } from './stream/stream.module';
     StreamModule
   ],
   controllers: [AppController],
-  providers: [MailService, AppService,
+  providers: [
+    MailService,
+    AppService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard

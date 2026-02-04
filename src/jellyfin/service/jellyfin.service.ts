@@ -10,14 +10,15 @@ import { EditSeries } from "src/series/dto/edit-series.interface";
 import { SeriesService } from "src/series/service/series.service";
 import { Node } from "src/common-interface/node.interface";
 import { Media } from "src/media/dto/media.interface";
+import { ConfigService } from "@nestjs/config";
 
 @Injectable()
 export class JellyfinService {
 
-    private httpPort: string = 'http://192.168.1.174:8096';
+    private httpPort: string = this.configService.get<string>('JELLYFIN_URL');
     private urlItmes: string = 'Items';
     private urlShows: string = 'Shows';
-    private apiKey: string = 'api_key=d0dd221a5030413086e110697f824972';
+    private apiKey: string = `api_key=${this.configService.get<string>('JELLYFIN_API_KEY')}`;
     private allJellyfinItemsMovie: any[] | null;
     private allJellyfinItemsSeries: any[] | null;
 
@@ -27,7 +28,8 @@ export class JellyfinService {
         @Inject(forwardRef(() => SeriesService))
         private readonly seriesService: SeriesService,
         @Inject(forwardRef(() => TmdbService))
-        private readonly tmdbService: TmdbService
+        private readonly tmdbService: TmdbService,
+        private readonly configService: ConfigService
     ) { }
 
     private async setAllJellyfinItemsMovie(): Promise<void> {

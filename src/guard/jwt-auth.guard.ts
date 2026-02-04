@@ -11,13 +11,15 @@ import { PUBLIC_KEY } from './public.decorator';
 import { UserService } from 'src/user/service/user.service';
 import { jwtConstants } from 'src/auth/constant';
 import { User } from 'src/user/dto/user.interface';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
     constructor(
         private jwtService: JwtService,
         private reflector: Reflector,
-        private userService: UserService
+        private userService: UserService,
+        private configService: ConfigService
     ) { }
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -36,7 +38,7 @@ export class JwtAuthGuard implements CanActivate {
         }
         try {
             const payload = await this.jwtService.verifyAsync(token, {
-                secret: jwtConstants.secret,
+                secret: jwtConstants(this.configService).secret,
             });
             const user: User = await this.userService.getUserById(payload.sub);
 

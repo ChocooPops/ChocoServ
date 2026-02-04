@@ -10,6 +10,7 @@ import { RegisterUser } from 'src/user/dto/register-user.interface';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import * as bcrypt from 'bcryptjs';
 import { jwtConstants } from 'src/auth/constant';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
@@ -19,7 +20,8 @@ export class AuthService {
 
     constructor(private readonly jwtService: JwtService,
         private userService: UserService,
-        private mailService: MailService
+        private mailService: MailService,
+        private configService: ConfigService
     ) { }
 
     async signIn(email: string, password: string): Promise<TokenModel> {
@@ -216,7 +218,7 @@ export class AuthService {
         }
         try {
             const payload = await this.jwtService.verifyAsync(token, {
-                secret: jwtConstants.secret,
+                secret: jwtConstants(this.configService).secret,
             });
             const user: User = await this.userService.getUserById(payload.sub);
             if (!user || user.role === 'NOT_ACTIVATE') {
