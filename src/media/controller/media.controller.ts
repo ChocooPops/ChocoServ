@@ -35,4 +35,13 @@ export class MediaController {
         return await this.mediaService.getMediaWithNullPoster();
     }
 
+    @UseGuards(AdminUserGuard)
+    @Get('path-dont-exist')
+    async getMediaWithPathDontExist(): Promise<{ movies: Node[], series: Node[] }> {
+        return {
+            movies : await this.movieService.getNodesMoviePathDontExist(),
+            series : await this.seriesService.getNodesEpisodePathDontExist()
+        }
+    }
+
 }

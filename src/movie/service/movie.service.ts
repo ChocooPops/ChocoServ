@@ -16,6 +16,7 @@ import { FormatPathService } from 'src/common-service/format-path.service';
 import { SimilarTitleService } from 'src/similar-title/service/similar-title.service';
 import { Node } from 'src/common-interface/node.interface';
 import { UploadImageService } from 'src/common-service/upload-image.service';
+import { promises as fs } from "fs";
 
 @Injectable()
 export class MovieService extends MediaService {
@@ -38,6 +39,30 @@ export class MovieService extends MediaService {
 
     public async getNodesMovie(): Promise<Node[]> {
         return await this.getNodesMediaByType();
+    }
+
+    public async getNodesMoviePathDontExist() : Promise<Node[]> {
+        const conn = await this.pool.getConnection();
+        try {
+            const query: string = `SELECT id, title, path FROM MEDIA WHERE mediaType = ?`;
+            const moviesWithoutPath: Node[] = [];
+            const movies : Movie[] = await conn.query(query, [this.currentMediaType]);
+            for (const movie of movies) {
+                try {
+                    await fs.access(movie.path);
+                } catch {
+                    moviesWithoutPath.push({
+                        id : movie.id,
+                        name : movie.title
+                    });
+                }
+            }
+            return moviesWithoutPath;
+        } catch (error) {
+            return null;
+        } finally {
+            await conn.release();
+        }
     }
 
     private getQuerySelectMovies(otherInfos: boolean, WHERE: string, ORDER: string, LIMIT: string): string {

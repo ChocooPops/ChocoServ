@@ -19,6 +19,7 @@ import { Season } from '../dto/season.interface';
 import { SimilarTitleService } from 'src/similar-title/service/similar-title.service';
 import { Node } from 'src/common-interface/node.interface';
 import { UploadImageService } from 'src/common-service/upload-image.service';
+import { promises as fs } from "fs";
 
 @Injectable()
 export class SeriesService extends MediaService {
@@ -41,6 +42,31 @@ export class SeriesService extends MediaService {
 
     public async getNodesSeries(): Promise<Node[]> {
         return await this.getNodesMediaByType();
+    }
+
+    public async getNodesEpisodePathDontExist() : Promise<Node[]> {
+        const conn = await this.pool.getConnection();
+        try {
+            const query: string = `SELECT e.id, CONCAT(m.title, ' : ', e.name) AS name, e.path FROM episode e
+                                    LEFT JOIN media m ON e.seriesId = m.id;`;
+            const episodesWithoutPath: Node[] = [];
+            const episodes : Episode[] = await conn.query(query);
+            for (const episode of episodes) {
+                try {
+                    await fs.access(episode.path);
+                } catch {
+                    episodesWithoutPath.push({
+                        id : episode.id,
+                        name : episode.name
+                    });
+                }
+            }
+            return episodesWithoutPath;
+        } catch (error) {
+            return [];
+        } finally {
+            await conn.release();
+        }
     }
 
     private getQuerySelectSeries(otherInfos: boolean, WHERE: string, ORDER: string, LIMIT: string): string {
