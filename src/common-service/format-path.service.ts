@@ -1,12 +1,14 @@
-
 import { Injectable } from '@nestjs/common';
 import { basename } from 'path';
 import { MediaType } from 'src/media/dto/media-type.enum';
+import { ConfigService } from "@nestjs/config";
 
 @Injectable()
 export class FormatPathService {
 
-    private folderHost: string = 'http://localhost:3000';
+    constructor(private readonly configService : ConfigService) { }
+
+    private folderHost: string = this.configService.get<string>('API_URL');
     private folderUploads: string = 'uploads';
     private folderProfilPhoto: string = 'profil-photo';
 

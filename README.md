@@ -451,6 +451,7 @@ DB_USER="root"
 DB_PASS="votre-mot-de-passe"
 DB_NAME="chocoplus"
 DB_CONNECTION_LIMIT=10
+API_URL="http://localhost:3000"
 
 # JWT
 JWT_SECRET="votre-secret-jwt-super-securise"
