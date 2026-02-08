@@ -474,10 +474,6 @@ JELLYFIN_API_KEY="votre-cle-api-jellyfin"
 # Application
 PORT=3000
 NODE_ENV=development
-
-#header
-HEADER_SECRET_API="votre-cle-secrete-api"
-HEADER_NAME_FIELD_SECRET_API="nom-du-header"
 ```
 
 ### Configuration MariaDB
