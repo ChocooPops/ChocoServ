@@ -54,7 +54,8 @@ async function bootstrap() {
     });
   });
 
-  await app.listen(port);
+  // Écouter sur toutes les interfaces réseau (0.0.0.0)
+  await app.listen(port, '0.0.0.0');
 
 }
 bootstrap();
