@@ -348,7 +348,7 @@ export class MovieService extends MediaService {
                             const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateMovie, oldMovie, this.currentMediaType, oldFormatedTitle, conn);
 
                             if (oldFormatedTitle !== newFormatedTitle) {
-                                await this.uploadImageService.renameFileOrdirectoryToMediaType(newFormatedTitle, oldFormatedTitle, this.currentMediaType);
+                                await this.uploadImageService.renameFileOrdirectoryToMediaType(oldFormatedTitle, newFormatedTitle, this.currentMediaType);
                             }
                             message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageStaff} \n ${messageKeyWord} \n ${messagePoster}`;
                             messageReturned = {

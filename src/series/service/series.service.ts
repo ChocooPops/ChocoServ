@@ -549,7 +549,7 @@ export class SeriesService extends MediaService {
                             const messageSeasons: string = await this.insertUpdateOrDeleteSeasons(updateSeries.seasons, oldSeries.seasons, updateSeries.id, oldFormatedTitle, updateSeries.jellyfinId, conn);
 
                             if (oldFormatedTitle !== newFormatedTitle) {
-                                await this.uploadImageService.renameFileOrdirectoryToMediaType(newFormatedTitle, oldFormatedTitle, this.currentMediaType);
+                                await this.uploadImageService.renameFileOrdirectoryToMediaType(oldFormatedTitle, newFormatedTitle, this.currentMediaType);
                             }
                             message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageStaff} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeasons}`;
                             messageReturned = {
