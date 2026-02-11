@@ -23,16 +23,16 @@ export class StreamService {
         return fs.existsSync(this.getFilePath(filename));
     }
 
-    public async streamMovie(mediaId: number, req: Request, res: Response): Promise<any> {
+    public async streamMovie(userId: number, mediaId: number, req: Request, res: Response): Promise<any> {
         const media: Media = await this.movieService.getSimpleMediaById(mediaId);
         if (media) {
-            this.streamVideo(media.path, req, res);
+            this.streamVideo(userId, media.id, media.path, req, res);
         } else {
             throw new NotFoundException();
         }
     }
 
-    public async streamEpisode(seasonId: number, episodeId: number, req: Request, res: Response): Promise<any> {
+    public async streamEpisode(userId: number, seasonId: number, episodeId: number, req: Request, res: Response): Promise<any> {
         let episode: Episode | null = null;
         if (episodeId && episodeId > 0) {
             episode = await this.seriesService.getSimpleEpisodeById(episodeId);
@@ -40,24 +40,23 @@ export class StreamService {
             episode = await this.seriesService.getFirstEpisodeBySeason(seasonId);
         }
         if (episode) {
-            this.streamVideo(episode.path, req, res);
+            this.streamVideo(userId, episode.id, episode.path, req, res);
         } else {
             throw new NotFoundException();
         }
     }
 
-    public async streamNewVideoRunning(newsId: number, req: Request, res: Response): Promise<any> {
+    public async streamNewVideoRunning(userId: number, newsId: number, req: Request, res: Response): Promise<any> {
         const news: NewsVideoRunning = await this.newsVideoRunningService.getSimpleNewsRunningById(newsId);
         if (news) {
-            this.streamVideo(news.path, req, res);
+            this.streamVideo(userId, -1, news.path, req, res);
         } else {
             throw new NotFoundException();
         }
     }
 
-    private async streamVideo(path: string, req: Request, res: Response): Promise<any> {
+    private async streamVideo(userId: number, mediaId: number, path: string, req: Request, res: Response): Promise<any> {
         try {
-
             if (!path || !this.fileExists(path)) {
                 return res.status(404).send('File not found');
             }
@@ -86,28 +85,51 @@ export class StreamService {
                     'Content-Range': `bytes ${start}-${end}/${fileSize}`,
                     'Accept-Ranges': 'bytes',
                     'Content-Length': chunkSize,
-                    'Content-Type': 'video/x-matroska', // MKV mime type
+                    'Content-Type': 'video/x-matroska',
                 });
 
-                stream.pipe(res);
+                // Suivre les bytes streamés
+                let bytesStreamed = 0;
+
+                stream.on('data', (chunk) => {
+                    bytesStreamed += chunk.length;
+                });
 
                 stream.on('error', (error) => {
-                    //console.error(`Stream error for ${path}:`, error);
                     if (!res.headersSent) {
                         res.status(500).send('Stream error');
                     }
                 });
 
+                // Quand le stream est interrompu
                 res.on('close', () => {
                     stream.destroy();
-                    //console.log(`Streaming of ${path} interrupted (Range: ${start}-${end})`);
+
+                    // Calculer la position finale
+                    const lastBytePosition = start + bytesStreamed;
+                    const watchProgress = (lastBytePosition / fileSize) * 100;
+
+                    // Estimation du temps (nécessite la durée de la vidéo)
+                    // Si vous connaissez la durée totale de la vidéo
+                    const totalDurationSeconds =  0;
+                    const watchedTimeSeconds = (lastBytePosition / fileSize) * totalDurationSeconds;
+
+                    console.log(`Stream interrompu:`, {
+                        userId,
+                        mediaId,
+                        lastBytePosition,
+                        watchProgress: `${watchProgress.toFixed(2)}%`,
+                        watchedTime: `${Math.floor(watchedTimeSeconds / 60)}:${Math.floor(watchedTimeSeconds % 60).toString().padStart(2, '0')}`
+                    });
+
                 });
 
+                stream.pipe(res);
+
             } else {
-                throw new NotAcceptableException('Not range acceptable')
+                throw new NotAcceptableException('Not range acceptable');
             }
         } catch (error) {
-            //console.error('Error streaming movie:', error);
             if (!res.headersSent) {
                 res.status(500).send('Internal server error');
             }

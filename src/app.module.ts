@@ -26,6 +26,7 @@ import { TmdbModule } from './tmdb/tmdb.module';
 import { SupportModule } from './support/support.module';
 import { SimilarTitleModule } from './similar-title/similar-title.module';
 import { StreamModule } from './stream/stream.module';
+import { StatUserService } from './stat-user/service/stat-user.service';
 
 @Module({
   imports: [
@@ -60,7 +61,8 @@ import { StreamModule } from './stream/stream.module';
     TmdbModule,
     SupportModule,
     SimilarTitleModule,
-    StreamModule
+    StreamModule,
+    StatUserService
   ],
   controllers: [AppController],
   providers: [
