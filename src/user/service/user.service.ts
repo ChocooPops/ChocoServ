@@ -431,6 +431,7 @@ export class UserService {
                 try {
                     await conn.beginTransaction();
                     await conn.query(`DELETE FROM User_Media_List WHERE userId = ?`, [user.id]);
+                    await conn.query(`DELETE FROM Stat_User WHERE userId = ?`, [user.id]);
                     const query: string = `DELETE FROM User WHERE id = ?`;
                     await conn.query(query, [user.id]);
                     await conn.commit();

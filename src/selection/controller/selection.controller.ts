@@ -7,6 +7,7 @@ import { AdminUserGuard } from 'src/guard/admin-user.guard';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { Graph } from 'src/common-interface/graph.intrface';
 import { PageType } from '../dto/page-type.enum';
+import { CurrentUser } from 'src/guard/current-user.guard';
 
 @Controller('selection')
 export class SelectionController {
@@ -19,8 +20,8 @@ export class SelectionController {
     }
 
     @Get('selection-home')
-    async getRandomSelectionsForHome(): Promise<Selection[]> {
-        return await this.selectionService.getSelectionsForHomePage();
+    async getRandomSelectionsForHome(@CurrentUser('sub') userId: number): Promise<Selection[]> {
+        return await this.selectionService.getSelectionsForHomePage(userId);
     }
 
     @Get('random-media-selection-by-type/:mediaType')

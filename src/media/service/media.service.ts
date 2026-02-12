@@ -485,6 +485,13 @@ export class MediaService {
     protected async deleteMediasById(mediaId: number, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
         try {
             const [title, mediaType, posterId] = await this.getAllPosterIdLinkedToMedia(mediaId, conn);
+            const resulMediaStatUser = await conn.query(`DELETE su FROM Stat_User su WHERE su.movieId = ?
+                                                        OR su.episodeId IN (
+                                                            SELECT e.id
+                                                            FROM Episode e
+                                                            WHERE e.seriesId = ?
+                                                        );`, [mediaId, mediaId]);
+
             const resultTranslationTitle = await conn.query(`DELETE FROM Translation_Title WHERE mediaId = ?`, [mediaId]);
             const resultMediaSatff = await conn.query(`DELETE FROM Media_Staff WHERE mediaId = ?`, [mediaId]);
             const resultMediaCategory = await conn.query(`DELETE FROM Media_Category WHERE mediaId = ?`, [mediaId]);
@@ -507,7 +514,7 @@ export class MediaService {
             const message: string = `${this.currentMediaType} supprimé \n Traduction de titre (${resultTranslationTitle.affectedRows}) \n Acteurs/Réalisateur (${resultMediaSatff.affectedRows}) \n Categories (${resultMediaCategory.affectedRows}) \n Mots clés (${resultKeyword.affectedRows})
             \n Selection Media (${resultSelectionMedia.affectedRows}) \n License Media (${resultLicenseMedia.affectedRows}) \n News (${resultNews.affectedRows}) \n News Video Running (${resultNewsVideoRunning.affectedRows})
             \n Episode (${resultEpisode.affectedRows}) \n Saison (${resultSeason.affectedRows}) \n ${resultPoster} \n Titre Similaire (${resultSimilarMedia.affectedRows})
-            \n MyList (${resulMediaUserList.affectedRows})`;
+            \n MyList (${resulMediaUserList.affectedRows}) \n StatUser (${resulMediaStatUser.affectedRows})`;
             return {
                 id: 0,
                 state: true,

@@ -18,6 +18,7 @@ import { Link } from 'src/common-interface/link.interface';
 import { PageType } from '../dto/page-type.enum';
 import { CategoryService } from 'src/category/service/category.service';
 import { CategoryEntirely } from 'src/category/dto/categoryEntirely.interface';
+import { StatUserService } from 'src/stat-user/service/stat-user.service';
 
 @Injectable()
 export class SelectionService {
@@ -27,7 +28,8 @@ export class SelectionService {
         private readonly movieService: MovieService,
         private readonly seriesService: SeriesService,
         private readonly searchService: SearchService,
-        private readonly categoryService: CategoryService) { }
+        private readonly categoryService: CategoryService,
+        private readonly statUserService: StatUserService) { }
 
     public async getGraphSelection(): Promise<Graph> {
         const conn = await this.pool.getConnection();
@@ -88,9 +90,10 @@ export class SelectionService {
         return selectionFormated;
     }
 
-    public async getSelectionsForHomePage(): Promise<Selection[]> {
+    public async getSelectionsForHomePage(userId: number): Promise<Selection[]> {
         const conn = await this.pool.getConnection();
         try {
+            const selectionInProgress: Selection = await this.statUserService.getMediaSelectionInProgess(userId, conn);
             const query: string = this.getQuerySelections(
                 `INNER JOIN Selection_Page selp ON selp.selectionId = sel.id`,
                 `WHERE selp.pageType = ?`,
@@ -99,7 +102,11 @@ export class SelectionService {
             selections.forEach((selection: Selection, index) => {
                 selections[index] = this.getFormatedSelection(selection);
             });
-            return selections;
+            if(selectionInProgress.mediaList.length > 0) {
+                return [selectionInProgress, ...selections];
+            } else {
+                return selections;
+            }
         } catch (error) {
             return [];
         } finally {

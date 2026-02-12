@@ -43,7 +43,7 @@ export class StreamController {
         try {
             if (await this.authService.verifToken(token)) {
                 const payload = this.jwtService.verify(token);
-                await this.streamService.streamEpisode(payload.userId, seasonId, episodeId, req, res);
+                await this.streamService.streamEpisode(payload.sub, seasonId, episodeId, req, res);
             }
         } catch (error) {
             throw error;
