@@ -2,10 +2,6 @@
 -- Suppression de toutes les tables si elles existent
 DROP TABLE IF EXISTS `Stat_User`;
 
-DROP TABLE IF EXISTS `Stream_Series`;
-
-DROP TABLE IF EXISTS `Stream_Movie`;
-
 DROP TABLE IF EXISTS `Selection_Page`;
 
 DROP TABLE IF EXISTS `Selection_Media`;
@@ -424,8 +420,8 @@ CREATE TABLE
         movieId INT NULL,
         episodeId INT NULL,
         userId INT NOT NULL,
-        state ENUM ('IN PROGRESS', 'FINISHED'),
-        watchProgress INT DEFAULT 0,
+        state ENUM ('IN_PROGRESS', 'FINISHED'),
+        watchProgress FLOAT(4, 2) DEFAULT 0,
         createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
         updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
         CONSTRAINT STAT_USER_PK PRIMARY KEY (id),

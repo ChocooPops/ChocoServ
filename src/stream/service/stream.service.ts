@@ -8,13 +8,16 @@ import { NewsVideoRunning } from 'src/news-video-running/dto/news-video-running.
 import { MovieService } from 'src/movie/service/movie.service';
 import { SeriesService } from 'src/series/service/series.service';
 import { NewsVideoRunningService } from 'src/news-video-running/service/news-video-running.service';
+import { StatUserService } from 'src/stat-user/service/stat-user.service';
+import { MediaType } from 'src/media/dto/media-type.enum';
 
 @Injectable()
 export class StreamService {
 
     constructor(private readonly movieService: MovieService,
         private readonly seriesService: SeriesService,
-        private readonly newsVideoRunningService: NewsVideoRunningService) { }
+        private readonly newsVideoRunningService: NewsVideoRunningService,
+        private readonly statUserService: StatUserService) { }
 
     private getFilePath(filename: string): string {
         return path.join(filename);
@@ -26,7 +29,7 @@ export class StreamService {
     public async streamMovie(userId: number, mediaId: number, req: Request, res: Response): Promise<any> {
         const media: Media = await this.movieService.getSimpleMediaById(mediaId);
         if (media) {
-            this.streamVideo(userId, media.id, media.path, req, res);
+            this.streamVideo(userId, media.id, media.path, req, res, MediaType.MOVIE);
         } else {
             throw new NotFoundException();
         }
@@ -40,22 +43,22 @@ export class StreamService {
             episode = await this.seriesService.getFirstEpisodeBySeason(seasonId);
         }
         if (episode) {
-            this.streamVideo(userId, episode.id, episode.path, req, res);
+            this.streamVideo(userId, episode.id, episode.path, req, res, MediaType.EPISODE);
         } else {
             throw new NotFoundException();
         }
     }
 
-    public async streamNewVideoRunning(userId: number, newsId: number, req: Request, res: Response): Promise<any> {
+    public async streamNewVideoRunning(newsId: number, req: Request, res: Response): Promise<any> {
         const news: NewsVideoRunning = await this.newsVideoRunningService.getSimpleNewsRunningById(newsId);
         if (news) {
-            this.streamVideo(userId, -1, news.path, req, res);
+            this.streamVideo(-1, -1, news.path, req, res, MediaType.OTHER);
         } else {
             throw new NotFoundException();
         }
     }
 
-    private async streamVideo(userId: number, mediaId: number, path: string, req: Request, res: Response): Promise<any> {
+    private async streamVideo(userId: number, mediaId: number, path: string, req: Request, res: Response, mediaType: MediaType): Promise<any> {
         try {
             if (!path || !this.fileExists(path)) {
                 return res.status(404).send('File not found');
@@ -109,18 +112,11 @@ export class StreamService {
                     const lastBytePosition = start + bytesStreamed;
                     const watchProgress = (lastBytePosition / fileSize) * 100;
 
-                    // Estimation du temps (nécessite la durée de la vidéo)
-                    // Si vous connaissez la durée totale de la vidéo
-                    const totalDurationSeconds =  0;
-                    const watchedTimeSeconds = (lastBytePosition / fileSize) * totalDurationSeconds;
-
-                    console.log(`Stream interrompu:`, {
-                        userId,
-                        mediaId,
-                        lastBytePosition,
-                        watchProgress: `${watchProgress.toFixed(2)}%`,
-                        watchedTime: `${Math.floor(watchedTimeSeconds / 60)}:${Math.floor(watchedTimeSeconds % 60).toString().padStart(2, '0')}`
-                    });
+                    if (mediaType === MediaType.MOVIE) {
+                        this.statUserService.saveStatUserForMovie(userId, mediaId, watchProgress);
+                    } else if (mediaType === MediaType.EPISODE) {
+                        this.statUserService.saveStatUserForEpisode(userId, mediaId, watchProgress);
+                    }
 
                 });
 

@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { StreamService } from 'src/stream/service/stream.service';
-import { StreamController } from 'src/stream/controller/stream.controller';
+import { StatUserController } from './controller/stat-user.controller';
+import { StatUserService } from './service/stat-user.service';
 
 @Module({
-  providers: [StreamService],
-  controllers: [StreamController],
-  exports: [StreamService]
+  providers: [StatUserService],
+  controllers: [StatUserController],
+  exports: [StatUserService]
 })
 export class StatUserModule { }
