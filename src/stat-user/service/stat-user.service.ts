@@ -20,7 +20,7 @@ export class StatUserService {
         private readonly seriesService: SeriesService) {
     }
 
-    public getQuerySelectMediaInProgress() : string {
+    public getQuerySelectMediaInProgress(): string {
         return `
         SELECT 
         ${this.mediaService.getQuerySelectManyMedia(`ORDER BY su.updatedAt desc`)} AS media
@@ -51,30 +51,50 @@ export class StatUserService {
                 selectionType: SelectionType.NORMAL_POSTER,
                 mediaList: medias
             };
-        } catch(error) {
+        } catch (error) {
             throw error;
         }
     }
 
-    public async saveStatUserForMovie(userId: number, movieId: number, watchProgress: number) : Promise<void> {
+    public async saveStatUserForMovie(userId: number, movieId: number, watchProgress: number): Promise<void> {
         const conn = await this.pool.getConnection();
         try {
             await conn.beginTransaction();
-            const stat: StatUser[] = await conn.query(`SELECT * FROM Stat_User WHERE userId = ? AND movieId = ? AND state = ?`, [userId, movieId, StatState.IN_PROGRESS]);
-            if (stat.length > 0) {
+
+            const newState = watchProgress >= 90 ? StatState.FINISHED : StatState.IN_PROGRESS;
+
+            const statInProgress: StatUser[] = await conn.query(
+                `SELECT * FROM Stat_User WHERE userId = ? AND movieId = ? AND state = ?`,
+                [userId, movieId, StatState.IN_PROGRESS]
+            );
+
+            if (statInProgress.length > 0) {
                 const queryUpdate: string = `
-                    UPDATE Stat_User
-                    SET watchProgress = ?
-                    WHERE id = ?`;
-                await conn.query(queryUpdate, [watchProgress, stat[0].id]);
+                UPDATE Stat_User
+                SET watchProgress = ?, state = ?
+                WHERE id = ?`;
+                await conn.query(queryUpdate, [watchProgress, newState, statInProgress[0].id]);
             } else {
-                const queryInsert: string = `
-                    INSERT INTO Stat_User (userId, movieId, state, watchProgress) VALUES (?, ?, ?, ?)`;
-                
-                await conn.query(queryInsert, [userId, movieId, StatState.IN_PROGRESS, watchProgress]);
+                const statFinishedToday: StatUser[] = await conn.query(
+                    `SELECT * FROM Stat_User 
+                 WHERE userId = ? 
+                 AND movieId = ? 
+                 AND state = ? 
+                 AND DATE(updatedAt) = CURDATE()`,
+                    [userId, movieId, StatState.FINISHED]
+                );
+
+                if (statFinishedToday.length === 0) {
+                    const queryInsert: string = `
+                    INSERT INTO Stat_User (userId, movieId, state, watchProgress) 
+                    VALUES (?, ?, ?, ?)`;
+
+                    await conn.query(queryInsert, [userId, movieId, newState, watchProgress]);
+                }
             }
+
             await conn.commit();
-        } catch(error) {
+        } catch (error) {
             await conn.rollback();
         } finally {
             await conn.release();
@@ -85,21 +105,41 @@ export class StatUserService {
         const conn = await this.pool.getConnection();
         try {
             await conn.beginTransaction();
-            const stat: StatUser[] = await conn.query(`SELECT * FROM Stat_User WHERE userId = ? AND episodeId = ? AND state = ?`, [userId, episodeId, StatState.IN_PROGRESS]);
-            if (stat.length > 0) {
+
+            const newState = watchProgress >= 90 ? StatState.FINISHED : StatState.IN_PROGRESS;
+
+            const statInProgress: StatUser[] = await conn.query(
+                `SELECT * FROM Stat_User WHERE userId = ? AND episodeId = ? AND state = ?`,
+                [userId, episodeId, StatState.IN_PROGRESS]
+            );
+
+            if (statInProgress.length > 0) {
                 const queryUpdate: string = `
-                    UPDATE Stat_User
-                    SET watchProgress = ?
-                    WHERE id = ?`;
-                await conn.query(queryUpdate, [watchProgress, stat[0].id]);
+                UPDATE Stat_User
+                SET watchProgress = ?, state = ?
+                WHERE id = ?`;
+                await conn.query(queryUpdate, [watchProgress, newState, statInProgress[0].id]);
             } else {
-                const queryInsert: string = `
-                    INSERT INTO Stat_User (userId, episodeId, state, watchProgress) VALUES (?, ?, ?, ?)`;
-                
-                await conn.query(queryInsert, [userId, episodeId, StatState.IN_PROGRESS, watchProgress]);
+                const statFinishedToday: StatUser[] = await conn.query(
+                    `SELECT * FROM Stat_User 
+                 WHERE userId = ? 
+                 AND episodeId = ? 
+                 AND state = ? 
+                 AND DATE(updatedAt) = CURDATE()`,
+                    [userId, episodeId, StatState.FINISHED]
+                );
+
+                if (statFinishedToday.length === 0) {
+                    const queryInsert: string = `
+                    INSERT INTO Stat_User (userId, episodeId, state, watchProgress) 
+                    VALUES (?, ?, ?, ?)`;
+
+                    await conn.query(queryInsert, [userId, episodeId, newState, watchProgress]);
+                }
             }
+
             await conn.commit();
-        } catch(error) {
+        } catch (error) {
             await conn.rollback();
         } finally {
             await conn.release();
