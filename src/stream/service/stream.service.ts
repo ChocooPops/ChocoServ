@@ -40,7 +40,10 @@ export class StreamService {
         if (episodeId && episodeId > 0) {
             episode = await this.seriesService.getSimpleEpisodeById(episodeId);
         } else {
-            episode = await this.seriesService.getFirstEpisodeBySeason(seasonId);
+            episode = await this.seriesService.getLastWatchedEpisode(userId, seasonId);
+            if (!episode) {
+                episode = await this.seriesService.getFirstEpisodeBySeason(seasonId);
+            }
         }
         if (episode) {
             this.streamVideo(userId, episode.id, episode.path, req, res, MediaType.EPISODE);
