@@ -20,8 +20,6 @@ import { SimilarTitleService } from 'src/similar-title/service/similar-title.ser
 import { Node } from 'src/common-interface/node.interface';
 import { UploadImageService } from 'src/common-service/upload-image.service';
 import { promises as fs } from "fs";
-import { StatUser } from 'src/stat-user/dto/stat-user.enum';
-import { StatState } from 'src/stat-user/dto/stat-state.enum';
 
 @Injectable()
 export class SeriesService extends MediaService {
@@ -265,65 +263,71 @@ export class SeriesService extends MediaService {
         try {
             const result: any[] = await conn.query(
                 `
-            SELECT e.*
-            FROM (
-                -- Cas 1: Retourner l'épisode IN_PROGRESS
-                SELECT su.episodeId, 1 as priority
-                FROM Stat_User su
-                INNER JOIN Episode e ON su.episodeId = e.id
-                WHERE su.userId = ? 
-                AND e.seriesId = ?
-                AND su.state = 'IN_PROGRESS'
-                ORDER BY su.updatedAt DESC
+                SELECT e.*
+                FROM (
+                    (
+                        -- Cas 1: Retourner l'épisode IN_PROGRESS
+                        SELECT su.episodeId, 1 as priority
+                        FROM Stat_User su
+                        INNER JOIN Episode e ON su.episodeId = e.id
+                        WHERE su.userId = ? 
+                        AND e.seriesId = ?
+                        AND su.state = 'IN_PROGRESS'
+                        ORDER BY su.updatedAt DESC
+                        LIMIT 1
+                    )
+                    
+                    UNION ALL
+                    
+                    (
+                        -- Cas 2: Retourner l'épisode suivant dans la même saison si FINISHED
+                        SELECT next_ep.id as episodeId, 2 as priority
+                        FROM (
+                            SELECT su.episodeId, e.seasonId, e.episodeNumber
+                            FROM Stat_User su
+                            INNER JOIN Episode e ON su.episodeId = e.id
+                            WHERE su.userId = ?
+                            AND e.seriesId = ?
+                            AND su.state = 'FINISHED'
+                            ORDER BY su.updatedAt DESC
+                            LIMIT 1
+                        ) last_stat
+                        INNER JOIN Episode next_ep ON next_ep.seasonId = last_stat.seasonId 
+                            AND next_ep.episodeNumber = last_stat.episodeNumber + 1
+                    )
+                    
+                    UNION ALL
+                    
+                    (
+                        -- Cas 3: Retourner le premier épisode de la saison suivante
+                        SELECT first_ep.id as episodeId, 3 as priority
+                        FROM (
+                            SELECT e.seasonId, e.episodeNumber, s.seriesId, s.seasonNumber
+                            FROM Stat_User su
+                            INNER JOIN Episode e ON su.episodeId = e.id
+                            INNER JOIN Season s ON e.seasonId = s.id
+                            WHERE su.userId = ?
+                            AND e.seriesId = ?
+                            AND su.state = 'FINISHED'
+                            ORDER BY su.updatedAt DESC
+                            LIMIT 1
+                        ) last_stat
+                        INNER JOIN Season next_season ON next_season.seriesId = last_stat.seriesId 
+                            AND next_season.seasonNumber = last_stat.seasonNumber + 1
+                        INNER JOIN Episode first_ep ON first_ep.seasonId = next_season.id 
+                            AND first_ep.episodeNumber = 1
+                        WHERE NOT EXISTS (
+                            SELECT 1 
+                            FROM Episode check_ep 
+                            WHERE check_ep.seasonId = last_stat.seasonId 
+                            AND check_ep.episodeNumber = last_stat.episodeNumber + 1
+                        )
+                    )
+                ) combined_results
+                INNER JOIN Episode e ON e.id = combined_results.episodeId
+                ORDER BY combined_results.priority
                 LIMIT 1
-                
-                UNION ALL
-                
-                -- Cas 2: Retourner l'épisode suivant dans la même saison si FINISHED
-                SELECT next_ep.id as episodeId, 2 as priority
-                FROM (
-                    SELECT su.episodeId, e.seasonId, e.episodeNumber
-                    FROM Stat_User su
-                    INNER JOIN Episode e ON su.episodeId = e.id
-                    WHERE su.userId = ?
-                    AND e.seriesId = ?
-                    AND su.state = 'FINISHED'
-                    ORDER BY su.updatedAt DESC
-                    LIMIT 1
-                ) last_stat
-                INNER JOIN Episode next_ep ON next_ep.seasonId = last_stat.seasonId 
-                    AND next_ep.episodeNumber = last_stat.episodeNumber + 1
-                
-                UNION ALL
-                
-                -- Cas 3: Retourner le premier épisode de la saison suivante
-                SELECT first_ep.id as episodeId, 3 as priority
-                FROM (
-                    SELECT e.seasonId, e.episodeNumber, s.seriesId, s.seasonNumber
-                    FROM Stat_User su
-                    INNER JOIN Episode e ON su.episodeId = e.id
-                    INNER JOIN Season s ON e.seasonId = s.id
-                    WHERE su.userId = ?
-                    AND e.seriesId = ?
-                    AND su.state = 'FINISHED'
-                    ORDER BY su.updatedAt DESC
-                    LIMIT 1
-                ) last_stat
-                INNER JOIN Season next_season ON next_season.seriesId = last_stat.seriesId 
-                    AND next_season.seasonNumber = last_stat.seasonNumber + 1
-                INNER JOIN Episode first_ep ON first_ep.seasonId = next_season.id 
-                    AND first_ep.episodeNumber = 1
-                WHERE NOT EXISTS (
-                    SELECT 1 
-                    FROM Episode check_ep 
-                    WHERE check_ep.seasonId = last_stat.seasonId 
-                    AND check_ep.episodeNumber = last_stat.episodeNumber + 1
-                )
-            ) combined_results
-            INNER JOIN Episode e ON e.id = combined_results.episodeId
-            ORDER BY combined_results.priority
-            LIMIT 1
-            `,
+                `,
                 [userId, mediaId, userId, mediaId, userId, mediaId]
             );
 

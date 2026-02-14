@@ -98,11 +98,11 @@ export class SelectionService {
                 `INNER JOIN Selection_Page selp ON selp.selectionId = sel.id`,
                 `WHERE selp.pageType = ?`,
                 `ORDER BY selp.orderIndex asc`);
-            const selections: Selection[] = await conn.query(query, [PageType.HOME]);
+            const selections: Selection[] | null = await conn.query(query, [PageType.HOME]);
             selections.forEach((selection: Selection, index) => {
                 selections[index] = this.getFormatedSelection(selection);
             });
-            if(selectionInProgress.mediaList.length > 0) {
+            if(selectionInProgress && selectionInProgress.mediaList.length > 0) {
                 return [selectionInProgress, ...selections];
             } else {
                 return selections;
