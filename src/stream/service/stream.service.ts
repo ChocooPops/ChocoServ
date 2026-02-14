@@ -1,6 +1,5 @@
 import { Injectable, NotAcceptableException, NotFoundException } from '@nestjs/common';
 import * as path from 'path';
-import { Media } from 'src/media/dto/media.interface';
 import * as fs from 'fs';
 import { Response, Request } from 'express';
 import { Episode } from 'src/series/dto/episode.interface';
@@ -10,6 +9,7 @@ import { SeriesService } from 'src/series/service/series.service';
 import { NewsVideoRunningService } from 'src/news-video-running/service/news-video-running.service';
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { MediaType } from 'src/media/dto/media-type.enum';
+import { Movie } from 'src/movie/dto/movie.interface';
 
 @Injectable()
 export class StreamService {
@@ -26,10 +26,10 @@ export class StreamService {
         return fs.existsSync(this.getFilePath(filename));
     }
 
-    public async streamMovie(userId: number, mediaId: number, req: Request, res: Response): Promise<any> {
-        const media: Media = await this.movieService.getSimpleMediaById(mediaId);
-        if (media) {
-            this.streamVideo(userId, media.id, media.path, req, res, MediaType.MOVIE);
+    public async streamMovie(userId: number, movieId: number, req: Request, res: Response): Promise<any> {
+        const movie: Movie = await this.movieService.getSimpleMediaById(movieId) as Movie;
+        if (movie) {
+            this.streamVideo(userId, movie.id, movie.path, Number(movie.time), req, res, MediaType.MOVIE);
         } else {
             throw new NotFoundException();
         }
@@ -46,7 +46,7 @@ export class StreamService {
             }
         }
         if (episode) {
-            this.streamVideo(userId, episode.id, episode.path, req, res, MediaType.EPISODE);
+            this.streamVideo(userId, episode.id, episode.path, Number(episode.time), req, res, MediaType.EPISODE);
         } else {
             throw new NotFoundException();
         }
@@ -55,13 +55,13 @@ export class StreamService {
     public async streamNewVideoRunning(newsId: number, req: Request, res: Response): Promise<any> {
         const news: NewsVideoRunning = await this.newsVideoRunningService.getSimpleNewsRunningById(newsId);
         if (news) {
-            this.streamVideo(-1, -1, news.path, req, res, MediaType.OTHER);
+            this.streamVideo(-1, -1, news.path, 0, req, res, MediaType.OTHER);
         } else {
             throw new NotFoundException();
         }
     }
 
-    private async streamVideo(userId: number, mediaId: number, path: string, req: Request, res: Response, mediaType: MediaType): Promise<any> {
+    private async streamVideo(userId: number, mediaId: number, path: string, videoDuration: number, req: Request, res: Response, mediaType: MediaType): Promise<any> {
         try {
             if (!path || !this.fileExists(path)) {
                 return res.status(404).send('File not found');
@@ -70,6 +70,7 @@ export class StreamService {
             const stat = fs.statSync(path);
             const fileSize = stat.size;
             const range = req.headers.range;
+            videoDuration = videoDuration / 10_000_00;
 
             if (range) {
                 const parts = range.replace(/bytes=/, '').split('-');
@@ -94,7 +95,6 @@ export class StreamService {
                     'Content-Type': 'video/x-matroska',
                 });
 
-                // Suivre les bytes streamés
                 let bytesStreamed = 0;
 
                 stream.on('data', (chunk) => {
@@ -107,13 +107,15 @@ export class StreamService {
                     }
                 });
 
-                // Quand le stream est interrompu
                 res.on('close', () => {
                     stream.destroy();
 
-                    // Calculer la position finale
                     const lastBytePosition = start + bytesStreamed;
-                    const watchProgress = (lastBytePosition / fileSize) * 100;
+                
+                    const byteProgress = lastBytePosition / fileSize;
+                    const estimatedTimeSeconds = byteProgress * videoDuration;
+                    
+                    const watchProgress = (estimatedTimeSeconds / videoDuration) * 100;
 
                     if (mediaType === MediaType.MOVIE) {
                         this.statUserService.saveStatUserForMovie(userId, mediaId, watchProgress);
