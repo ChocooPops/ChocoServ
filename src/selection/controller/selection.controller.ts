@@ -25,8 +25,8 @@ export class SelectionController {
     }
 
     @Get('random-media-selection-by-type/:mediaType')
-    async getRandomMovieSelections(@Param('mediaType') mediaType: MediaType): Promise<Selection[]> {
-        return await this.selectionService.createMediaSelectionsByTypeFromCategoryByCount(mediaType);
+    async getRandomMovieSelections(@CurrentUser('sub') userId: number, @Param('mediaType') mediaType: MediaType): Promise<Selection[]> {
+        return await this.selectionService.createMediaSelectionsByTypeFromCategoryByCount(userId, mediaType);
     }
 
     @Get('research/:keyWord')

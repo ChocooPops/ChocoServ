@@ -98,7 +98,7 @@ export class SelectionService {
                 `INNER JOIN Selection_Page selp ON selp.selectionId = sel.id`,
                 `WHERE selp.pageType = ?`,
                 `ORDER BY selp.orderIndex asc`);
-            const selections: Selection[] | null = await conn.query(query, [PageType.HOME]);
+            const selections: Selection[] | null = await conn.query(query, [userId, PageType.HOME]);
             selections.forEach((selection: Selection, index) => {
                 selections[index] = this.getFormatedSelection(selection);
             });
@@ -114,9 +114,9 @@ export class SelectionService {
         }
     }
 
-    public async createMediaSelectionsByTypeFromCategoryByCount(mediaType: MediaType): Promise<Selection[]> {
+    public async createMediaSelectionsByTypeFromCategoryByCount(userId: number, mediaType: MediaType): Promise<Selection[]> {
         const selections: Selection[] = [];
-        const categories: CategoryEntirely[] = await this.categoryService.getCategoriesWithMedia(mediaType);
+        const categories: CategoryEntirely[] = await this.categoryService.getCategoriesWithMedia(userId, mediaType);
         categories.forEach((category: CategoryEntirely) => {
             selections.push({
                 id: category.id,
@@ -156,7 +156,7 @@ export class SelectionService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelections(``, `WHERE sel.id = ?`, ``);
-            const result = await conn.query(query, [id]);
+            const result = await conn.query(query, [-1, id]);
             return this.getFormatedSelection(result[0]);
         } catch (error) {
             return null;

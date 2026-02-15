@@ -5,6 +5,7 @@ import { License } from '../dto/license.interface';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { EditLicense } from '../dto/edit-license.interface';
 import { Graph } from 'src/common-interface/graph.intrface';
+import { CurrentUser } from 'src/guard/current-user.guard';
 
 @Controller('license')
 export class LicenseController {
@@ -32,8 +33,8 @@ export class LicenseController {
     }
 
     @Get(':id')
-    async getLicenseById(@Param('id', ParseIntPipe) id: number): Promise<License> {
-        return await this.licenseService.getEntirelyLicenseById(id);
+    async getLicenseById(@CurrentUser('sub') userId: number, @Param('id', ParseIntPipe) id: number): Promise<License> {
+        return await this.licenseService.getEntirelyLicenseById(userId, id);
     }
 
     @UseGuards(AdminUserGuard)

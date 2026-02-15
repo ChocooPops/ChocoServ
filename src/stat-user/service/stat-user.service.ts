@@ -46,7 +46,7 @@ export class StatUserService {
     public async getMediaSelectionInProgess(userId: number, conn: mariadb.Connection): Promise<Selection | null> {
         try {
             const query: string = this.getQuerySelectMediaInProgress();
-            const results: any[] = await conn.query(query, [userId]);
+            const results: any[] = await conn.query(query, [userId, userId]);
             if (results.length > 0) {
                 const medias: Media[] = results[0].media;
                 medias.forEach((media: Media, index) => {

@@ -91,12 +91,12 @@ export class SimilarTitleService {
         return [];
     }
 
-    public async getAllSimilarTitlesForOneMediaByIdAndType(sourceId: number): Promise<Media[]> {
+    public async getAllSimilarTitlesForOneMediaByIdAndType(userId: number, sourceId: number): Promise<Media[]> {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectSimilarMedia(`WHERE st.sourceId = ?`);
-            const results: any = await conn.query(query, [sourceId]);
-            const medias: Media[] = results[0].media
+            const results: any = await conn.query(query, [userId, sourceId]);
+            const medias: Media[] = results[0].media;
             medias.forEach((media: Media, index) => {
                 if (media.mediaType === MediaType.MOVIE) {
                     medias[index] = this.movieService.getFormatedMovie(media);

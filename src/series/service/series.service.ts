@@ -346,7 +346,7 @@ export class SeriesService extends MediaService {
             const result: any[] = await conn.query(query, id);
             const series: Series = this.getFormatedSeries(result[0]);
             for (const [index, season] of series.seasons.entries()) {
-                const episodes: Episode[] = await this.getEpisodesBySeriesAndSeasonId(series.id, season.id);
+                const episodes: Episode[] = await this.getEpisodesBySeriesAndSeasonId(-1, series.id, season.id);
                 series.seasons[index].episodes = episodes;
             }
             return series;
@@ -380,7 +380,7 @@ export class SeriesService extends MediaService {
         }
     }
 
-    public async getEpisodesBySeriesAndSeasonId(idSeries: number, idSeason: number): Promise<Episode[]> {
+    public async getEpisodesBySeriesAndSeasonId(userId: number, idSeries: number, idSeason: number): Promise<Episode[]> {
         const conn = await this.pool.getConnection();
         try {
             const query: string = `
@@ -396,13 +396,15 @@ export class SeriesService extends MediaService {
                     e.date,
                     e.time,
                     e.quality,
-                    p.name AS srcPoster
+                    p.name AS srcPoster,
+                    su.watchProgress
                     FROM episode e
                     LEFT JOIN poster p ON p.id = e.srcPoster
                     LEFT JOIN media m ON m.id = e.seriesId
+                    LEFT JOIN stat_user su ON su.userId = ? AND su.episodeId = e.id
                     WHERE e.seriesId = ? AND e.seasonId = ?
                     ORDER BY e.episodeNumber;`
-            const results: any[] = await conn.query(query, [idSeries, idSeason]);
+            const results: any[] = await conn.query(query, [userId, idSeries, idSeason]);
             const episodes: Episode[] = [];
             results.forEach((result: any) => {
                 episodes.push({
@@ -420,6 +422,7 @@ export class SeriesService extends MediaService {
             });
             return episodes;
         } catch (error) {
+            console.log(error)
             return [];
         } finally {
             await conn.release();

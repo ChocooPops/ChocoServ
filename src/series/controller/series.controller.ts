@@ -6,6 +6,7 @@ import { EditSeries } from '../dto/edit-series.interface';
 import { AdminUserGuard } from 'src/guard/admin-user.guard';
 import { Episode } from '../dto/episode.interface';
 import { Node } from 'src/common-interface/node.interface';
+import { CurrentUser } from 'src/guard/current-user.guard';
 
 @Controller('series')
 export class SeriesController {
@@ -23,8 +24,8 @@ export class SeriesController {
     }
 
     @Get('episodes/:idSeries/:idSeason')
-    async getEpisodesBySeriesAndSeasonId(@Param('idSeries', ParseIntPipe) idSeries: number, @Param('idSeason', ParseIntPipe) idSeason: number): Promise<Episode[]> {
-        return await this.seriesService.getEpisodesBySeriesAndSeasonId(idSeries, idSeason);
+    async getEpisodesBySeriesAndSeasonId(@CurrentUser('sub') userId: number, @Param('idSeries', ParseIntPipe) idSeries: number, @Param('idSeason', ParseIntPipe) idSeason: number): Promise<Episode[]> {
+        return await this.seriesService.getEpisodesBySeriesAndSeasonId(userId, idSeries, idSeason);
     }
 
     @Get('random-series')

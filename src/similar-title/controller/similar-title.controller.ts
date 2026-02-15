@@ -5,6 +5,7 @@ import { AdminUserGuard } from 'src/guard/admin-user.guard';
 import { SimilarTitle } from '../dto/similar-title.interface';
 import { Link } from 'src/common-interface/link.interface';
 import { Node } from 'src/common-interface/node.interface';
+import { CurrentUser } from 'src/guard/current-user.guard';
 
 @Controller('similar-title')
 export class SimilarTitleController {
@@ -28,8 +29,8 @@ export class SimilarTitleController {
     }
 
     @Get(':id')
-    async getAllSimilarTitlesForOneMovieById(@Param('id', ParseIntPipe) id: number): Promise<Media[]> {
-        return this.similarTitleService.getAllSimilarTitlesForOneMediaByIdAndType(id);
+    async getAllSimilarTitlesForOneMovieById(@CurrentUser('sub') userId: number, @Param('id', ParseIntPipe) id: number): Promise<Media[]> {
+        return this.similarTitleService.getAllSimilarTitlesForOneMediaByIdAndType(userId, id);
     }
 
     @UseGuards(AdminUserGuard)

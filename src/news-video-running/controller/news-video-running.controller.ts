@@ -5,6 +5,7 @@ import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { AdminUserGuard } from "src/guard/admin-user.guard";
 import { NewsVideoRunningService } from '../service/news-video-running.service';
 import { MediaType } from 'src/media/dto/media-type.enum';
+import { CurrentUser } from 'src/guard/current-user.guard';
 
 @Controller('news-video-running')
 export class NewsVideoRunningController {
@@ -12,13 +13,13 @@ export class NewsVideoRunningController {
     constructor(private newsVideoRunningService: NewsVideoRunningService) { }
 
     @Get('movies')
-    async getRandomNewsMovieRunning(): Promise<NewsVideoRunning> {
-        return await this.newsVideoRunningService.getRandomNewsMovieRunning();
+    async getRandomNewsMovieRunning(@CurrentUser('sub') userId: number): Promise<NewsVideoRunning> {
+        return await this.newsVideoRunningService.getRandomNewsMovieRunning(userId);
     }
 
     @Get('series')
-    async getRandomSeriesRunning(): Promise<NewsVideoRunning> {
-        return await this.newsVideoRunningService.getRandomSeriesRunning();
+    async getRandomSeriesRunning(@CurrentUser('sub') userId: number): Promise<NewsVideoRunning> {
+        return await this.newsVideoRunningService.getRandomSeriesRunning(userId);
     }
 
     @Get('all-movies')

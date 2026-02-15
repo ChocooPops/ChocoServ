@@ -47,10 +47,10 @@ export class NewsService {
         return formatedNews;
     }
 
-    public async getAllNews(): Promise<News[]> {
+    public async getAllNews(userId: number): Promise<News[]> {
         const conn = await this.pool.getConnection();
         try {
-            const news: News[] = await conn.query(this.getQuerySelectNews(''));
+            const news: News[] = await conn.query(this.getQuerySelectNews(''), [userId]);
             news.forEach((item: News, index) => {
                 news[index] = this.getFormatedNews(item);
             });

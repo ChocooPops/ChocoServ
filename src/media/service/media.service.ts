@@ -83,6 +83,7 @@ export class MediaService {
                 'seasons',
                 CASE
                     WHEN m.mediaType = 'SERIES' THEN seas.seasons
+                    WHEN m.mediaType = 'MOVIE' THEN JSON_OBJECT('watchProgress', IFNULL(su2.watchProgress, 0))
                     ELSE NULL
                 END
             )
@@ -164,7 +165,9 @@ export class MediaService {
                 FROM season s
                 LEFT JOIN poster sp ON sp.id = s.srcPoster
                 GROUP BY s.seriesId
-            ) seas ON seas.mediaId = m.id`
+            ) seas ON seas.mediaId = m.id
+             
+            LEFT JOIN Stat_User su2 ON su2.userId = ? AND m.id = su2.movieId`
     }
 
     private getQuerySelectMedia(WHERE: string, ORDER: string, LIMIT: string): string {

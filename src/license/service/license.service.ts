@@ -201,11 +201,11 @@ export class LicenseService {
         }
     }
 
-    public async getEntirelyLicenseById(id: number): Promise<License> {
+    public async getEntirelyLicenseById(userId: number, id: number): Promise<License> {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectLicense(`WHERE lic.id = ?`);
-            const result = await conn.query(query, [id]);
+            const result = await conn.query(query, [userId, userId, id]);
             return this.getFormatedLicense(result[0]);
         } catch (error) {
             return null;
@@ -273,7 +273,7 @@ export class LicenseService {
         if (updateLicense.name && updateLicense.name.trim() != "") {
             const conn = await this.pool.getConnection();
             try {
-                const oldLicense: License = await this.getEntirelyLicenseById(updateLicense.id);
+                const oldLicense: License = await this.getEntirelyLicenseById(-1, updateLicense.id);
                 if (oldLicense && oldLicense.id) {
                     if (!(await this.getIfLicenseNameExist(updateLicense.name, updateLicense.id, conn))) {
                         const formatedTitle: string = this.formatPathService.formatPath(oldLicense.name);
