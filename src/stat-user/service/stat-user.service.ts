@@ -26,7 +26,7 @@ export class StatUserService {
     public getQuerySelectMediaInProgress(): string {
         return `
         SELECT 
-        ${this.mediaService.getQuerySelectManyMedia(`ORDER BY su.lastUpdated desc`)} AS media
+        ${this.mediaService.getQuerySelectManyMedia(`ORDER BY su.lastUpdated desc LIMIT 30`)} AS media
         FROM (
             SELECT
                 su.userId,

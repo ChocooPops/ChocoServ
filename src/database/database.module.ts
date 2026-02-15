@@ -19,6 +19,8 @@ export const DATABASE_POOL = 'DATABASE_POOL';
           password: config.get('DB_PASS'),
           database: config.get('DB_NAME'),
           connectionLimit: +config.get('DB_CONNECTION_LIMIT'),
+          decimalAsNumber: true,
+          bigIntAsNumber: true
         });
         // Optionally test connection
         // const conn = await pool.getConnection();

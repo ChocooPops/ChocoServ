@@ -172,7 +172,26 @@ export class MediaService {
                 GROUP BY s.seriesId
             ) seas ON seas.mediaId = m.id
              
-            LEFT JOIN Stat_User su2 ON su2.userId = ? AND m.id = su2.movieId`
+            LEFT JOIN (
+                SELECT 
+                    su.movieId,
+                    su.watchProgress,
+                    su.state,
+                    su.updatedAt
+                FROM Stat_User su
+                INNER JOIN (
+                    SELECT 
+                        movieId,
+                        userId,
+                        MAX(updatedAt) AS max_updated
+                    FROM Stat_User
+                    WHERE movieId IS NOT NULL
+                    GROUP BY movieId, userId
+                ) latest ON su.movieId = latest.movieId 
+                        AND su.userId = latest.userId 
+                        AND su.updatedAt = latest.max_updated
+                WHERE su.userId = ?
+            ) su2 ON su2.movieId = m.id`
     }
 
     private getQuerySelectMedia(WHERE: string, ORDER: string, LIMIT: string): string {
@@ -467,7 +486,7 @@ export class MediaService {
         }
     }
 
-    public async getMoviesAndSeriesByResearch(keyWord: string): Promise<any[]> {
+    public async getMoviesAndSeriesByResearch(userId: number, keyWord: string): Promise<any[]> {
         const conn = await this.pool.getConnection();
         try {
             const querySelectAllMedias: string = `SELECT id, title FROM Media`;
@@ -479,7 +498,7 @@ export class MediaService {
                 const ORDER: string = `ORDER BY FIELD (m.id, ${mediaIds.map(() => '?').join(', ')})`;
                 const LIMIT: string = `LIMIT 50`;
                 const queryFiltered: string = this.getQuerySelectMedia(WHERE, ORDER, LIMIT);
-                const results: any[] = await conn.query(queryFiltered, [...mediaIds, ...mediaIds]);
+                const results: any[] = await conn.query(queryFiltered, [userId, ...mediaIds, ...mediaIds]);
                 return results;
             }
             return medias;

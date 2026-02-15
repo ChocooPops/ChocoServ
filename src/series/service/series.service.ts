@@ -331,11 +331,31 @@ export class SeriesService extends MediaService {
                     )
                 ) combined_results
                 INNER JOIN Episode e ON e.id = combined_results.episodeId
-                LEFT JOIN Stat_User su ON su.episodeId = combined_results.episodeId AND su.userId = ?
+                LEFT JOIN (
+                    SELECT 
+                        su_inner.episodeId,
+                        su_inner.userId,
+                        su_inner.watchProgress,
+                        su_inner.state,
+                        su_inner.updatedAt
+                    FROM Stat_User su_inner
+                    INNER JOIN (
+                        -- Trouve la date la plus récente par episodeId et userId
+                        SELECT 
+                            episodeId,
+                            userId,
+                            MAX(updatedAt) AS max_updated
+                        FROM Stat_User
+                        WHERE episodeId IS NOT NULL
+                        GROUP BY episodeId, userId
+                    ) latest ON su_inner.episodeId = latest.episodeId 
+                            AND su_inner.userId = latest.userId 
+                            AND su_inner.updatedAt = latest.max_updated
+                    WHERE su_inner.userId = ?
+                ) su ON su.episodeId = e.id AND su.userId = ?
                 ORDER BY combined_results.priority
-                LIMIT 1
-                `,
-                [userId, seriesId, userId, seriesId, userId, seriesId, userId]
+                LIMIT 1`,
+                [userId, seriesId, userId, seriesId, userId, seriesId, userId, userId]
             );
             if (result.length > 0 && result[0]) {
                 result[0].time = Number(result[0]);
@@ -412,10 +432,31 @@ export class SeriesService extends MediaService {
                     FROM episode e
                     LEFT JOIN poster p ON p.id = e.srcPoster
                     LEFT JOIN media m ON m.id = e.seriesId
-                    LEFT JOIN stat_user su ON su.userId = ? AND su.episodeId = e.id
+                    LEFT JOIN (
+                        SELECT 
+                            su_inner.episodeId,
+                            su_inner.userId,
+                            su_inner.watchProgress,
+                            su_inner.state,
+                            su_inner.updatedAt
+                        FROM Stat_User su_inner
+                        INNER JOIN (
+                            -- Trouve la date la plus récente par episodeId et userId
+                            SELECT 
+                                episodeId,
+                                userId,
+                                MAX(updatedAt) AS max_updated
+                            FROM Stat_User
+                            WHERE episodeId IS NOT NULL
+                            GROUP BY episodeId, userId
+                        ) latest ON su_inner.episodeId = latest.episodeId 
+                                AND su_inner.userId = latest.userId 
+                                AND su_inner.updatedAt = latest.max_updated
+                        WHERE su_inner.userId = ?
+                    ) su ON su.episodeId = e.id AND su.userId = ?
                     WHERE e.seriesId = ? AND e.seasonId = ?
                     ORDER BY e.episodeNumber;`
-            const results: any[] = await conn.query(query, [userId, idSeries, idSeason]);
+            const results: any[] = await conn.query(query, [userId, userId, idSeries, idSeason]);
             const episodes: Episode[] = [];
             results.forEach((result: any) => {
                 episodes.push({

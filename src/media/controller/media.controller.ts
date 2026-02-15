@@ -6,6 +6,7 @@ import { SeriesService } from 'src/series/service/series.service';
 import { MediaType } from '../dto/media-type.enum';
 import { AdminUserGuard } from 'src/guard/admin-user.guard';
 import { Node } from 'src/common-interface/node.interface';
+import { CurrentUser } from 'src/guard/current-user.guard';
 
 @Controller('media')
 export class MediaController {
@@ -16,9 +17,9 @@ export class MediaController {
     ) { }
 
     @Get('research/:keyword')
-    async getMediaByResearch(@Param('keyword') keyword: string): Promise<Media[]> {
+    async getMediaByResearch(@CurrentUser('sub') userId: number, @Param('keyword') keyword: string): Promise<Media[]> {
         const medias: Media[] = [];
-        const items: any[] = await this.mediaService.getMoviesAndSeriesByResearch(keyword);
+        const items: any[] = await this.mediaService.getMoviesAndSeriesByResearch(userId, keyword);
         items.forEach((item: any) => {
             if (item.media.mediaType === MediaType.MOVIE) {
                 medias.push(this.movieService.getFormatedMovie(item));
