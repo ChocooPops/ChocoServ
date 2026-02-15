@@ -36,20 +36,12 @@ export class StreamService {
     }
 
     public async streamEpisode(userId: number, seasonId: number, episodeId: number, req: Request, res: Response): Promise<any> {
-        let episode: Episode | null = null;
-        if (episodeId && episodeId > 0) {
-            episode = await this.seriesService.getSimpleEpisodeById(episodeId);
-        } else {
-            episode = await this.seriesService.getLastWatchedEpisode(userId, seasonId);
-            if (!episode) {
-                episode = await this.seriesService.getFirstEpisodeBySeason(seasonId);
-            }
-        }
+        const episode: Episode = await this.seriesService.getSimpleEpisodeById(episodeId);
         if (episode) {
             this.streamVideo(userId, episode.id, episode.path, Number(episode.time), req, res, MediaType.EPISODE);
         } else {
             throw new NotFoundException();
-        }
+        }        
     }
 
     public async streamNewVideoRunning(newsId: number, req: Request, res: Response): Promise<any> {

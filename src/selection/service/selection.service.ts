@@ -98,7 +98,7 @@ export class SelectionService {
                 `INNER JOIN Selection_Page selp ON selp.selectionId = sel.id`,
                 `WHERE selp.pageType = ?`,
                 `ORDER BY selp.orderIndex asc`);
-            const selections: Selection[] | null = await conn.query(query, [userId, PageType.HOME]);
+            const selections: any[] | null = await conn.query(query, [userId, PageType.HOME]);
             selections.forEach((selection: Selection, index) => {
                 selections[index] = this.getFormatedSelection(selection);
             });

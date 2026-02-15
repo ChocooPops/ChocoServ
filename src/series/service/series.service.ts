@@ -206,6 +206,7 @@ export class SeriesService extends MediaService {
         series.seasons = this.getFormatedSeasons(series.seasons, series.title);
         delete (series as any).time;
         delete (series as any).quality;
+        delete (series as any).watchProgress;
         return series;
     }
 
@@ -233,7 +234,7 @@ export class SeriesService extends MediaService {
         }
     }
 
-    public async getFirstEpisodeBySeason(seasonId: number): Promise<Episode | null> {
+    public async getFirstEpisodeBySeason(seriesId: number): Promise<Episode | null> {
         const conn = await this.pool.getConnection();
         try {
             const query: string = `
@@ -249,7 +250,12 @@ export class SeriesService extends MediaService {
                 AND e.episodeNumber = 1
                 AND m.mediaType = 'SERIES'
                 LIMIT 1;`
-            const result: Episode[] = await conn.query(query, [seasonId]);
+            const result: Episode[] = await conn.query(query, [seriesId]);
+            if (result.length > 0 && result[0]) {
+                result[0].time = Number(result[0]);
+            } else {
+                return null;
+            }
             return result[0] ?? null;
         } catch (error) {
             throw error;
@@ -258,12 +264,12 @@ export class SeriesService extends MediaService {
         }
     }
 
-    public async getLastWatchedEpisode(userId: number, mediaId: number): Promise<Episode | null> {
+    public async getLastWatchedEpisode(userId: number, seriesId: number): Promise<Episode | null> {
         const conn = await this.pool.getConnection();
         try {
             const result: any[] = await conn.query(
                 `
-                SELECT e.*
+                SELECT e.*, su.watchProgress
                 FROM (
                     (
                         -- Cas 1: Retourner l'épisode IN_PROGRESS
@@ -325,13 +331,18 @@ export class SeriesService extends MediaService {
                     )
                 ) combined_results
                 INNER JOIN Episode e ON e.id = combined_results.episodeId
+                LEFT JOIN Stat_User su ON su.episodeId = combined_results.episodeId AND su.userId = ?
                 ORDER BY combined_results.priority
                 LIMIT 1
                 `,
-                [userId, mediaId, userId, mediaId, userId, mediaId]
+                [userId, seriesId, userId, seriesId, userId, seriesId, userId]
             );
-
-            return result.length > 0 ? result[0] : null;
+            if (result.length > 0 && result[0]) {
+                result[0].time = Number(result[0]);
+                return result[0];
+            } else {
+                return await this.getFirstEpisodeBySeason(seriesId);
+            }
         } catch (error) {
             throw error;
         } finally {
@@ -422,7 +433,6 @@ export class SeriesService extends MediaService {
             });
             return episodes;
         } catch (error) {
-            console.log(error)
             return [];
         } finally {
             await conn.release();

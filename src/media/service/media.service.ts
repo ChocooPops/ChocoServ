@@ -79,11 +79,16 @@ export class MediaService {
                 ),
 
                 'mediaType', m.mediaType,
+                
+                'watchProgress', 
+                CASE
+                    WHEN m.mediaType = 'MOVIE' THEN IFNULL(su2.watchProgress, 0)
+                    ELSE NULL
+                END,
 
                 'seasons',
                 CASE
                     WHEN m.mediaType = 'SERIES' THEN seas.seasons
-                    WHEN m.mediaType = 'MOVIE' THEN JSON_OBJECT('watchProgress', IFNULL(su2.watchProgress, 0))
                     ELSE NULL
                 END
             )
