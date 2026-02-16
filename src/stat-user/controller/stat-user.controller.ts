@@ -7,6 +7,7 @@ import { WatchingStatsResponse } from '../dto/watching-stats-response.interface'
 import { PeriodType } from '../dto/period.type';
 import { ContentType } from '../dto/content.type';
 import { TopMediaResponse } from '../dto/top-media-response.interface';
+import { MediaTypeFilter } from '../dto/media-type-filter.interface';
 
 @Controller('stat-user')
 export class StatUserController {
@@ -77,8 +78,9 @@ export class StatUserController {
   async getUserTopMedia(
     @CurrentUser('sub') userIdToken: number,
     @Param('userId', ParseIntPipe) userId: number,
+    @Query('mediaType') mediaType: MediaTypeFilter = 'all',
   ): Promise<TopMediaResponse> {
-    return this.statUserService.getUserTopMedia(userId > 0 ? userId : userIdToken);
+    return this.statUserService.getUserTopMedia(userId > 0 ? userId : userIdToken, mediaType);
   }
 
 }

@@ -20,6 +20,7 @@ import { WatchingStatsResponse } from '../dto/watching-stats-response.interface'
 import { TopMedia } from '../dto/top-media.interface';
 import { TopMediaResponse } from '../dto/top-media-response.interface';
 import { FormatPathService } from 'src/common-service/format-path.service';
+import { MediaTypeFilter } from '../dto/media-type-filter.interface';
 
 @Injectable()
 export class StatUserService {
@@ -30,7 +31,7 @@ export class StatUserService {
     private readonly mediaService: MediaService,
     private readonly movieService: MovieService,
     private readonly seriesService: SeriesService,
-    private readonly formatPathService: FormatPathService
+    private readonly formatPathService: FormatPathService,
   ) {}
 
   public getQuerySelectMediaInProgress(): string {
@@ -286,7 +287,7 @@ export class StatUserService {
         LIMIT ?
         `;
 
-      const rows = await conn.execute(query, [userId, userId, limit]);
+      const rows = await conn.query(query, [userId, userId, limit]);
 
       if (!rows || (rows as any[]).length === 0) {
         return {
@@ -379,7 +380,7 @@ export class StatUserService {
             LIMIT ?
             `;
 
-      const rows = await conn.execute(query, [userId, userId, limit]);
+      const rows = await conn.query(query, [userId, userId, limit]);
 
       if (!rows || (rows as any[]).length === 0) {
         return {
@@ -479,7 +480,7 @@ export class StatUserService {
                 ORDER BY ctc.total_time DESC
                 LIMIT ?`;
 
-      const rows = await conn.execute(query, [userId, userId, limit]);
+      const rows = await conn.query(query, [userId, userId, limit]);
       return rows;
     } catch (error) {
       throw error;
@@ -549,7 +550,7 @@ export class StatUserService {
         COALESCE((SELECT total_time_seconds FROM series_stats), 0) as total_time_seconds
     `;
 
-      const rows = await conn.execute(query, [userId, userId]);
+      const rows = await conn.query(query, [userId, userId]);
 
       if (!Array.isArray(rows) || rows.length === 0) {
         return this.getEmptyWatchTimeStats(userId);
@@ -628,7 +629,7 @@ export class StatUserService {
       const dateFormat = this.getDateFormat(periodType);
       const query = this.buildQuery(periodType, contentType, dateFormat);
 
-      const rows = await conn.execute(query, [
+      const rows = await conn.query(query, [
         userId,
         startDate,
         userId,
@@ -687,7 +688,6 @@ export class StatUserService {
     contentType: ContentType,
     dateFormat: string,
   ): string {
-    // Base query structure
     let query = `
       WITH movie_data AS (
         SELECT 
@@ -760,7 +760,6 @@ export class StatUserService {
         ORDER BY ss.period ASC
       `;
     } else {
-      // 'all' - combine both
       query += `
         SELECT 
           COALESCE(ms.period, ss.period) as period,
@@ -787,12 +786,95 @@ export class StatUserService {
     return query;
   }
 
-  async getUserTopMedia(userId: number): Promise<TopMediaResponse> {
+  public async getUserTopMedia(
+    userId: number,
+    mediaType: MediaTypeFilter = 'all',
+  ): Promise<TopMediaResponse> {
     const conn = await this.pool.getConnection();
     try {
-      const query = `
-      WITH media_stats AS (
-        -- Statistiques des films
+      const query = this.buildQueryTopMedia(mediaType);
+      const rows = await conn.query(query, [userId, userId]);
+
+      if (!Array.isArray(rows)) {
+        return {
+          userId,
+          mediaType,
+          topMedia: [],
+        };
+      }
+
+      const topMedia: TopMedia[] = (rows as any[]).map((row) => ({
+        rank: parseInt(row.rank),
+        mediaId: parseInt(row.mediaId),
+        title: row.title,
+        mediaType: row.mediaType,
+        description: row.description,
+        date: row.date,
+        quality: row.quality,
+        posterName: this.formatPathService.getOneFormatedPosterUrl(row.title, row.mediaType, row.posterName),
+        posterType: row.posterType,
+        watchCount: parseInt(row.watchCount),
+        totalProgress: parseFloat(row.totalProgress),
+        avgProgress: parseFloat(row.avgProgress),
+      }));
+
+      return {
+        userId,
+        mediaType,
+        topMedia,
+      };
+    } catch (error) {
+      throw error;
+    } finally {
+      await conn.release();
+    }
+  }
+
+  private buildQueryTopMedia(mediaType: MediaTypeFilter): string {
+    let mediaStatsQuery = '';
+
+    if (mediaType === 'MOVIE') {
+      // Uniquement les films
+      mediaStatsQuery = `
+        SELECT 
+          m.id as mediaId,
+          m.title,
+          m.mediaType,
+          m.description,
+          m.date,
+          m.quality,
+          COUNT(su.id) as watch_count,
+          SUM(su.watchProgress) as total_progress,
+          AVG(su.watchProgress) as avg_progress
+        FROM Stat_User su
+        INNER JOIN Media m ON m.id = su.movieId
+        WHERE su.userId = ?
+          AND su.movieId IS NOT NULL
+        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, m.quality
+      `;
+    } else if (mediaType === 'SERIES') {
+      // Uniquement les séries
+      mediaStatsQuery = `
+        SELECT 
+          m.id as mediaId,
+          m.title,
+          m.mediaType,
+          m.description,
+          m.date,
+          m.quality,
+          COUNT(DISTINCT su.episodeId) as watch_count,
+          SUM(su.watchProgress) as total_progress,
+          AVG(su.watchProgress) as avg_progress
+        FROM Stat_User su
+        INNER JOIN Episode e ON e.id = su.episodeId
+        INNER JOIN Media m ON m.id = e.seriesId
+        WHERE su.userId = ?
+          AND su.episodeId IS NOT NULL
+        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, m.quality
+      `;
+    } else {
+      // Tous les médias (films et séries)
+      mediaStatsQuery = `
         SELECT 
           m.id as mediaId,
           m.title,
@@ -811,7 +893,6 @@ export class StatUserService {
         
         UNION ALL
         
-        -- Statistiques des séries (groupées par série)
         SELECT 
           m.id as mediaId,
           m.title,
@@ -828,6 +909,12 @@ export class StatUserService {
         WHERE su.userId = ?
           AND su.episodeId IS NOT NULL
         GROUP BY m.id, m.title, m.mediaType, m.description, m.date, m.quality
+      `;
+    }
+
+    return `
+      WITH media_stats AS (
+        ${mediaStatsQuery}
       ),
       ranked_media AS (
         SELECT 
@@ -840,7 +927,6 @@ export class StatUserService {
           watch_count,
           total_progress,
           avg_progress,
-          -- Score composite : nombre de visionnages + progression moyenne
           (watch_count * 100 + total_progress) as score,
           ROW_NUMBER() OVER (ORDER BY (watch_count * 100 + total_progress) DESC) as media_rank
         FROM media_stats
@@ -852,7 +938,6 @@ export class StatUserService {
         ORDER BY media_rank
       ),
       poster_priority AS (
-        -- Récupérer le meilleur poster pour chaque média du top 10
         SELECT 
           mp.mediaId,
           p.name as posterName,
@@ -895,39 +980,5 @@ export class StatUserService {
       LEFT JOIN poster_priority pp ON pp.mediaId = tm.mediaId AND pp.poster_rank = 1
       ORDER BY tm.media_rank ASC
     `;
-
-      const rows = await conn.execute(query, [userId, userId]);
-
-      if (!Array.isArray(rows)) {
-        return {
-          userId,
-          topMedia: [],
-        };
-      }
-
-      const topMedia: TopMedia[] = (rows as any[]).map((row) => ({
-        rank: parseInt(row.rank),
-        mediaId: parseInt(row.mediaId),
-        title: row.title,
-        mediaType: row.mediaType,
-        description: row.description,
-        date: row.date,
-        quality: row.quality,
-        posterName: this.formatPathService.getOneFormatedPosterUrl(row.title, row.mediaType, row.posterName),
-        posterType: row.posterType,
-        watchCount: parseInt(row.watchCount),
-        totalProgress: parseFloat(row.totalProgress),
-        avgProgress: parseFloat(row.avgProgress),
-      }));
-
-      return {
-        userId,
-        topMedia,
-      };
-    } catch (error) {
-      throw error;
-    } finally {
-      await conn.release();
-    }
   }
 }
