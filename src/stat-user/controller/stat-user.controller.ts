@@ -3,9 +3,13 @@ import { UserCategoryPreferences } from '../dto/user-category-preferences.interf
 import { StatUserService } from '../service/stat-user.service';
 import { CurrentUser } from 'src/guard/current-user.guard';
 import { WatchTimeStats } from '../dto/watch-time-stats.interface';
+import { WatchingStatsResponse } from '../dto/watching-stats-response.interface';
+import { PeriodType } from '../dto/period.type';
+import { ContentType } from '../dto/content.type';
 
 @Controller('stat-user')
 export class StatUserController {
+
   constructor(private statUserService: StatUserService) {}
 
   @Get(':userId/categories/preferences')
@@ -50,6 +54,21 @@ export class StatUserController {
     @Param('userId', ParseIntPipe) userId: number,
   ): Promise<WatchTimeStats> {
     return this.statUserService.getUserWatchTime(userId > 0 ? userId : userIdToken);
+  }
+
+  @Get('users/:userId/watching-history')
+  async getUserWatchingHistory(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Query('startDate') startDate: string,
+    @Query('periodType') periodType: PeriodType = 'month',
+    @Query('contentType') contentType: ContentType = 'all',
+  ): Promise<WatchingStatsResponse> {
+    return this.statUserService.getUserWatchingHistory(
+      userId,
+      startDate,
+      periodType,
+      contentType,
+    );
   }
 
 }

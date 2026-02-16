@@ -13,6 +13,10 @@ import { SelectionType } from 'src/selection/dto/selection-type.enum';
 import { CategoryStats } from '../dto/category-stats.interface';
 import { UserCategoryPreferences } from '../dto/user-category-preferences.interface';
 import { WatchTimeStats } from '../dto/watch-time-stats.interface';
+import { ContentType } from '../dto/content.type';
+import { DataPoint } from '../dto/data-point.interface';
+import { PeriodType } from '../dto/period.type';
+import { WatchingStatsResponse } from '../dto/watching-stats-response.interface';
 
 @Injectable()
 export class StatUserService {
@@ -541,40 +545,41 @@ export class StatUserService {
         COALESCE((SELECT total_time_seconds FROM series_stats), 0) as total_time_seconds
     `;
 
-    const rows = await conn.execute(query, [userId, userId]);
+      const rows = await conn.execute(query, [userId, userId]);
 
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return this.getEmptyWatchTimeStats(userId);
-    }
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return this.getEmptyWatchTimeStats(userId);
+      }
 
-    const data = rows[0] as any;
+      const data = rows[0] as any;
 
-    const movieTimeSeconds = parseFloat(data.movie_time_seconds || 0);
-    const seriesTimeSeconds = parseFloat(data.series_time_seconds || 0);
-    const totalTimeSeconds = parseFloat(data.total_time_seconds || 0);
+      const movieTimeSeconds = parseFloat(data.movie_time_seconds || 0);
+      const seriesTimeSeconds = parseFloat(data.series_time_seconds || 0);
+      const totalTimeSeconds = parseFloat(data.total_time_seconds || 0);
 
-    return {
-      userId,
-      movies: {
-        totalHours: Math.floor(movieTimeSeconds / 3600),
-        totalMinutes: Math.floor((movieTimeSeconds % 3600) / 60),
-        totalSeconds: Math.floor(movieTimeSeconds % 60),
-        contentCount: parseInt(data.movie_count || 0),
-      },
-      series: {
-        totalHours: Math.floor(seriesTimeSeconds / 3600),
-        totalMinutes: Math.floor((seriesTimeSeconds % 3600) / 60),
-        totalSeconds: Math.floor(seriesTimeSeconds % 60),
-        contentCount: parseInt(data.series_count || 0),
-        episodeCount: parseInt(data.episode_count || 0),
-      },
-      total: {
-        totalHours: Math.floor(totalTimeSeconds / 3600),
-        totalMinutes: Math.floor((totalTimeSeconds % 3600) / 60),
-        totalSeconds: Math.floor(totalTimeSeconds % 60),
-        contentCount: parseInt(data.movie_count || 0) + parseInt(data.series_count || 0),
-      },
-    };
+      return {
+        userId,
+        movies: {
+          totalHours: Math.floor(movieTimeSeconds / 3600),
+          totalMinutes: Math.floor((movieTimeSeconds % 3600) / 60),
+          totalSeconds: Math.floor(movieTimeSeconds % 60),
+          contentCount: parseInt(data.movie_count || 0),
+        },
+        series: {
+          totalHours: Math.floor(seriesTimeSeconds / 3600),
+          totalMinutes: Math.floor((seriesTimeSeconds % 3600) / 60),
+          totalSeconds: Math.floor(seriesTimeSeconds % 60),
+          contentCount: parseInt(data.series_count || 0),
+          episodeCount: parseInt(data.episode_count || 0),
+        },
+        total: {
+          totalHours: Math.floor(totalTimeSeconds / 3600),
+          totalMinutes: Math.floor((totalTimeSeconds % 3600) / 60),
+          totalSeconds: Math.floor(totalTimeSeconds % 60),
+          contentCount:
+            parseInt(data.movie_count || 0) + parseInt(data.series_count || 0),
+        },
+      };
     } catch (error) {
       throw error;
     } finally {
@@ -605,5 +610,176 @@ export class StatUserService {
         contentCount: 0,
       },
     };
+  }
+
+  async getUserWatchingHistory(
+    userId: number,
+    startDate: string,
+    periodType: PeriodType,
+    contentType: ContentType,
+  ): Promise<WatchingStatsResponse> {
+    const conn = await this.pool.getConnection();
+
+    try {
+      const dateFormat = this.getDateFormat(periodType);
+      const query = this.buildQuery(periodType, contentType, dateFormat);
+
+      const rows = await conn.execute(query, [
+        userId,
+        startDate,
+        userId,
+        startDate,
+      ]);
+
+      if (!Array.isArray(rows)) {
+        return {
+          userId,
+          startDate,
+          periodType,
+          contentType,
+          data: [],
+        };
+      }
+
+      const data: DataPoint[] = (rows as any[]).map((row) => ({
+        period: row.period,
+        hours: parseFloat(row.total_hours || 0),
+        movies: parseInt(row.movie_count || 0),
+        series: parseInt(row.series_count || 0),
+        episodeCount: parseInt(row.episode_count || 0),
+      }));
+
+      return {
+        userId,
+        startDate,
+        periodType,
+        contentType,
+        data,
+      };
+    } catch (error) {
+      throw error;
+    } finally {
+      await conn.release();
+    }
+  }
+
+  private getDateFormat(periodType: PeriodType): string {
+    switch (periodType) {
+      case 'day':
+        return '%Y-%m-%d';
+      case 'week':
+        return '%Y-W%u'; // Année + numéro de semaine
+      case 'month':
+        return '%Y-%m';
+      case 'year':
+        return '%Y';
+      default:
+        return '%Y-%m';
+    }
+  }
+
+  private buildQuery(
+    periodType: PeriodType,
+    contentType: ContentType,
+    dateFormat: string,
+  ): string {
+    // Base query structure
+    let query = `
+      WITH movie_data AS (
+        SELECT 
+          DATE_FORMAT(su.createdAt, '${dateFormat}') as period,
+          m.id as content_id,
+          (m.time / 10000000) as time_seconds,
+          MAX(su.watchProgress) as max_progress
+        FROM Stat_User su
+        INNER JOIN Media m ON m.id = su.movieId
+        WHERE su.userId = ?
+          AND su.movieId IS NOT NULL
+          AND m.time IS NOT NULL
+          AND su.createdAt >= ?
+        GROUP BY period, m.id, m.time
+      ),
+      movie_stats AS (
+        SELECT 
+          period,
+          COUNT(DISTINCT content_id) as movie_count,
+          SUM(time_seconds * max_progress / 100.0) as total_seconds
+        FROM movie_data
+        GROUP BY period
+      ),
+      episode_data AS (
+        SELECT 
+          DATE_FORMAT(su.createdAt, '${dateFormat}') as period,
+          e.id as episode_id,
+          e.seriesId,
+          (e.time / 10000000) as time_seconds,
+          MAX(su.watchProgress) as max_progress
+        FROM Stat_User su
+        INNER JOIN Episode e ON e.id = su.episodeId
+        WHERE su.userId = ?
+          AND su.episodeId IS NOT NULL
+          AND e.time IS NOT NULL
+          AND su.createdAt >= ?
+        GROUP BY period, e.id, e.seriesId, e.time
+      ),
+      series_stats AS (
+        SELECT 
+          period,
+          COUNT(DISTINCT seriesId) as series_count,
+          COUNT(DISTINCT episode_id) as episode_count,
+          SUM(time_seconds * max_progress / 100.0) as total_seconds
+        FROM episode_data
+        GROUP BY period
+      )
+    `;
+
+    if (contentType === 'movies') {
+      query += `
+        SELECT 
+          ms.period,
+          COALESCE(ms.movie_count, 0) as movie_count,
+          0 as series_count,
+          0 as episode_count,
+          ROUND(COALESCE(ms.total_seconds, 0) / 3600, 2) as total_hours
+        FROM movie_stats ms
+        ORDER BY ms.period ASC
+      `;
+    } else if (contentType === 'series') {
+      query += `
+        SELECT 
+          ss.period,
+          0 as movie_count,
+          COALESCE(ss.series_count, 0) as series_count,
+          COALESCE(ss.episode_count, 0) as episode_count,
+          ROUND(COALESCE(ss.total_seconds, 0) / 3600, 2) as total_hours
+        FROM series_stats ss
+        ORDER BY ss.period ASC
+      `;
+    } else {
+      // 'all' - combine both
+      query += `
+        SELECT 
+          COALESCE(ms.period, ss.period) as period,
+          COALESCE(ms.movie_count, 0) as movie_count,
+          COALESCE(ss.series_count, 0) as series_count,
+          COALESCE(ss.episode_count, 0) as episode_count,
+          ROUND((COALESCE(ms.total_seconds, 0) + COALESCE(ss.total_seconds, 0)) / 3600, 2) as total_hours
+        FROM movie_stats ms
+        LEFT JOIN series_stats ss ON ms.period = ss.period
+        UNION
+        SELECT 
+          ss.period,
+          COALESCE(ms.movie_count, 0) as movie_count,
+          COALESCE(ss.series_count, 0) as series_count,
+          COALESCE(ss.episode_count, 0) as episode_count,
+          ROUND((COALESCE(ms.total_seconds, 0) + COALESCE(ss.total_seconds, 0)) / 3600, 2) as total_hours
+        FROM series_stats ss
+        LEFT JOIN movie_stats ms ON ss.period = ms.period
+        WHERE ms.period IS NULL
+        ORDER BY period ASC
+      `;
+    }
+
+    return query;
   }
 }
