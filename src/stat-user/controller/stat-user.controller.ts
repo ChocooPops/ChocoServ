@@ -6,6 +6,7 @@ import { WatchTimeStats } from '../dto/watch-time-stats.interface';
 import { WatchingStatsResponse } from '../dto/watching-stats-response.interface';
 import { PeriodType } from '../dto/period.type';
 import { ContentType } from '../dto/content.type';
+import { TopMediaResponse } from '../dto/top-media-response.interface';
 
 @Controller('stat-user')
 export class StatUserController {
@@ -58,17 +59,26 @@ export class StatUserController {
 
   @Get('users/:userId/watching-history')
   async getUserWatchingHistory(
+    @CurrentUser('sub') userIdToken: number,
     @Param('userId', ParseIntPipe) userId: number,
     @Query('startDate') startDate: string,
     @Query('periodType') periodType: PeriodType = 'month',
     @Query('contentType') contentType: ContentType = 'all',
   ): Promise<WatchingStatsResponse> {
     return this.statUserService.getUserWatchingHistory(
-      userId,
+      userId > 0 ? userId : userIdToken,
       startDate,
       periodType,
       contentType,
     );
+  }
+
+  @Get('users/:userId/top-media')
+  async getUserTopMedia(
+    @CurrentUser('sub') userIdToken: number,
+    @Param('userId', ParseIntPipe) userId: number,
+  ): Promise<TopMediaResponse> {
+    return this.statUserService.getUserTopMedia(userId > 0 ? userId : userIdToken);
   }
 
 }

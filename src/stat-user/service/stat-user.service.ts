@@ -17,6 +17,9 @@ import { ContentType } from '../dto/content.type';
 import { DataPoint } from '../dto/data-point.interface';
 import { PeriodType } from '../dto/period.type';
 import { WatchingStatsResponse } from '../dto/watching-stats-response.interface';
+import { TopMedia } from '../dto/top-media.interface';
+import { TopMediaResponse } from '../dto/top-media-response.interface';
+import { FormatPathService } from 'src/common-service/format-path.service';
 
 @Injectable()
 export class StatUserService {
@@ -27,6 +30,7 @@ export class StatUserService {
     private readonly mediaService: MediaService,
     private readonly movieService: MovieService,
     private readonly seriesService: SeriesService,
+    private readonly formatPathService: FormatPathService
   ) {}
 
   public getQuerySelectMediaInProgress(): string {
@@ -781,5 +785,149 @@ export class StatUserService {
     }
 
     return query;
+  }
+
+  async getUserTopMedia(userId: number): Promise<TopMediaResponse> {
+    const conn = await this.pool.getConnection();
+    try {
+      const query = `
+      WITH media_stats AS (
+        -- Statistiques des films
+        SELECT 
+          m.id as mediaId,
+          m.title,
+          m.mediaType,
+          m.description,
+          m.date,
+          m.quality,
+          COUNT(su.id) as watch_count,
+          SUM(su.watchProgress) as total_progress,
+          AVG(su.watchProgress) as avg_progress
+        FROM Stat_User su
+        INNER JOIN Media m ON m.id = su.movieId
+        WHERE su.userId = ?
+          AND su.movieId IS NOT NULL
+        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, m.quality
+        
+        UNION ALL
+        
+        -- Statistiques des séries (groupées par série)
+        SELECT 
+          m.id as mediaId,
+          m.title,
+          m.mediaType,
+          m.description,
+          m.date,
+          m.quality,
+          COUNT(DISTINCT su.episodeId) as watch_count,
+          SUM(su.watchProgress) as total_progress,
+          AVG(su.watchProgress) as avg_progress
+        FROM Stat_User su
+        INNER JOIN Episode e ON e.id = su.episodeId
+        INNER JOIN Media m ON m.id = e.seriesId
+        WHERE su.userId = ?
+          AND su.episodeId IS NOT NULL
+        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, m.quality
+      ),
+      ranked_media AS (
+        SELECT 
+          mediaId,
+          title,
+          mediaType,
+          description,
+          date,
+          quality,
+          watch_count,
+          total_progress,
+          avg_progress,
+          -- Score composite : nombre de visionnages + progression moyenne
+          (watch_count * 100 + total_progress) as score,
+          ROW_NUMBER() OVER (ORDER BY (watch_count * 100 + total_progress) DESC) as media_rank
+        FROM media_stats
+      ),
+      top_10_media AS (
+        SELECT * 
+        FROM ranked_media 
+        WHERE media_rank <= 10
+        ORDER BY media_rank
+      ),
+      poster_priority AS (
+        -- Récupérer le meilleur poster pour chaque média du top 10
+        SELECT 
+          mp.mediaId,
+          p.name as posterName,
+          mp.type as posterType,
+          CASE 
+            WHEN mp.type = 'SPECIAL' THEN 1
+            WHEN mp.type = 'NORMAL' THEN 2
+            WHEN mp.type = 'LICENSE' THEN 3
+            ELSE 4
+          END as priority,
+          ROW_NUMBER() OVER (
+            PARTITION BY mp.mediaId 
+            ORDER BY 
+              CASE 
+                WHEN mp.type = 'SPECIAL' THEN 1
+                WHEN mp.type = 'NORMAL' THEN 2
+                WHEN mp.type = 'LICENSE' THEN 3
+                ELSE 4
+              END
+          ) as poster_rank
+        FROM top_10_media tm
+        INNER JOIN Media_Poster mp ON mp.mediaId = tm.mediaId
+        INNER JOIN Poster p ON p.id = mp.posterId
+        WHERE mp.type IN ('SPECIAL', 'NORMAL', 'LICENSE')
+      )
+      SELECT 
+        tm.media_rank as rank,
+        tm.mediaId,
+        tm.title,
+        tm.mediaType,
+        tm.description,
+        DATE_FORMAT(tm.date, '%Y-%m-%d') as date,
+        tm.quality,
+        pp.posterName,
+        pp.posterType,
+        tm.watch_count as watchCount,
+        ROUND(tm.total_progress, 2) as totalProgress,
+        ROUND(tm.avg_progress, 2) as avgProgress
+      FROM top_10_media tm
+      LEFT JOIN poster_priority pp ON pp.mediaId = tm.mediaId AND pp.poster_rank = 1
+      ORDER BY tm.media_rank ASC
+    `;
+
+      const rows = await conn.execute(query, [userId, userId]);
+
+      if (!Array.isArray(rows)) {
+        return {
+          userId,
+          topMedia: [],
+        };
+      }
+
+      const topMedia: TopMedia[] = (rows as any[]).map((row) => ({
+        rank: parseInt(row.rank),
+        mediaId: parseInt(row.mediaId),
+        title: row.title,
+        mediaType: row.mediaType,
+        description: row.description,
+        date: row.date,
+        quality: row.quality,
+        posterName: this.formatPathService.getOneFormatedPosterUrl(row.title, row.mediaType, row.posterName),
+        posterType: row.posterType,
+        watchCount: parseInt(row.watchCount),
+        totalProgress: parseFloat(row.totalProgress),
+        avgProgress: parseFloat(row.avgProgress),
+      }));
+
+      return {
+        userId,
+        topMedia,
+      };
+    } catch (error) {
+      throw error;
+    } finally {
+      await conn.release();
+    }
   }
 }
