@@ -12,21 +12,21 @@ import { Selection } from 'src/selection/dto/selection.interface';
 import { SelectionType } from 'src/selection/dto/selection-type.enum';
 import { CategoryStats } from '../dto/category-stats.interface';
 import { UserCategoryPreferences } from '../dto/user-category-preferences.interface';
+import { WatchTimeStats } from '../dto/watch-time-stats.interface';
 
 @Injectable()
 export class StatUserService {
-    
-    private readonly minimumRate: number = 92;
+  private readonly minimumRate: number = 92;
 
-    constructor(
-        @Inject(DATABASE_POOL) private pool: mariadb.Pool,
-        private readonly mediaService: MediaService,
-        private readonly movieService: MovieService,
-        private readonly seriesService: SeriesService,
-    ) {}
+  constructor(
+    @Inject(DATABASE_POOL) private pool: mariadb.Pool,
+    private readonly mediaService: MediaService,
+    private readonly movieService: MovieService,
+    private readonly seriesService: SeriesService,
+  ) {}
 
-    public getQuerySelectMediaInProgress(): string {
-        return `
+  public getQuerySelectMediaInProgress(): string {
+    return `
                 SELECT 
                 ${this.mediaService.getQuerySelectManyMedia(`ORDER BY su.lastUpdated desc LIMIT 30`)} AS media
                 FROM (
@@ -43,192 +43,192 @@ export class StatUserService {
                 JOIN media m ON m.id = su.mediaId
                 ${this.mediaService.getQueryJoinMedia()}
                 GROUP BY su.userId`;
+  }
+
+  public async getMediaSelectionInProgess(
+    userId: number,
+    conn: mariadb.Connection,
+  ): Promise<Selection | null> {
+    try {
+      const query: string = this.getQuerySelectMediaInProgress();
+      const results: any[] = await conn.query(query, [userId, userId]);
+      if (results.length > 0) {
+        const medias: Media[] = results[0].media;
+        medias.forEach((media: Media, index) => {
+          if (media.mediaType === MediaType.MOVIE) {
+            medias[index] = this.movieService.getFormatedMovie(media);
+          } else if (media.mediaType === MediaType.SERIES) {
+            medias[index] = this.seriesService.getFormatedSeries(media);
+          }
+        });
+        return {
+          id: userId,
+          name: 'Vue récemment',
+          selectionType: SelectionType.NORMAL_POSTER,
+          mediaList: medias,
+        };
+      } else {
+        return null;
+      }
+    } catch (error) {
+      throw error;
     }
+  }
 
-    public async getMediaSelectionInProgess(
-        userId: number,
-        conn: mariadb.Connection,
-    ): Promise<Selection | null> {
-        try {
-        const query: string = this.getQuerySelectMediaInProgress();
-        const results: any[] = await conn.query(query, [userId, userId]);
-        if (results.length > 0) {
-            const medias: Media[] = results[0].media;
-            medias.forEach((media: Media, index) => {
-            if (media.mediaType === MediaType.MOVIE) {
-                medias[index] = this.movieService.getFormatedMovie(media);
-            } else if (media.mediaType === MediaType.SERIES) {
-                medias[index] = this.seriesService.getFormatedSeries(media);
-            }
-            });
-            return {
-            id: userId,
-            name: 'Vue récemment',
-            selectionType: SelectionType.NORMAL_POSTER,
-            mediaList: medias,
-            };
-        } else {
-            return null;
-        }
-        } catch (error) {
-        throw error;
-        }
-    }
+  public async saveStatUserForMovie(
+    userId: number,
+    movieId: number,
+    watchProgress: number,
+  ): Promise<void> {
+    const conn = await this.pool.getConnection();
+    try {
+      await conn.beginTransaction();
 
-    public async saveStatUserForMovie(
-        userId: number,
-        movieId: number,
-        watchProgress: number,
-    ): Promise<void> {
-        const conn = await this.pool.getConnection();
-        try {
-        await conn.beginTransaction();
+      const newState =
+        watchProgress >= this.minimumRate
+          ? StatState.FINISHED
+          : StatState.IN_PROGRESS;
 
-        const newState =
-            watchProgress >= this.minimumRate
-            ? StatState.FINISHED
-            : StatState.IN_PROGRESS;
+      const statInProgress: StatUser[] = await conn.query(
+        `SELECT * FROM Stat_User WHERE userId = ? AND movieId = ? AND state = ?`,
+        [userId, movieId, StatState.IN_PROGRESS],
+      );
 
-        const statInProgress: StatUser[] = await conn.query(
-            `SELECT * FROM Stat_User WHERE userId = ? AND movieId = ? AND state = ?`,
-            [userId, movieId, StatState.IN_PROGRESS],
-        );
-
-        if (statInProgress.length > 0) {
-            const queryUpdate: string = `
+      if (statInProgress.length > 0) {
+        const queryUpdate: string = `
                         UPDATE Stat_User
                         SET watchProgress = ?, state = ?
                         WHERE id = ?`;
-            await conn.query(queryUpdate, [
-            watchProgress,
-            newState,
-            statInProgress[0].id,
-            ]);
-        } else {
-            const statFinishedToday: StatUser[] = await conn.query(
-            `SELECT * FROM Stat_User 
+        await conn.query(queryUpdate, [
+          watchProgress,
+          newState,
+          statInProgress[0].id,
+        ]);
+      } else {
+        const statFinishedToday: StatUser[] = await conn.query(
+          `SELECT * FROM Stat_User 
                         WHERE userId = ? 
                         AND movieId = ? 
                         AND state = ? 
                         AND DATE(updatedAt) = CURDATE()`,
-            [userId, movieId, StatState.FINISHED],
-            );
+          [userId, movieId, StatState.FINISHED],
+        );
 
-            if (statFinishedToday.length === 0) {
-            const queryInsert: string = `
+        if (statFinishedToday.length === 0) {
+          const queryInsert: string = `
                             INSERT INTO Stat_User (userId, movieId, state, watchProgress) 
                             VALUES (?, ?, ?, ?)`;
 
-            await conn.query(queryInsert, [
-                userId,
-                movieId,
-                newState,
-                watchProgress,
-            ]);
-            } else {
-            const queryUpdateFinished: string = `
+          await conn.query(queryInsert, [
+            userId,
+            movieId,
+            newState,
+            watchProgress,
+          ]);
+        } else {
+          const queryUpdateFinished: string = `
                             UPDATE Stat_User
                             SET watchProgress = ?, state = ?
                             WHERE id = ?`;
-            await conn.query(queryUpdateFinished, [
-                watchProgress,
-                newState,
-                statFinishedToday[0].id,
-            ]);
-            }
+          await conn.query(queryUpdateFinished, [
+            watchProgress,
+            newState,
+            statFinishedToday[0].id,
+          ]);
         }
+      }
 
-        await conn.commit();
-        } catch (error) {
-        await conn.rollback();
-        } finally {
-        await conn.release();
-        }
+      await conn.commit();
+    } catch (error) {
+      await conn.rollback();
+    } finally {
+      await conn.release();
     }
+  }
 
-    public async saveStatUserForEpisode(
-        userId: number,
-        episodeId: number,
-        watchProgress: number,
-    ): Promise<void> {
-        const conn = await this.pool.getConnection();
-        try {
-        await conn.beginTransaction();
+  public async saveStatUserForEpisode(
+    userId: number,
+    episodeId: number,
+    watchProgress: number,
+  ): Promise<void> {
+    const conn = await this.pool.getConnection();
+    try {
+      await conn.beginTransaction();
 
-        const newState =
-            watchProgress >= this.minimumRate
-            ? StatState.FINISHED
-            : StatState.IN_PROGRESS;
+      const newState =
+        watchProgress >= this.minimumRate
+          ? StatState.FINISHED
+          : StatState.IN_PROGRESS;
 
-        const statInProgress: StatUser[] = await conn.query(
-            `SELECT * FROM Stat_User WHERE userId = ? AND episodeId = ? AND state = ?`,
-            [userId, episodeId, StatState.IN_PROGRESS],
-        );
+      const statInProgress: StatUser[] = await conn.query(
+        `SELECT * FROM Stat_User WHERE userId = ? AND episodeId = ? AND state = ?`,
+        [userId, episodeId, StatState.IN_PROGRESS],
+      );
 
-        if (statInProgress.length > 0) {
-            const queryUpdate: string = `
+      if (statInProgress.length > 0) {
+        const queryUpdate: string = `
                         UPDATE Stat_User
                         SET watchProgress = ?, state = ?
                         WHERE id = ?`;
-            await conn.query(queryUpdate, [
-            watchProgress,
-            newState,
-            statInProgress[0].id,
-            ]);
-        } else {
-            const statFinishedToday: StatUser[] = await conn.query(
-            `SELECT * FROM Stat_User 
+        await conn.query(queryUpdate, [
+          watchProgress,
+          newState,
+          statInProgress[0].id,
+        ]);
+      } else {
+        const statFinishedToday: StatUser[] = await conn.query(
+          `SELECT * FROM Stat_User 
                         WHERE userId = ? 
                         AND episodeId = ? 
                         AND state = ? 
                         AND DATE(updatedAt) = CURDATE()`,
-            [userId, episodeId, StatState.FINISHED],
-            );
+          [userId, episodeId, StatState.FINISHED],
+        );
 
-            if (statFinishedToday.length === 0) {
-            const queryInsert: string = `
+        if (statFinishedToday.length === 0) {
+          const queryInsert: string = `
                             INSERT INTO Stat_User (userId, episodeId, state, watchProgress) 
                             VALUES (?, ?, ?, ?)`;
 
-            await conn.query(queryInsert, [
-                userId,
-                episodeId,
-                newState,
-                watchProgress,
-            ]);
-            } else {
-            const queryUpdateFinished: string = `
+          await conn.query(queryInsert, [
+            userId,
+            episodeId,
+            newState,
+            watchProgress,
+          ]);
+        } else {
+          const queryUpdateFinished: string = `
                             UPDATE Stat_User
                             SET watchProgress = ?, state = ?
                             WHERE id = ?`;
-            await conn.query(queryUpdateFinished, [
-                watchProgress,
-                newState,
-                statFinishedToday[0].id,
-            ]);
-            }
+          await conn.query(queryUpdateFinished, [
+            watchProgress,
+            newState,
+            statFinishedToday[0].id,
+          ]);
         }
-        await conn.commit();
-        } catch (error) {
-        await conn.rollback();
-        } finally {
-        await conn.release();
-        }
+      }
+      await conn.commit();
+    } catch (error) {
+      await conn.rollback();
+    } finally {
+      await conn.release();
     }
+  }
 
-    /**
-     * Récupère les catégories préférées d'un utilisateur avec leurs ratios
-     * @param userId - ID de l'utilisateur
-     * @param limit - Nombre de catégories à retourner (par défaut: 10)
-     * @returns Les catégories avec leurs statistiques
-     */
-    async getUserPreferredCategories(
-        userId: number,
-        limit: number = 10,
-    ): Promise<UserCategoryPreferences> {
-        const conn = await this.pool.getConnection();
-        try {
-        const query = `
+  /**
+   * Récupère les catégories préférées d'un utilisateur avec leurs ratios
+   * @param userId - ID de l'utilisateur
+   * @param limit - Nombre de catégories à retourner (par défaut: 10)
+   * @returns Les catégories avec leurs statistiques
+   */
+  async getUserPreferredCategories(
+    userId: number,
+    limit: number = 10,
+  ): Promise<UserCategoryPreferences> {
+    const conn = await this.pool.getConnection();
+    try {
+      const query = `
         WITH user_content AS (
             -- Récupérer tous les films regardés par l'utilisateur
             SELECT DISTINCT
@@ -278,49 +278,45 @@ export class StatUserService {
         LIMIT ?
         `;
 
-        const rows = await conn.execute(query, [
-        userId,
-        userId,
-        limit,
-        ]);
+      const rows = await conn.execute(query, [userId, userId, limit]);
 
-        if (!rows || (rows as any[]).length === 0) {
+      if (!rows || (rows as any[]).length === 0) {
         return {
-            userId,
-            totalWatched: 0,
-            categories: [],
+          userId,
+          totalWatched: 0,
+          categories: [],
         };
-        }
+      }
 
-        const data = rows as any[];
-        const totalWatched = data[0]?.totalWatched || 0;
+      const data = rows as any[];
+      const totalWatched = data[0]?.totalWatched || 0;
 
-        const categories: CategoryStats[] = data.map((row) => ({
+      const categories: CategoryStats[] = data.map((row) => ({
         categoryId: row.categoryId,
         categoryName: row.categoryName,
         count: row.count,
         percentage: parseFloat(row.percentage),
-        }));
+      }));
 
-        return {
+      return {
         userId,
         totalWatched,
         categories,
-        };
-        } catch(error) {
-            throw error;
-        } finally {
-            await conn.release();
-        }
+      };
+    } catch (error) {
+      throw error;
+    } finally {
+      await conn.release();
     }
+  }
 
-    async getUserPreferredCategoriesWeighted(
-        userId: number,
-        limit: number = 10,
-    ): Promise<UserCategoryPreferences> {
-        const conn = await this.pool.getConnection();
-        try {
-        const query = `
+  async getUserPreferredCategoriesWeighted(
+    userId: number,
+    limit: number = 10,
+  ): Promise<UserCategoryPreferences> {
+    const conn = await this.pool.getConnection();
+    try {
+      const query = `
             WITH user_content_weighted AS (
                 -- Films avec leur progression de visionnage
                 SELECT 
@@ -375,51 +371,51 @@ export class StatUserService {
             LIMIT ?
             `;
 
-        const rows = await conn.execute(query, [userId, userId, limit]);
+      const rows = await conn.execute(query, [userId, userId, limit]);
 
-        if (!rows || (rows as any[]).length === 0) {
-            return {
-            userId,
-            totalWatched: 0,
-            categories: [],
-            };
-        }
-
-        const data = rows as any[];
-        const totalWatched = parseFloat(data[0]?.totalWatched || 0);
-
-        const categories: CategoryStats[] = data.map((row) => ({
-            categoryId: row.categoryId,
-            categoryName: row.categoryName,
-            count: row.count,
-            percentage: parseFloat(row.percentage),
-        }));
-
+      if (!rows || (rows as any[]).length === 0) {
         return {
-            userId,
-            totalWatched,
-            categories,
+          userId,
+          totalWatched: 0,
+          categories: [],
         };
-        } catch (error) {
-        throw error;
-        } finally {
-        await conn.release();
-        }
-    }
+      }
 
-    /**
-     * Récupère les catégories avec un temps de visionnage total
-     * (Prend en compte le temps réel passé à regarder chaque contenu)
-     * @param userId - ID de l'utilisateur
-     * @param limit - Nombre de catégories à retourner
-     */
-    async getUserPreferredCategoriesByTime(
-        userId: number,
-        limit: number = 10,
-    ): Promise<any> {
-        const conn = await this.pool.getConnection();
-        try {
-        const query = `
+      const data = rows as any[];
+      const totalWatched = parseFloat(data[0]?.totalWatched || 0);
+
+      const categories: CategoryStats[] = data.map((row) => ({
+        categoryId: row.categoryId,
+        categoryName: row.categoryName,
+        count: row.count,
+        percentage: parseFloat(row.percentage),
+      }));
+
+      return {
+        userId,
+        totalWatched,
+        categories,
+      };
+    } catch (error) {
+      throw error;
+    } finally {
+      await conn.release();
+    }
+  }
+
+  /**
+   * Récupère les catégories avec un temps de visionnage total
+   * (Prend en compte le temps réel passé à regarder chaque contenu)
+   * @param userId - ID de l'utilisateur
+   * @param limit - Nombre de catégories à retourner
+   */
+  async getUserPreferredCategoriesByTime(
+    userId: number,
+    limit: number = 10,
+  ): Promise<any> {
+    const conn = await this.pool.getConnection();
+    try {
+      const query = `
                 WITH user_content_time AS (
                     -- Temps total passé sur les films
                     SELECT 
@@ -475,12 +471,139 @@ export class StatUserService {
                 ORDER BY ctc.total_time DESC
                 LIMIT ?`;
 
-        const rows = await conn.execute(query, [userId, userId, limit]);
-        return rows;
-        } catch (error) {
-        throw error;
-        } finally {
-        await conn.release();
-        }
+      const rows = await conn.execute(query, [userId, userId, limit]);
+      return rows;
+    } catch (error) {
+      throw error;
+    } finally {
+      await conn.release();
     }
+  }
+
+  async getUserWatchTime(userId: number): Promise<WatchTimeStats> {
+    const conn = await this.pool.getConnection();
+    try {
+      const query = `
+      WITH movie_time AS (
+        -- Calculer le temps passé sur les films
+        -- time est en bigint, diviser par 10_000_000 pour obtenir les secondes
+        SELECT 
+          m.id as movie_id,
+          (m.time / 10000000) as time_seconds,
+          MAX(su.watchProgress) as max_progress
+        FROM Stat_User su
+        INNER JOIN Media m ON m.id = su.movieId
+        WHERE su.userId = ?
+          AND su.movieId IS NOT NULL
+          AND m.time IS NOT NULL
+        GROUP BY m.id, m.time
+      ),
+      movie_stats AS (
+        SELECT
+          COUNT(DISTINCT movie_id) as movie_count,
+          SUM(time_seconds * max_progress / 100.0) as total_time_seconds
+        FROM movie_time
+      ),
+      episode_time AS (
+        -- Calculer le temps passé sur chaque épisode
+        -- time est en bigint, diviser par 10_000_000 pour obtenir les secondes
+        SELECT 
+          e.id as episode_id,
+          e.seriesId,
+          (e.time / 10000000) as time_seconds,
+          MAX(su.watchProgress) as max_progress
+        FROM Stat_User su
+        INNER JOIN Episode e ON e.id = su.episodeId
+        WHERE su.userId = ?
+          AND su.episodeId IS NOT NULL
+          AND e.time IS NOT NULL
+        GROUP BY e.id, e.seriesId, e.time
+      ),
+      series_stats AS (
+        SELECT
+          COUNT(DISTINCT seriesId) as series_count,
+          COUNT(DISTINCT episode_id) as episode_count,
+          SUM(time_seconds * max_progress / 100.0) as total_time_seconds
+        FROM episode_time
+      )
+      SELECT
+        -- Films (en secondes)
+        COALESCE((SELECT total_time_seconds FROM movie_stats), 0) as movie_time_seconds,
+        COALESCE((SELECT movie_count FROM movie_stats), 0) as movie_count,
+        
+        -- Séries (en secondes)
+        COALESCE((SELECT total_time_seconds FROM series_stats), 0) as series_time_seconds,
+        COALESCE((SELECT series_count FROM series_stats), 0) as series_count,
+        COALESCE((SELECT episode_count FROM series_stats), 0) as episode_count,
+        
+        -- Total (en secondes)
+        COALESCE((SELECT total_time_seconds FROM movie_stats), 0) + 
+        COALESCE((SELECT total_time_seconds FROM series_stats), 0) as total_time_seconds
+    `;
+
+    const rows = await conn.execute(query, [userId, userId]);
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return this.getEmptyWatchTimeStats(userId);
+    }
+
+    const data = rows[0] as any;
+
+    const movieTimeSeconds = parseFloat(data.movie_time_seconds || 0);
+    const seriesTimeSeconds = parseFloat(data.series_time_seconds || 0);
+    const totalTimeSeconds = parseFloat(data.total_time_seconds || 0);
+
+    return {
+      userId,
+      movies: {
+        totalHours: Math.floor(movieTimeSeconds / 3600),
+        totalMinutes: Math.floor((movieTimeSeconds % 3600) / 60),
+        totalSeconds: Math.floor(movieTimeSeconds % 60),
+        contentCount: parseInt(data.movie_count || 0),
+      },
+      series: {
+        totalHours: Math.floor(seriesTimeSeconds / 3600),
+        totalMinutes: Math.floor((seriesTimeSeconds % 3600) / 60),
+        totalSeconds: Math.floor(seriesTimeSeconds % 60),
+        contentCount: parseInt(data.series_count || 0),
+        episodeCount: parseInt(data.episode_count || 0),
+      },
+      total: {
+        totalHours: Math.floor(totalTimeSeconds / 3600),
+        totalMinutes: Math.floor((totalTimeSeconds % 3600) / 60),
+        totalSeconds: Math.floor(totalTimeSeconds % 60),
+        contentCount: parseInt(data.movie_count || 0) + parseInt(data.series_count || 0),
+      },
+    };
+    } catch (error) {
+      throw error;
+    } finally {
+      await conn.release();
+    }
+  }
+
+  private getEmptyWatchTimeStats(userId: number): WatchTimeStats {
+    return {
+      userId,
+      movies: {
+        totalHours: 0,
+        totalMinutes: 0,
+        totalSeconds: 0,
+        contentCount: 0,
+      },
+      series: {
+        totalHours: 0,
+        totalMinutes: 0,
+        totalSeconds: 0,
+        contentCount: 0,
+        episodeCount: 0,
+      },
+      total: {
+        totalHours: 0,
+        totalMinutes: 0,
+        totalSeconds: 0,
+        contentCount: 0,
+      },
+    };
+  }
 }
