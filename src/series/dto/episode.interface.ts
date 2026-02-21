@@ -9,5 +9,6 @@ export interface Episode {
     time: number,
     quality: string,
     srcPoster: string,
-    path?: string
+    path?: string,
+    watchProgress: number
 }

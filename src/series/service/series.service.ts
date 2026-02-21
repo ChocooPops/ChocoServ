@@ -412,27 +412,7 @@ export class SeriesService extends MediaService {
                     FROM episode e
                     LEFT JOIN poster p ON p.id = e.srcPoster
                     LEFT JOIN media m ON m.id = e.seriesId
-                    LEFT JOIN (
-                        SELECT 
-                            su_inner.episodeId,
-                            su_inner.userId,
-                            su_inner.watchProgress,
-                            su_inner.state,
-                            su_inner.updatedAt
-                        FROM Stat_User su_inner
-                        INNER JOIN (
-                            SELECT 
-                                episodeId,
-                                userId,
-                                MAX(updatedAt) AS max_updated
-                            FROM Stat_User
-                            WHERE episodeId IS NOT NULL
-                            GROUP BY episodeId, userId
-                        ) latest ON su_inner.episodeId = latest.episodeId 
-                                AND su_inner.userId = latest.userId 
-                                AND su_inner.updatedAt = latest.max_updated
-                        WHERE su_inner.userId = ?
-                    ) su ON su.episodeId = e.id AND su.userId = ?
+                    ${this.statUserService.getQueryJoinStatUserForEpisode()}
                     WHERE e.seriesId = ? AND e.seasonId = ?
                     ORDER BY e.episodeNumber;`
             const results: any[] = await conn.query(query, [userId, userId, idSeries, idSeason]);
@@ -448,7 +428,8 @@ export class SeriesService extends MediaService {
                     date: result.date,
                     time: Number(result.time),
                     quality: result.quality,
-                    srcPoster: this.formatPathService.getOneFormatedPosterUrl(result.title, MediaType.SERIES, result.srcPoster)
+                    srcPoster: this.formatPathService.getOneFormatedPosterUrl(result.title, MediaType.SERIES, result.srcPoster),
+                    watchProgress : result.watchProgress ?? 0
                 });
             });
             return episodes;
