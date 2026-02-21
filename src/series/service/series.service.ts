@@ -237,7 +237,6 @@ export class SeriesService extends MediaService {
     }
 
     public async getFirstEpisodeBySeason(seriesId: number): Promise<Episode | null> {
-        const conn = await this.pool.getConnection();
         try {
             const query: string = `
                 SELECT 
@@ -252,97 +251,87 @@ export class SeriesService extends MediaService {
                 AND e.episodeNumber = 1
                 AND m.mediaType = 'SERIES'
                 LIMIT 1;`
-            const result: Episode[] = await conn.query(query, [seriesId]);
+            const result: Episode[] = await this.pool.query(query, [seriesId]);
             if (result.length > 0 && result[0]) {
-                result[0].time = Number(result[0]);
+                result[0].time = Number(result[0].time);
             } else {
                 return null;
             }
             return result[0] ?? null;
         } catch (error) {
             throw error;
-        } finally {
-            await conn.release();
         }
     }
 
     public async getLastWatchedEpisode(userId: number, seriesId: number): Promise<Episode | null> {
         const conn = await this.pool.getConnection();
         try {
-            const result: any[] = await conn.query(
+            const lastWatched: any[] = await conn.query(
                 `
-                SELECT e.*, su.watchProgress
-                FROM (
-                    (
-                        -- Cas 1: Retourner l'épisode IN_PROGRESS
-                        SELECT su.episodeId, 1 as priority
-                        FROM Stat_User su
-                        INNER JOIN Episode e ON su.episodeId = e.id
-                        WHERE su.userId = ? 
-                        AND e.seriesId = ?
-                        AND su.state = 'IN_PROGRESS'
-                        ORDER BY su.updatedAt DESC
-                        LIMIT 1
-                    )
-                    
-                    UNION ALL
-                    
-                    (
-                        -- Cas 2: Retourner l'épisode suivant dans la même saison si FINISHED
-                        SELECT next_ep.id as episodeId, 2 as priority
-                        FROM (
-                            SELECT su.episodeId, e.seasonId, e.episodeNumber
-                            FROM Stat_User su
-                            INNER JOIN Episode e ON su.episodeId = e.id
-                            WHERE su.userId = ?
-                            AND e.seriesId = ?
-                            AND su.state = 'FINISHED'
-                            ORDER BY su.updatedAt DESC
-                            LIMIT 1
-                        ) last_stat
-                        INNER JOIN Episode next_ep ON next_ep.seasonId = last_stat.seasonId 
-                            AND next_ep.episodeNumber = last_stat.episodeNumber + 1
-                    )
-                    
-                    UNION ALL
-                    
-                    (
-                        -- Cas 3: Retourner le premier épisode de la saison suivante
-                        SELECT first_ep.id as episodeId, 3 as priority
-                        FROM (
-                            SELECT e.seasonId, e.episodeNumber, s.seriesId, s.seasonNumber
-                            FROM Stat_User su
-                            INNER JOIN Episode e ON su.episodeId = e.id
-                            INNER JOIN Season s ON e.seasonId = s.id
-                            WHERE su.userId = ?
-                            AND e.seriesId = ?
-                            AND su.state = 'FINISHED'
-                            ORDER BY su.updatedAt DESC
-                            LIMIT 1
-                        ) last_stat
-                        INNER JOIN Season next_season ON next_season.seriesId = last_stat.seriesId 
-                            AND next_season.seasonNumber = last_stat.seasonNumber + 1
-                        INNER JOIN Episode first_ep ON first_ep.seasonId = next_season.id 
-                            AND first_ep.episodeNumber = 1
-                        WHERE NOT EXISTS (
-                            SELECT 1 
-                            FROM Episode check_ep 
-                            WHERE check_ep.seasonId = last_stat.seasonId 
-                            AND check_ep.episodeNumber = last_stat.episodeNumber + 1
-                        )
-                    )
-                ) combined_results
-                ${this.statUserService.getQueryJoinStatUserForEpisode()}
-                ORDER BY combined_results.priority
-                LIMIT 1`,
-                [userId, seriesId, userId, seriesId, userId, seriesId, userId, userId]
+                SELECT 
+                    e.*,
+                    su.watchProgress,
+                    su.state,
+                    s.seasonNumber
+                FROM Stat_User su
+                INNER JOIN Episode e ON su.episodeId = e.id
+                INNER JOIN Season s ON e.seasonId = s.id
+                WHERE su.userId = ?
+                AND e.seriesId = ?
+                AND su.episodeId IS NOT NULL
+                ORDER BY su.updatedAt DESC
+                LIMIT 1
+                `,
+                [userId, seriesId]
             );
-            if (result.length > 0 && result[0]) {
-                result[0].time = Number(result[0]);
-                return result[0];
-            } else {
+
+            if (!lastWatched.length || !lastWatched[0]) {
                 return await this.getFirstEpisodeBySeason(seriesId);
             }
+
+            const last = lastWatched[0];
+            last.time = Number(last.time);
+
+            if (last.state === 'IN_PROGRESS') {
+                return last;
+            }
+
+            const nextInSeason: any[] = await conn.query(
+                `
+                SELECT e.*, 0 as watchProgress
+                FROM Episode e
+                WHERE e.seasonId = ?
+                AND e.episodeNumber = ?
+                LIMIT 1
+                `,
+                [last.seasonId, last.episodeNumber + 1]
+            );
+
+            if (nextInSeason.length && nextInSeason[0]) {
+                nextInSeason[0].time = Number(nextInSeason[0].time);
+                return nextInSeason[0];
+            }
+
+            const nextSeasonFirstEp: any[] = await conn.query(
+                `
+                SELECT e.*, 0 as watchProgress
+                FROM Season s
+                INNER JOIN Episode e ON e.seasonId = s.id
+                WHERE s.seriesId = ?
+                AND s.seasonNumber = ?
+                AND e.episodeNumber = 1
+                LIMIT 1
+                `,
+                [seriesId, last.seasonNumber + 1]
+            );
+
+            if (nextSeasonFirstEp.length && nextSeasonFirstEp[0]) {
+                nextSeasonFirstEp[0].time = Number(nextSeasonFirstEp[0].time);
+                return nextSeasonFirstEp[0];
+            }
+
+            return last;
+
         } catch (error) {
             throw error;
         } finally {

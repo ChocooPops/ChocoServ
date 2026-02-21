@@ -139,7 +139,7 @@ export class UserService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectMediaList(`WHERE um.userId = ?`);
-            const results: any[] = await conn.query(query, [userId]);
+            const results: any[] = await conn.query(query, [userId, userId]);
             const medias: Media[] = results[0].media;
             medias.forEach((media: Media, index) => {
                 if (media.mediaType === MediaType.MOVIE) {
