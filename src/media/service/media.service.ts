@@ -24,7 +24,7 @@ export class MediaService {
         protected readonly verifTimerShowService: VerifTimerShowService,
         protected readonly formatPathService: FormatPathService,
         protected readonly posterService: PosterService
-    ) { }
+     ) { }
 
     protected async getNodesMediaByType(): Promise<Node[]> {
         const conn = await this.pool.getConnection();

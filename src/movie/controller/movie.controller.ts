@@ -5,6 +5,7 @@ import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { EditMovie } from '../dto/edit-movie.interface';
 import { AdminUserGuard } from 'src/guard/admin-user.guard';
 import { Node } from 'src/common-interface/node.interface';
+import { CurrentUser } from 'src/guard/current-user.guard';
 
 @Controller('movie')
 export class MovieController {
@@ -29,6 +30,11 @@ export class MovieController {
     @Get(':id')
     async getMovieById(@Param('id', ParseIntPipe) id: number): Promise<Movie> {
         return await this.movieService.getMovieById(id);
+    }
+
+    @Get('watchProgress/:movieId')
+    async getWatchProgressByMovieId(@CurrentUser('sub') userId: number, @Param('movieId', ParseIntPipe) movieId: number): Promise<{ watchProgress: number }> {
+        return await this.movieService.getWatchProgressByMovieId(userId, movieId);
     }
 
     @UseGuards(AdminUserGuard)

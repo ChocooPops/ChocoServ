@@ -20,6 +20,7 @@ import { SimilarTitleService } from 'src/similar-title/service/similar-title.ser
 import { Node } from 'src/common-interface/node.interface';
 import { UploadImageService } from 'src/common-service/upload-image.service';
 import { promises as fs } from "fs";
+import { StatUserService } from 'src/stat-user/service/stat-user.service';
 
 @Injectable()
 export class SeriesService extends MediaService {
@@ -35,6 +36,7 @@ export class SeriesService extends MediaService {
         private readonly jellyfinService: JellyfinService,
         @Inject(forwardRef(() => SimilarTitleService))
         private readonly similarTitleService: SimilarTitleService,
+        private readonly statUserService: StatUserService,        
         private readonly uploadImageService: UploadImageService
     ) {
         super(pool, searchService, verifTimerShowService, formatPathService, posterService);
@@ -330,29 +332,7 @@ export class SeriesService extends MediaService {
                         )
                     )
                 ) combined_results
-                INNER JOIN Episode e ON e.id = combined_results.episodeId
-                LEFT JOIN (
-                    SELECT 
-                        su_inner.episodeId,
-                        su_inner.userId,
-                        su_inner.watchProgress,
-                        su_inner.state,
-                        su_inner.updatedAt
-                    FROM Stat_User su_inner
-                    INNER JOIN (
-                        -- Trouve la date la plus récente par episodeId et userId
-                        SELECT 
-                            episodeId,
-                            userId,
-                            MAX(updatedAt) AS max_updated
-                        FROM Stat_User
-                        WHERE episodeId IS NOT NULL
-                        GROUP BY episodeId, userId
-                    ) latest ON su_inner.episodeId = latest.episodeId 
-                            AND su_inner.userId = latest.userId 
-                            AND su_inner.updatedAt = latest.max_updated
-                    WHERE su_inner.userId = ?
-                ) su ON su.episodeId = e.id AND su.userId = ?
+                ${this.statUserService.getQueryJoinStatUserForEpisode()}
                 ORDER BY combined_results.priority
                 LIMIT 1`,
                 [userId, seriesId, userId, seriesId, userId, seriesId, userId, userId]
@@ -441,7 +421,6 @@ export class SeriesService extends MediaService {
                             su_inner.updatedAt
                         FROM Stat_User su_inner
                         INNER JOIN (
-                            -- Trouve la date la plus récente par episodeId et userId
                             SELECT 
                                 episodeId,
                                 userId,
@@ -869,6 +848,20 @@ export class SeriesService extends MediaService {
             }
         } finally {
             await conn.release();
+        }
+    }
+
+    public async getWatchProgressByEpisodeId(userId: number, episodeId: number): Promise<{ watchProgress: number}> {
+        try {
+            const query: string = `
+                SELECT su.watchProgress FROM Episode e
+                ${this.statUserService.getQueryJoinStatUserForEpisode()}
+                WHERE e.id = ?
+            `;
+            const watchProgress: any = await this.pool.query(query, [userId, userId, episodeId]);
+            return watchProgress[0];
+        } catch(error) {
+            return { watchProgress: 0 }
         }
     }
 

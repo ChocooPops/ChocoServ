@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { Media } from 'src/media/dto/media.interface';
 import { DATABASE_POOL } from 'src/database/database.module';
 import * as mariadb from 'mariadb';
@@ -28,8 +28,11 @@ export class StatUserService {
 
   constructor(
     @Inject(DATABASE_POOL) private pool: mariadb.Pool,
+    @Inject(forwardRef(() => MediaService))
     private readonly mediaService: MediaService,
+    @Inject(forwardRef(() => MovieService))
     private readonly movieService: MovieService,
+    @Inject(forwardRef(() => SeriesService))
     private readonly seriesService: SeriesService,
     private readonly formatPathService: FormatPathService,
   ) {}
@@ -54,6 +57,55 @@ export class StatUserService {
                 GROUP BY su.userId`;
   }
 
+  public getQueryJoinStatUserForMedia(): string {
+    return `
+    LEFT JOIN (
+      SELECT 
+        su.movieId,
+        su.watchProgress,
+        su.state,
+        su.updatedAt
+        FROM Stat_User su
+        INNER JOIN (
+          SELECT 
+            movieId,
+            userId,
+            MAX(updatedAt) AS max_updated
+            FROM Stat_User
+              WHERE movieId IS NOT NULL
+              GROUP BY movieId, userId
+        ) latest ON su.movieId = latest.movieId 
+        AND su.userId = latest.userId 
+        AND su.updatedAt = latest.max_updated
+        WHERE su.userId = ?
+    ) su2 ON su2.movieId = m.id`
+  }
+
+  public getQueryJoinStatUserForEpisode(): string {
+    return `
+    LEFT JOIN (
+      SELECT 
+        su_inner.episodeId,
+        su_inner.userId,
+        su_inner.watchProgress,
+        su_inner.state,
+        su_inner.updatedAt
+      FROM Stat_User su_inner
+        INNER JOIN (
+          SELECT 
+          episodeId,
+          userId,
+          MAX(updatedAt) AS max_updated
+          FROM Stat_User
+            WHERE episodeId IS NOT NULL
+            GROUP BY episodeId, userId
+          ) latest ON su_inner.episodeId = latest.episodeId 
+          AND su_inner.userId = latest.userId 
+          AND su_inner.updatedAt = latest.max_updated
+          WHERE su_inner.userId = ?
+      ) su ON su.episodeId = e.id AND su.userId = ?`
+  }
+  
   public async getMediaSelectionInProgess(
     userId: number,
     conn: mariadb.Connection,

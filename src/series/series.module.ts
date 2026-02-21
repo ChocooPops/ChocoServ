@@ -9,9 +9,10 @@ import { FormatPathService } from 'src/common-service/format-path.service';
 import { SimilarTitleModule } from 'src/similar-title/similar-title.module';
 import { UploadImageService } from 'src/common-service/upload-image.service';
 import { UserModule } from 'src/user/user.module';
+import { StatUserModule } from 'src/stat-user/stat-user.module';
 
 @Module({
-  imports: [forwardRef(() => UserModule), forwardRef(() => JellyfinModule), forwardRef(() => SimilarTitleModule), PosterModule],
+  imports: [forwardRef(() => UserModule), forwardRef(() => JellyfinModule), forwardRef(() => SimilarTitleModule), PosterModule, StatUserModule],
   controllers: [SeriesController],
   providers: [SeriesService, SearchService, VerifTimerShowService, FormatPathService, UploadImageService],
   exports: [SeriesService]

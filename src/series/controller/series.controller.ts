@@ -48,6 +48,11 @@ export class SeriesController {
         return await this.seriesService.getSeriesById(id);
     }
 
+    @Get('watchProgress/:episodeId')
+    async getWatchProgressByEpisodeId(@CurrentUser('sub') userId: number, @Param('episodeId', ParseIntPipe) episodeId: number): Promise<{ watchProgress: number }> {
+        return await this.seriesService.getWatchProgressByEpisodeId(userId, episodeId);
+    }
+
     @UseGuards(AdminUserGuard)
     @Post('add')
     async addData(@Body() newData: EditSeries): Promise<ReturnMessage> {
