@@ -98,6 +98,7 @@ export class LicenseService {
                         'selectionType', sel.selectionType,
                         'mediaList', sel_media.medias
                     )
+                    ORDER BY ls.orderIndex  
                 ) AS selections
             FROM license_selection ls
             JOIN selection sel ON sel.id = ls.selectionId
@@ -111,7 +112,8 @@ export class LicenseService {
             ) sel_media ON sel_media.selectionId = sel.id
             GROUP BY ls.licenseId
         ) selections_license ON selections_license.licenseId = lic.id
-        ${WHERE};`;
+        ${WHERE}
+        ;`;
     }
 
     private getFormatedLicense(license: any): License {
