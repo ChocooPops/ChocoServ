@@ -100,21 +100,17 @@ export class StreamService {
                 });
 
                 res.on('close', () => {
-                    stream.destroy();
-
                     const lastBytePosition = start + bytesStreamed;
-                
                     const byteProgress = lastBytePosition / fileSize;
-                    const estimatedTimeSeconds = byteProgress * videoDuration;
-                    
-                    const watchProgress = (estimatedTimeSeconds / videoDuration) * 100;
+                    const watchProgress = byteProgress * 100;
+
+                    if (watchProgress < 1) return;
 
                     if (mediaType === MediaType.MOVIE) {
                         this.statUserService.saveStatUserForMovie(userId, mediaId, watchProgress);
                     } else if (mediaType === MediaType.EPISODE) {
                         this.statUserService.saveStatUserForEpisode(userId, mediaId, watchProgress);
                     }
-
                 });
 
                 stream.pipe(res);
