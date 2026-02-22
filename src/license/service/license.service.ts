@@ -63,57 +63,64 @@ export class LicenseService {
 
     private getQuerySelectLicense(WHERE: string): string {
         return `
-        SELECT
-            JSON_OBJECT(
-                'id', lic.id,
-                'name', lic.name,
-                'orderIndex', lic.orderIndex,
-                'position', lic.position,
-                'srcIcon', pli.name,
-                'srcLogo', pll.name,
-                'srcBackground', plb.name,
-                'mediaList', media_license.medias,
-                'selectionList', selections_license.selections
-            ) AS license
-        FROM license lic
-        LEFT JOIN poster pli ON pli.id = lic.srcIcon
-        LEFT JOIN poster pll ON pll.id = lic.srcLogo
-        LEFT JOIN poster plb ON plb.id = lic.srcBackground
+            SELECT
+                JSON_OBJECT(
+                    'id', lic.id,
+                    'name', lic.name,
+                    'orderIndex', lic.orderIndex,
+                    'position', lic.position,
+                    'srcIcon', pli.name,
+                    'srcLogo', pll.name,
+                    'srcBackground', plb.name,
+                    'mediaList', media_license.medias,
+                    'selectionList', selections_license.selections
+                ) AS license
+            FROM license lic
+            LEFT JOIN poster pli ON pli.id = lic.srcIcon
+            LEFT JOIN poster pll ON pll.id = lic.srcLogo
+            LEFT JOIN poster plb ON plb.id = lic.srcBackground
 
-        LEFT JOIN (
-            SELECT lm.licenseId,
-                ${this.mediaService.getQuerySelectManyMedia(`ORDER BY lm.orderIndex asc`)} AS medias
-            FROM license_media lm
-            JOIN media m ON m.id = lm.mediaId
-            ${this.mediaService.getQueryJoinMedia()}
-            GROUP BY lm.licenseId
-        ) media_license ON media_license.licenseId = lic.id
-
-        LEFT JOIN (
-            SELECT ls.licenseId,
-                JSON_ARRAYAGG(
-                    JSON_OBJECT(
-                        'id', sel.id,
-                        'name', sel.name,
-                        'selectionType', sel.selectionType,
-                        'mediaList', sel_media.medias
-                    )
-                    ORDER BY ls.orderIndex  
-                ) AS selections
-            FROM license_selection ls
-            JOIN selection sel ON sel.id = ls.selectionId
             LEFT JOIN (
-                SELECT sm.selectionId,
-                    ${this.mediaService.getQuerySelectManyMedia(`ORDER BY sm.orderIndex asc`)} AS medias
-                FROM selection_media sm
-                JOIN media m ON m.id = sm.mediaId
+                SELECT lm.licenseId,
+                    ${this.mediaService.getQuerySelectManyMedia(`ORDER BY lm.orderIndex ASC`)} AS medias
+                FROM license_media lm
+                JOIN media m ON m.id = lm.mediaId
                 ${this.mediaService.getQueryJoinMedia()}
-                GROUP BY sm.selectionId
-            ) sel_media ON sel_media.selectionId = sel.id
-            GROUP BY ls.licenseId
-        ) selections_license ON selections_license.licenseId = lic.id
-        ${WHERE}
-        ;`;
+                WHERE lm.licenseId = ?
+                GROUP BY lm.licenseId
+            ) media_license ON media_license.licenseId = lic.id
+
+            LEFT JOIN (
+                SELECT ls.licenseId,
+                    JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'id', sel.id,
+                            'name', sel.name,
+                            'selectionType', sel.selectionType,
+                            'mediaList', sel_media.medias
+                        )
+                        ORDER BY ls.orderIndex
+                    ) AS selections
+                FROM license_selection ls
+                JOIN selection sel ON sel.id = ls.selectionId
+                LEFT JOIN (
+                    SELECT sm.selectionId,
+                        ${this.mediaService.getQuerySelectManyMedia(`ORDER BY sm.orderIndex ASC`)} AS medias
+                    FROM selection_media sm
+                    JOIN media m ON m.id = sm.mediaId
+                    ${this.mediaService.getQueryJoinMedia()}
+                    WHERE sm.selectionId IN (
+                        SELECT ls2.selectionId
+                        FROM license_selection ls2
+                        WHERE ls2.licenseId = ?
+                    )
+                    GROUP BY sm.selectionId
+                ) sel_media ON sel_media.selectionId = sel.id
+                WHERE ls.licenseId = ?
+                GROUP BY ls.licenseId
+            ) selections_license ON selections_license.licenseId = lic.id
+
+            ${WHERE};`;
     }
 
     private getFormatedLicense(license: any): License {
@@ -207,7 +214,7 @@ export class LicenseService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectLicense(`WHERE lic.id = ?`);
-            const result = await conn.query(query, [userId, userId, id]);
+            const result = await conn.query(query, [userId, id, userId, id, id, id]);
             return this.getFormatedLicense(result[0]);
         } catch (error) {
             return null;
