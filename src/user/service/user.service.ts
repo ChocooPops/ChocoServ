@@ -31,7 +31,7 @@ export class UserService {
     private getQuerySelectMediaList(WHERE: string): string {
         return `
         SELECT 
-        ${this.mediaService.getQuerySelectManyMedia('')} AS media
+        ${this.mediaService.getQuerySelectManyMedia(`ORDER BY um.createdAt asc`)} AS media
         FROM User_Media_List um
         LEFT JOIN media m ON m.id = um.mediaId
         ${this.mediaService.getQueryJoinMedia()}
