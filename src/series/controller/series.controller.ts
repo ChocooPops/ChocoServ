@@ -44,14 +44,14 @@ export class SeriesController {
         return await this.seriesService.getLastWatchedEpisode(userId, seriesId);
     }
 
-    @Get(':id')
-    async getSeriesById(@Param('id', ParseIntPipe) id: number): Promise<Series> {
-        return await this.seriesService.getSeriesById(id);
-    }
-
     @Get('watchProgress/:episodeId')
     async getWatchProgressByEpisodeId(@CurrentUser('sub') userId: number, @Param('episodeId', ParseIntPipe) episodeId: number): Promise<{ watchProgress: number, state: StatState}> {
         return await this.seriesService.getWatchProgressByEpisodeId(userId, episodeId);
+    }
+
+    @Get(':id')
+    async getSeriesById(@Param('id', ParseIntPipe) id: number): Promise<Series> {
+        return await this.seriesService.getSeriesById(id);
     }
 
     @UseGuards(AdminUserGuard)

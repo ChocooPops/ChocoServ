@@ -201,6 +201,7 @@ enum Role {
 | GET | `/movie/nodes` | Liste simplifiée (nodes) de tous les films | ✅ | - |
 | GET | `/movie/research/:keyWord` | Recherche de films par mot-clé | ✅ | - |
 | GET | `/movie/random-movie` | Film aléatoire | ✅ | - |
+| GET | `/movie/watchProgress/:movieId` | Obtenir la dernière progression du film selon l'utilisateur | ✅ | - |
 | GET | `/movie/:id` | Détails complets d'un film | ✅ | - |
 | POST | `/movie/add` | Ajouter un nouveau film | ✅ | ✅ |
 | PUT | `/movie/modify` | Modifier un film existant | ✅ | ✅ |
@@ -214,9 +215,12 @@ enum Role {
 |---------|-------|-------------|------|-------|
 | GET | `/series/nodes` | Liste simplifiée (nodes) de toutes les séries | ✅ | - |
 | GET | `/series/research/:keyWord` | Recherche de séries par mot-clé | ✅ | - |
+| GET | `/series/episodes/:idSeries/:idSeason` | Obtenir tous les épisodes d'une saison | ✅ | - |
 | GET | `/series/random-series` | Série aléatoire | ✅ | - |
+| GET | `/series/first-episode/:seriesId` | Obtenir le premier épisode d'une série | ✅ | - |
+| GET | `/series/last-episode-watched/:seriesId` | Obtenir le dernier épisode visonné selon l'utilisateur | ✅ | - |
+| GET | `/series/watchProgress/:episodeId` | Obtenir la dernière progression d'un épisode selon l'utilisateur | ✅ | - |
 | GET | `/series/:id` | Détails complets d'une série | ✅ | - |
-| GET | `/series/episodes/:idSeries/:idSeason` | Épisodes d'une saison spécifique | ✅ | - |
 | POST | `/series/add` | Ajouter une nouvelle série | ✅ | ✅ |
 | PUT | `/series/modify` | Modifier une série existante | ✅ | ✅ |
 | DELETE | `/series/delete/:id` | Supprimer une série | ✅ | ✅ |
@@ -229,6 +233,7 @@ enum Role {
 |---------|-------|-------------|------|-------|
 | GET | `/media/research/:keyword` | Recherche globale (films + séries) | ✅ | - |
 | GET | `/media/null-poster` | Médias sans poster (pour maintenance) | ✅ | ✅ |
+| GET | `/media/path-dont-exist` | Médias avec répertoire inexistant (pour maintenance) | ✅ | ✅ |
 
 ---
 
@@ -495,6 +500,8 @@ const pool = mariadb.createPool({
   password: config.get('DB_PASS'),
   database: config.get('DB_NAME'),
   connectionLimit: config.get('DB_CONNECTION_LIMIT'), // Nombre max de connexions
+  decimalAsNumber: true,
+  bigIntAsNumber: true
 });
 ```
 
@@ -518,7 +525,7 @@ const pool = mariadb.createPool({
 ```bash
 # 1. Cloner le repository
 git clone <repository-url>
-cd chocoplus-api
+cd chocoserv
 
 # 2. Installer les dépendances
 npm install
@@ -801,11 +808,11 @@ L'API peut :
 
 ## 🤝 Contribution
 
-Ce projet est privé. Pour toute question, contactez l'équipe de développement.
+Ce projet est public. Pour toute question, contactez l'équipe de développement.
 
 ## 📄 License
 
-Projet privé - Tous droits réservés
+Projet public - Tous droits réservés
 
 ---
 

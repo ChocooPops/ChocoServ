@@ -28,14 +28,14 @@ export class MovieController {
         return await this.movieService.getRandomMovie();
     }
 
-    @Get(':id')
-    async getMovieById(@Param('id', ParseIntPipe) id: number): Promise<Movie> {
-        return await this.movieService.getMovieById(id);
-    }
-
     @Get('watchProgress/:movieId')
     async getWatchProgressByMovieId(@CurrentUser('sub') userId: number, @Param('movieId', ParseIntPipe) movieId: number): Promise<{ watchProgress: number, state: StatState}> {
         return await this.movieService.getWatchProgressByMovieId(userId, movieId);
+    }
+    
+    @Get(':id')
+    async getMovieById(@Param('id', ParseIntPipe) id: number): Promise<Movie> {
+        return await this.movieService.getMovieById(id);
     }
 
     @UseGuards(AdminUserGuard)
