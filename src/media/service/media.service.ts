@@ -13,6 +13,7 @@ import { DATABASE_POOL } from 'src/database/database.module';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { PosterService } from 'src/poster/service/poster.service';
 import { Node } from 'src/common-interface/node.interface';
+import { StatState } from 'src/stat-user/dto/stat-state.enum';
 
 @Injectable()
 export class MediaService {
@@ -83,6 +84,12 @@ export class MediaService {
                 'watchProgress', 
                 CASE
                     WHEN m.mediaType = 'MOVIE' THEN IFNULL(su2.watchProgress, 0)
+                    ELSE NULL
+                END,
+
+                'stateProgress', 
+                CASE
+                    WHEN m.mediaType = 'MOVIE' THEN IFNULL(su2.state, '${StatState.NOT_WATCHED}')
                     ELSE NULL
                 END,
 

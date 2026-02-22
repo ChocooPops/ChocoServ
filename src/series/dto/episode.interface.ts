@@ -1,3 +1,5 @@
+import { StatState } from "src/stat-user/dto/stat-state.enum"
+
 export interface Episode {
     id: number,
     seasonId: number,
@@ -10,5 +12,6 @@ export interface Episode {
     quality: string,
     srcPoster: string,
     path?: string,
-    watchProgress: number
+    watchProgress: number,
+    stateProgress: StatState
 }

@@ -21,6 +21,7 @@ import { Node } from 'src/common-interface/node.interface';
 import { UploadImageService } from 'src/common-service/upload-image.service';
 import { promises as fs } from "fs";
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
+import { StatState } from 'src/stat-user/dto/stat-state.enum';
 
 @Injectable()
 export class SeriesService extends MediaService {
@@ -209,6 +210,7 @@ export class SeriesService extends MediaService {
         delete (series as any).time;
         delete (series as any).quality;
         delete (series as any).watchProgress;
+        delete (series as any).stateProgress;
         return series;
     }
 
@@ -397,7 +399,8 @@ export class SeriesService extends MediaService {
                     e.time,
                     e.quality,
                     p.name AS srcPoster,
-                    su.watchProgress
+                    su.watchProgress,
+                    su.state as stateProgress
                     FROM episode e
                     LEFT JOIN poster p ON p.id = e.srcPoster
                     LEFT JOIN media m ON m.id = e.seriesId
@@ -418,7 +421,8 @@ export class SeriesService extends MediaService {
                     time: Number(result.time),
                     quality: result.quality,
                     srcPoster: this.formatPathService.getOneFormatedPosterUrl(result.title, MediaType.SERIES, result.srcPoster),
-                    watchProgress : result.watchProgress ?? 0
+                    watchProgress : result.watchProgress ?? 0,
+                    stateProgress: result.stateProgress ?? StatState.NOT_WATCHED
                 });
             });
             return episodes;
