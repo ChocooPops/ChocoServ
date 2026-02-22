@@ -104,7 +104,7 @@ export class StreamService {
                     const byteProgress = lastBytePosition / fileSize;
                     const watchProgress = byteProgress * 100;
 
-                    if (watchProgress < 1) return;
+                    if (watchProgress < 0) return;
 
                     if (mediaType === MediaType.MOVIE) {
                         this.statUserService.saveStatUserForMovie(userId, mediaId, watchProgress);
