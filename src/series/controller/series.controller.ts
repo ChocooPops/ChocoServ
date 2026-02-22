@@ -7,6 +7,7 @@ import { AdminUserGuard } from 'src/guard/admin-user.guard';
 import { Episode } from '../dto/episode.interface';
 import { Node } from 'src/common-interface/node.interface';
 import { CurrentUser } from 'src/guard/current-user.guard';
+import { StatState } from 'src/stat-user/dto/stat-state.enum';
 
 @Controller('series')
 export class SeriesController {
@@ -49,7 +50,7 @@ export class SeriesController {
     }
 
     @Get('watchProgress/:episodeId')
-    async getWatchProgressByEpisodeId(@CurrentUser('sub') userId: number, @Param('episodeId', ParseIntPipe) episodeId: number): Promise<{ watchProgress: number }> {
+    async getWatchProgressByEpisodeId(@CurrentUser('sub') userId: number, @Param('episodeId', ParseIntPipe) episodeId: number): Promise<{ watchProgress: number, state: StatState}> {
         return await this.seriesService.getWatchProgressByEpisodeId(userId, episodeId);
     }
 

@@ -825,17 +825,17 @@ export class SeriesService extends MediaService {
         }
     }
 
-    public async getWatchProgressByEpisodeId(userId: number, episodeId: number): Promise<{ watchProgress: number}> {
+    public async getWatchProgressByEpisodeId(userId: number, episodeId: number): Promise<{ watchProgress: number, state: StatState}> {
         try {
             const query: string = `
-                SELECT su.watchProgress FROM Episode e
+                SELECT su.watchProgress, su.state FROM Episode e
                 ${this.statUserService.getQueryJoinStatUserForEpisode()}
                 WHERE e.id = ?
             `;
             const watchProgress: any = await this.pool.query(query, [userId, userId, episodeId]);
             return watchProgress[0];
         } catch(error) {
-            return { watchProgress: 0 }
+            return { watchProgress: 0, state: StatState.NOT_WATCHED}
         }
     }
 

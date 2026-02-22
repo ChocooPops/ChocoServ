@@ -6,6 +6,7 @@ import { EditMovie } from '../dto/edit-movie.interface';
 import { AdminUserGuard } from 'src/guard/admin-user.guard';
 import { Node } from 'src/common-interface/node.interface';
 import { CurrentUser } from 'src/guard/current-user.guard';
+import { StatState } from 'src/stat-user/dto/stat-state.enum';
 
 @Controller('movie')
 export class MovieController {
@@ -33,7 +34,7 @@ export class MovieController {
     }
 
     @Get('watchProgress/:movieId')
-    async getWatchProgressByMovieId(@CurrentUser('sub') userId: number, @Param('movieId', ParseIntPipe) movieId: number): Promise<{ watchProgress: number }> {
+    async getWatchProgressByMovieId(@CurrentUser('sub') userId: number, @Param('movieId', ParseIntPipe) movieId: number): Promise<{ watchProgress: number, state: StatState}> {
         return await this.movieService.getWatchProgressByMovieId(userId, movieId);
     }
 

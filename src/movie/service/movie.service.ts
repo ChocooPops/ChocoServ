@@ -18,6 +18,7 @@ import { Node } from 'src/common-interface/node.interface';
 import { UploadImageService } from 'src/common-service/upload-image.service';
 import { promises as fs } from "fs";
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
+import { StatState } from 'src/stat-user/dto/stat-state.enum';
 
 @Injectable()
 export class MovieService extends MediaService {
@@ -420,17 +421,17 @@ export class MovieService extends MediaService {
         }
     }
 
-    public async getWatchProgressByMovieId(userId: number, movieId: number): Promise<{ watchProgress: number}> {
+    public async getWatchProgressByMovieId(userId: number, movieId: number): Promise<{ watchProgress: number, state: StatState}> {
         try {
             const query: string = `
-                SELECT su2.watchProgress FROM Media m
+                SELECT su2.watchProgress, su2.state FROM Media m
                 ${this.statUserService.getQueryJoinStatUserForMedia()}
                 WHERE m.id = ?
             `;
             const watchProgress: any = await this.pool.query(query, [userId, movieId]);
             return watchProgress[0];
         } catch(error) {
-            return { watchProgress: 0 }
+            return { watchProgress: 0, state: StatState.NOT_WATCHED}
         }
     }
 
