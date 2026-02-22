@@ -11,6 +11,7 @@ API REST complète pour l'application **ChocoPlus**, développée avec NestJS et
 
 - [Vue d'ensemble](#-vue-densemble)
 - [Architecture](#-architecture)
+- [Base de données](#-base-de-données)
 - [Authentification et sécurité](#-authentification-et-sécurité)
 - [API Endpoints](#-api-endpoints)
 - [Intégrations externes](#-intégrations-externes)
@@ -112,6 +113,348 @@ export class MovieService {
 - ✅ Flexibilité pour les requêtes complexes avec jointures
 - ✅ Pool de connexions pour gérer la concurrence
 - ✅ Typage TypeScript avec les interfaces DTO
+
+---
+
+## 🗄️ Base de données
+
+La base de données MariaDB est le cœur du système ChocoPlus. Elle est organisée en **6 domaines fonctionnels** qui reflètent les grandes entités métier de l'application.
+
+### Schéma général
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                          DOMAINE UTILISATEURS                              │
+│  Profil_Photo ←──── User ────→ User_Media_List                            │
+│                        │                  │                               │
+│                        └──────────────────┼──→ Stat_User                 │
+└────────────────────────────────────────────┼───────────────────────────── ┘
+                                             │
+┌────────────────────────────────────────────┼───────────────────────────────┐
+│                          DOMAINE MÉDIAS    │                               │
+│                                            ↓                               │
+│  Poster ←──── Media (MOVIE | SERIES) ────→ Translation_Title              │
+│    ↑              │                        │                               │
+│    │              ├──→ Season ──→ Episode  │                               │
+│    │              ├──→ Media_Staff         │                               │
+│    │              ├──→ Media_Category      │                               │
+│    │              ├──→ Media_Poster        │                               │
+│    │              ├──→ Keyword             │                               │
+│    │              └──→ Similar_Title       │                               │
+└────┼──────────────────────────────────────────────────────────────────────┘
+     │
+┌────┼──────────────────────────────────────────────────────────────────────┐
+│    │                   DOMAINE ORGANISATION                               │
+│    ↓                                                                       │
+│  License ────→ License_Media ────→ Media                                  │
+│     └────────→ License_Selection ──→ Selection ──→ Selection_Media        │
+│                                         └──────────→ Selection_Page       │
+└────────────────────────────────────────────────────────────────────────────┘
+     │
+┌────┼──────────────────────────────────────────────────────────────────────┐
+│    │                   DOMAINE ACTUALITÉS                                  │
+│    ↓                                                                       │
+│  News ────────────────────────────→ Media                                 │
+│  News_Video_Running ──────────────→ Media                                 │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 👥 Domaine Utilisateurs
+
+#### `Profil_Photo`
+Stocke les avatars disponibles dans l'application.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | INT AUTO_INCREMENT | Identifiant unique |
+| `name` | VARCHAR(255) UNIQUE | Nom du fichier image |
+| `isDefaultPhoto` | BOOLEAN | `true` = photo fournie par défaut |
+| `createdAt` / `updatedAt` | DATETIME(3) | Horodatages automatiques |
+
+#### `User`
+Table centrale des comptes utilisateurs. L'AUTO_INCREMENT commence à **70000** pour que les IDs soient facilement reconnaissables.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | INT (début 70000) | Identifiant unique |
+| `pseudo` | VARCHAR(255) UNIQUE | Pseudonyme public |
+| `email` | VARCHAR(255) UNIQUE | Email de connexion |
+| `password` | VARCHAR(255) | Mot de passe hashé (bcrypt, 15 rounds) |
+| `firstName` / `lastName` | VARCHAR(255) | Nom et prénom |
+| `dateBorn` | DATE | Date de naissance |
+| `role` | ENUM | `ADMIN`, `USER`, `FAMILY`, `NOT_ACTIVATE`, `SUSPENDED` |
+| `profilPhoto` | INT (FK) | Référence vers `Profil_Photo` (nullable) |
+
+**Contraintes** : `email` et `pseudo` sont uniques. La suppression d'une photo de profil met `profilPhoto` à NULL (`ON DELETE SET NULL`).
+
+#### `User_Media_List`
+Liste personnelle de favoris de chaque utilisateur (table de jointure Many-to-Many entre `User` et `Media`).
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `userId` | INT (FK) | Référence vers `User` |
+| `mediaId` | INT (FK) | Référence vers `Media` |
+
+**Contrainte** : La combinaison `(userId, mediaId)` est unique — un même média ne peut être ajouté qu'une fois dans la liste d'un utilisateur.
+
+#### `Stat_User`
+Suivi de la progression de visionnage de chaque utilisateur.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `movieId` | INT (FK, nullable) | Film visionné (ou NULL si épisode) |
+| `episodeId` | INT (FK, nullable) | Épisode visionné (ou NULL si film) |
+| `userId` | INT (FK) | Utilisateur concerné |
+| `state` | ENUM | `IN_PROGRESS` ou `FINISHED` |
+| `watchProgress` | FLOAT(5,2) | Pourcentage de progression (ex: `73.45`) |
+
+> Un enregistrement référence soit un film, soit un épisode — jamais les deux à la fois.
+
+---
+
+### 🎬 Domaine Médias
+
+#### `Media`
+Table centrale qui représente un **film** (`MOVIE`) ou une **série** (`SERIES`). L'AUTO_INCREMENT commence à **2 000 000** pour distinguer les IDs médias de ceux des autres entités.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | INT (début 2 000 000) | Identifiant unique |
+| `title` | VARCHAR(255) UNIQUE | Titre principal (unique) |
+| `jellyfinId` | VARCHAR(255) UNIQUE | ID Jellyfin pour la synchronisation |
+| `description` | VARCHAR(1024) | Synopsis (nullable) |
+| `date` | DATE | Date de sortie |
+| `time` | BIGINT UNSIGNED | Durée en millisecondes (nullable) |
+| `quality` | VARCHAR(50) | Ex: `4K`, `1080p`, `720p` |
+| `startShow` / `endShow` | VARCHAR(10) | Période de diffusion (ex: `2020`, `2024`) |
+| `mediaType` | ENUM | `MOVIE` ou `SERIES` |
+| `path` | VARCHAR(555) | Chemin vers le fichier vidéo (films uniquement) |
+| `srcLogo` | INT (FK) | Poster utilisé comme logo |
+| `srcBackground` | INT (FK) | Poster utilisé comme fond d'écran |
+
+#### `Poster`
+Répertoire de toutes les images (logos, fonds, affiches). L'AUTO_INCREMENT commence à **100 000**. Le fichier image réel est servi via le module `/poster`.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | INT (début 100 000) | Identifiant unique |
+| `name` | VARCHAR(255) | Nom du fichier image |
+
+#### `Media_Poster`
+Associe plusieurs posters à un média avec un type d'affichage.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `mediaId` | INT (FK) | Référence vers `Media` |
+| `posterId` | INT (FK) | Référence vers `Poster` |
+| `type` | ENUM | `NORMAL`, `SPECIAL`, `LICENSE`, `HORIZONTAL` |
+
+#### `Translation_Title`
+Titres traduits d'un média dans différentes langues.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `title` | VARCHAR(255) | Titre traduit |
+| `iso_639_1` | ENUM | Langue : `VO`, `FR`, `US`, `ES`, `DE`, `IT`, `JP`, `RU`, `KR`, `CN`, `PT` |
+| `mediaId` | INT (FK) | Référence vers `Media` |
+
+#### `Category`
+Genres cinématographiques (Comédie, Action, Horreur…). L'AUTO_INCREMENT commence à **600**. 16 catégories par défaut sont insérées au démarrage.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `name` | VARCHAR(255) | Nom du genre (ex: `Action`) |
+| `nameSelection` | VARCHAR(255) | Nom affiché dans les sélections |
+
+#### `Media_Category`
+Table de jointure Many-to-Many entre `Media` et `Category`.
+
+**Contrainte** : La combinaison `(mediaId, categoryId)` est unique.
+
+#### `Staff`
+Acteurs et réalisateurs liés aux médias.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `fullName` | VARCHAR(255) | Nom complet |
+| `job` | ENUM | `ACTOR` ou `DIRECTOR` |
+
+#### `Media_Staff`
+Table de jointure Many-to-Many entre `Media` et `Staff`.
+
+**Contrainte** : La combinaison `(mediaId, staffId)` est unique.
+
+#### `Keyword`
+Mots-clés associés à un média pour améliorer la recherche.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `name` | VARCHAR(100) | Le mot-clé |
+| `mediaId` | INT (FK) | Référence vers `Media` |
+
+#### `Similar_Title`
+Liens de similarité entre médias, utilisés pour les recommandations "Vous aimerez aussi".
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `sourceId` | INT (FK) | Média source |
+| `targetId` | INT (FK) | Média suggéré |
+| `rate` | DECIMAL(6,3) | Score de similarité |
+
+**Contrainte** : La paire `(sourceId, targetId)` est unique.
+
+---
+
+### 📺 Domaine Séries
+
+Les séries (`Media` avec `mediaType = 'SERIES'`) ont une hiérarchie à trois niveaux : **Série → Saison → Épisode**.
+
+#### `Season`
+Saisons d'une série. L'AUTO_INCREMENT commence à **5 000 000**.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | INT (début 5 000 000) | Identifiant unique |
+| `seriesId` | INT (FK) | Référence vers `Media` (la série parente) |
+| `jellyfinId` | VARCHAR(255) UNIQUE | ID Jellyfin |
+| `name` | VARCHAR(255) | Nom de la saison |
+| `seasonNumber` | INT | Numéro de saison |
+| `srcPoster` | INT (FK) | Poster de la saison (nullable) |
+
+#### `Episode`
+Épisodes d'une série. L'AUTO_INCREMENT commence à **8 000 000**.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | INT (début 8 000 000) | Identifiant unique |
+| `seriesId` | INT (FK) | Référence vers `Media` (la série parente) |
+| `seasonId` | INT (FK) | Référence vers `Season` |
+| `jellyfinId` | VARCHAR(255) UNIQUE | ID Jellyfin |
+| `name` | VARCHAR(255) | Titre de l'épisode |
+| `episodeNumber` | INT | Numéro dans la saison |
+| `description` | VARCHAR(1024) | Synopsis |
+| `date` | DATE | Date de diffusion |
+| `time` | BIGINT UNSIGNED | Durée en millisecondes |
+| `quality` | VARCHAR(50) | Qualité vidéo |
+| `path` | VARCHAR(555) | Chemin vers le fichier vidéo |
+| `srcPoster` | INT (FK) | Vignette de l'épisode (nullable) |
+
+> Les IDs de début très élevés (`2M`, `5M`, `8M`) permettent d'identifier immédiatement en base à quelle entité appartient un ID donné.
+
+---
+
+### 🗂️ Domaine Organisation (Licences & Sélections)
+
+Ce domaine permet d'organiser le contenu pour l'affichage dans l'application.
+
+#### `License`
+Une licence regroupe des médias autour d'une marque ou franchise (ex: Marvel, Star Wars, Disney). L'AUTO_INCREMENT commence à **10 000**.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `name` | VARCHAR(255) | Nom de la licence |
+| `orderIndex` | INT | Ordre d'affichage (plus petit = affiché en premier) |
+| `position` | BOOLEAN | `true` = affiché sur la page d'accueil |
+| `srcIcon` | INT (FK) | Icône de la licence |
+| `srcLogo` | INT (FK) | Logo de la licence |
+| `srcBackground` | INT (FK) | Image de fond |
+
+#### `License_Media`
+Médias appartenant à une licence, avec un ordre d'affichage.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `licenseId` | INT (FK) | Référence vers `License` |
+| `mediaId` | INT (FK) | Référence vers `Media` |
+| `orderIndex` | INT | Ordre dans la licence |
+
+#### `Selection`
+Une sélection est une collection thématique de médias (ex: "Les meilleurs films d'animation"). L'AUTO_INCREMENT commence à **30 000**.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `name` | VARCHAR(255) | Nom de la sélection |
+| `selectionType` | ENUM | `NORMAL_POSTER` ou `SPECIAL_POSTER` (type d'affichage) |
+
+#### `Selection_Media`
+Médias dans une sélection, triés par `orderIndex`.
+
+**Contrainte** : La combinaison `(selectionId, mediaId)` est unique.
+
+#### `Selection_Page`
+Détermine sur quelles pages une sélection est affichée et dans quel ordre.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `selectionId` | INT (FK) | Référence vers `Selection` |
+| `orderIndex` | INT | Ordre d'affichage sur la page |
+| `pageType` | ENUM | `HOME`, `MOVIES` ou `SERIES` |
+
+#### `License_Selection`
+Lie une sélection à une licence, avec un ordre d'affichage dans la page de la licence.
+
+**Contrainte** : La combinaison `(licenseId, selectionId)` est unique.
+
+---
+
+### 📰 Domaine Actualités
+
+#### `News`
+Actualités affichées sur la page d'accueil, associées à un média. L'AUTO_INCREMENT commence à **90 000**.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `srcBackground` | INT (FK) | Image de fond (nullable) |
+| `orientation` | INT | Disposition visuelle (1, 2 ou 3) |
+| `mediaId` | INT (FK) | Média associé à l'actualité |
+| `orderIndex` | INT | Ordre d'affichage |
+
+#### `News_Video_Running`
+Vidéos promotionnelles défilantes sur les pages Films et Séries. L'AUTO_INCREMENT commence à **50 000**.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `srcBackground` | INT (FK) | Image de fond (nullable) |
+| `startShow` / `endShow` | VARCHAR(10) | Période d'affichage |
+| `jellyfinId` | VARCHAR(255) | ID Jellyfin de la vidéo |
+| `path` | VARCHAR(555) | Chemin vers le fichier vidéo |
+| `mediaId` | INT (FK) | Média lié |
+
+---
+
+### 🔑 Stratégie des clés étrangères
+
+Toutes les relations respectent une politique cohérente :
+
+- **`ON DELETE RESTRICT`** : Empêche la suppression d'un enregistrement parent s'il est encore référencé. Par exemple, on ne peut pas supprimer un `Media` s'il existe encore des `Episode`, `Keyword` ou entrées dans `User_Media_List` qui le référencent.
+- **`ON DELETE SET NULL`** : Utilisé pour les champs optionnels comme `profilPhoto` (User), `srcLogo` ou `srcBackground` (Media). La suppression d'un poster met simplement la référence à NULL sans bloquer.
+- **`ON UPDATE CASCADE`** : Toutes les relations propagent automatiquement les modifications d'ID parent.
+
+---
+
+### 📊 Indexation
+
+Tous les champs de jointure (`userId`, `mediaId`, `selectionId`, etc.) sont indexés pour garantir des performances optimales sur les requêtes avec jointures. Exemple de la table `Stat_User` :
+
+```sql
+INDEX IDX_SU_MOVIE    (movieId)
+INDEX IDX_SU_EPISODE  (episodeId)
+INDEX IDX_SU_USER     (userId)
+```
+
+---
+
+### 🌱 Données initiales
+
+Lors de l'importation de `db.sql`, les données suivantes sont insérées automatiquement :
+
+**Compte administrateur** : Un utilisateur `ChocoPops` avec le rôle `ADMIN` est créé.
+
+**16 catégories** : Comédie, Animation, Drame, Fantastique, Science Fiction, Action, Horreur, Guerre/Thriller, Crime, Aventure, Romance, Histoire, Mystère, Musique, Western, Familiale.
+
+---
 
 ## 🔐 Authentification et sécurité
 
@@ -218,7 +561,7 @@ enum Role {
 | GET | `/series/episodes/:idSeries/:idSeason` | Obtenir tous les épisodes d'une saison | ✅ | - |
 | GET | `/series/random-series` | Série aléatoire | ✅ | - |
 | GET | `/series/first-episode/:seriesId` | Obtenir le premier épisode d'une série | ✅ | - |
-| GET | `/series/last-episode-watched/:seriesId` | Obtenir le dernier épisode visonné selon l'utilisateur | ✅ | - |
+| GET | `/series/last-episode-watched/:seriesId` | Obtenir le dernier épisode visionné selon l'utilisateur | ✅ | - |
 | GET | `/series/watchProgress/:episodeId` | Obtenir la dernière progression d'un épisode selon l'utilisateur | ✅ | - |
 | GET | `/series/:id` | Détails complets d'une série | ✅ | - |
 | POST | `/series/add` | Ajouter une nouvelle série | ✅ | ✅ |
@@ -538,13 +881,13 @@ cp .env.example .env
 # Créer la base de données
 mysql -u root -p -e "CREATE DATABASE chocoplus CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
-# Importer le schéma SQL
+# Importer le schéma SQL (crée toutes les tables + données initiales)
 mysql -u root -p chocoplus < db.sql
 
 # 5. Lancer en mode développement
 npm run start:dev
 
-# 7. L'API est accessible sur http://localhost:3000
+# 6. L'API est accessible sur http://localhost:3000
 ```
 
 ### Scripts disponibles

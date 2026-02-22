@@ -526,11 +526,11 @@ INSERT INTO
 VALUES
     (
         'ChocoPops',
-        '$2b$15$DSA3rCumcCRoMJpdCeFVbuD8EplU1MRodZJsBfI/Os57L1Afi1EoO',
-        'Nahil',
-        'Rahmani',
+        '$2a$15$4aNQfEuHoorxOOAFfgPekeTlgk86Aw18TOGjIaTABdjSv2/RjK0KK',
+        'ChocoPops',
+        'NutellaPops',
         '2004-07-29',
-        'rahmaninahil@gmail.com',
+        'choco.plus.service@gmail.com',
         'ADMIN',
         NULL
     );
