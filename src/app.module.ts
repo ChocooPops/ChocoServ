@@ -27,9 +27,17 @@ import { SupportModule } from './support/support.module';
 import { SimilarTitleModule } from './similar-title/similar-title.module';
 import { StreamModule } from './stream/stream.module';
 import { StatUserModule } from './stat-user/stat-user.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60_000, // fenêtre de 60 secondes
+        limit: 50,  // max 50 requêtes par IP
+      }
+    ]),
     HttpModule,
     ConfigModule.forRoot({ isGlobal: true }),
     PassportModule,
@@ -68,6 +76,10 @@ import { StatUserModule } from './stat-user/stat-user.module';
   providers: [
     MailService,
     AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard
