@@ -214,7 +214,7 @@ export class LicenseService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectLicense(`WHERE lic.id = ?`);
-            const result = await conn.query(query, [userId, id, userId, id, id, id]);
+            const result = await conn.query(query, [userId, userId, id, userId, userId, id, id, id]);
             return this.getFormatedLicense(result[0]);
         } catch (error) {
             return null;

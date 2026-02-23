@@ -407,7 +407,7 @@ export class SeriesService extends MediaService {
                     ${this.statUserService.getQueryJoinStatUserForEpisode()}
                     WHERE e.seriesId = ? AND e.seasonId = ?
                     ORDER BY e.episodeNumber;`
-            const results: any[] = await conn.query(query, [userId, userId, idSeries, idSeason]);
+            const results: any[] = await conn.query(query, [userId, userId, userId, idSeries, idSeason]);
             const episodes: Episode[] = [];
             results.forEach((result: any) => {
                 episodes.push({
@@ -832,7 +832,7 @@ export class SeriesService extends MediaService {
                 ${this.statUserService.getQueryJoinStatUserForEpisode()}
                 WHERE e.id = ?
             `;
-            const watchProgress: any = await this.pool.query(query, [userId, userId, episodeId]);
+            const watchProgress: any = await this.pool.query(query, [userId, userId, userId, episodeId]);
             return watchProgress[0];
         } catch(error) {
             return { watchProgress: 0, state: StatState.NOT_WATCHED}

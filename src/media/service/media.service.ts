@@ -192,7 +192,7 @@ export class MediaService {
                         userId,
                         MAX(updatedAt) AS max_updated
                     FROM Stat_User
-                    WHERE movieId IS NOT NULL
+                    WHERE userId = ? AND movieId IS NOT NULL
                     GROUP BY movieId, userId
                 ) latest ON su.movieId = latest.movieId 
                         AND su.userId = latest.userId 
@@ -505,7 +505,7 @@ export class MediaService {
                 const ORDER: string = `ORDER BY FIELD (m.id, ${mediaIds.map(() => '?').join(', ')})`;
                 const LIMIT: string = `LIMIT 50`;
                 const queryFiltered: string = this.getQuerySelectMedia(WHERE, ORDER, LIMIT);
-                const results: any[] = await conn.query(queryFiltered, [userId, ...mediaIds, ...mediaIds]);
+                const results: any[] = await conn.query(queryFiltered, [userId, userId, ...mediaIds, ...mediaIds]);
                 return results;
             }
             return medias;

@@ -428,7 +428,7 @@ export class MovieService extends MediaService {
                 ${this.statUserService.getQueryJoinStatUserForMedia()}
                 WHERE m.id = ?
             `;
-            const watchProgress: any = await this.pool.query(query, [userId, movieId]);
+            const watchProgress: any = await this.pool.query(query, [userId, userId, movieId]);
             return watchProgress[0];
         } catch(error) {
             return { watchProgress: 0, state: StatState.NOT_WATCHED}

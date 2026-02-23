@@ -115,7 +115,7 @@ export class CategoryService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectCategory(``, `WHERE c.id = ?`, ``, ``, ``);
-            const category: any[] = await conn.query(query, [-1, id]);
+            const category: any[] = await conn.query(query, [-1, -1, id]);
             category[0] = this.getFormatedCategoryWithDifferentiatedMedia(category[0]);
             return category[0];
         } catch (error) {
@@ -134,7 +134,7 @@ export class CategoryService {
             const ORDER: string = `ORDER BY RAND()`;
             const LIMIT: string = `LIMIT 6`;
             const query: string = this.getQuerySelectCategory(ORDER_MEDIA, WHERE, HAVING, ORDER, LIMIT);
-            const categories: CategoryEntirely[] = await conn.query(query, [userId, mediaType]);
+            const categories: CategoryEntirely[] = await conn.query(query, [userId, userId, mediaType]);
             categories.forEach((category: CategoryEntirely, index) => {
                 categories[index] = this.getFormatedCategoryWithMedia(category);
             });

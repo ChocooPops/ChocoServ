@@ -72,7 +72,7 @@ export class StatUserService {
             userId,
             MAX(updatedAt) AS max_updated
             FROM Stat_User
-              WHERE movieId IS NOT NULL
+              WHERE userId = ? AND movieId IS NOT NULL
               GROUP BY movieId, userId
         ) latest ON su.movieId = latest.movieId 
         AND su.userId = latest.userId 
@@ -97,7 +97,7 @@ export class StatUserService {
           userId,
           MAX(updatedAt) AS max_updated
           FROM Stat_User
-            WHERE episodeId IS NOT NULL
+            WHERE userId = ? AND episodeId IS NOT NULL
             GROUP BY episodeId, userId
           ) latest ON su_inner.episodeId = latest.episodeId 
           AND su_inner.userId = latest.userId 
@@ -112,7 +112,7 @@ export class StatUserService {
   ): Promise<Selection | null> {
     try {
       const query: string = this.getQuerySelectMediaInProgress();
-      const results: any[] = await conn.query(query, [userId, userId]);
+      const results: any[] = await conn.query(query, [userId, userId, userId]);
       if (results.length > 0) {
         const medias: Media[] = results[0].media;
         medias.forEach((media: Media, index) => {
