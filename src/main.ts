@@ -74,7 +74,8 @@ async function bootstrap() {
   // ──────────────────────────────────────────
   app.use((req, res, next) => {
     if (req.path.startsWith('/uploads')) return next();
-    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    if (req.path.startsWith('/stream')) return next();
+    //if (req.method === 'OPTIONS') return res.sendStatus(204);
 
     const requestHeaderValue = req.headers[headerName.toLowerCase()];
 
