@@ -28,6 +28,7 @@ import { SimilarTitleModule } from './similar-title/similar-title.module';
 import { StreamModule } from './stream/stream.module';
 import { StatUserModule } from './stat-user/stat-user.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { DocumentationModule } from './documentation/documentation.module';
 
 @Module({
   imports: [
@@ -70,7 +71,8 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
     SupportModule,
     SimilarTitleModule,
     StreamModule,
-    StatUserModule
+    StatUserModule,
+    DocumentationModule
   ],
   controllers: [AppController],
   providers: [
