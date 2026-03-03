@@ -58,7 +58,6 @@ export class StreamService {
             if (!path || !this.fileExists(path)) {
                 return res.status(404).send('File not found');
             }
-
             const stat = fs.statSync(path);
             const fileSize = stat.size;
             const range = req.headers.range;

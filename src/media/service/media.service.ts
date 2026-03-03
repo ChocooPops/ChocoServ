@@ -14,6 +14,7 @@ import { FormatPathService } from 'src/common-service/format-path.service';
 import { PosterService } from 'src/poster/service/poster.service';
 import { Node } from 'src/common-interface/node.interface';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
+import { SortCatalog } from '../dto/sort-catalog.enum';
 
 @Injectable()
 export class MediaService {
@@ -25,7 +26,7 @@ export class MediaService {
         protected readonly verifTimerShowService: VerifTimerShowService,
         protected readonly formatPathService: FormatPathService,
         protected readonly posterService: PosterService
-     ) { }
+    ) { }
 
     protected async getNodesMediaByType(): Promise<Node[]> {
         const conn = await this.pool.getConnection();
@@ -619,4 +620,71 @@ export class MediaService {
         }
     }
 
+
+    public async getMediaByCatalogFilters(
+        userId: number,
+        decadeFilter: number,
+        categoryFilter: number,
+        mediaTypeFilter: MediaType,
+        sortFilter: SortCatalog,
+        orderDirection: boolean,
+        count: number,
+        offset: number
+    ): Promise<Media[]> {
+        const conn = await this.pool.getConnection();
+        try {
+            const params: any[] = [userId, userId];
+            const conditions: string[] = [];
+
+            if (mediaTypeFilter != null) {
+                conditions.push(`m.mediaType = ?`);
+                params.push(mediaTypeFilter);
+            }
+
+            if (decadeFilter != null) {
+                conditions.push(`YEAR(m.date) >= ? AND YEAR(m.date) < ?`);
+                params.push(decadeFilter, decadeFilter + 10);
+            }
+
+            if (categoryFilter != null) {
+                conditions.push(
+                    `EXISTS (
+                        SELECT 1 FROM media_category mc
+                        WHERE mc.mediaId = m.id AND mc.categoryId = ?
+                    )`,
+                );
+                params.push(categoryFilter);
+            }
+
+            const WHERE: string =
+                conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+            const direction: string = orderDirection ? 'ASC' : 'DESC';
+            const ORDER: string = `ORDER BY ${this.resolveSortColumn(sortFilter)} ${direction}`;
+
+            const LIMIT: string = `LIMIT ? OFFSET ?`;
+            params.push(count, offset);
+
+            const query: string = this.getQuerySelectMedia(WHERE, ORDER, LIMIT);
+
+            const results: any[] = await conn.query(query, params);
+
+            return results;
+        } catch (error) {
+            return [];
+        } finally {
+            await conn.release();
+        }
+    }
+
+    private resolveSortColumn(sort: SortCatalog): string {
+        switch (sort) {
+            case SortCatalog.TITLE: return 'm.title';
+            case SortCatalog.RELEASE_DATE: return 'm.date';
+            case SortCatalog.ADDED_DATE: return 'm.createdAt';
+            case SortCatalog.DURATION: return 'm.time';
+            case SortCatalog.SHUFFLE: return 'RAND()';
+            default: return 'RAND()';
+        }
+    }
 }
