@@ -97,8 +97,8 @@ async function bootstrap() {
   // ──────────────────────────────────────────
   // 5. ÉCOUTE SUR LOCALHOST
   // ──────────────────────────────────────────
-  await app.listen(port, '127.0.0.1');
-  console.log(`🚀 Serveur démarré sur http://127.0.0.1:${port}`);
+  await app.listen(port, 'localhost');
+  console.log(`🚀 Serveur démarré sur http://localhost:${port}`);
 }
 
 bootstrap();

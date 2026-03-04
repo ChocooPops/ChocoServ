@@ -151,10 +151,10 @@ export class SimilarTitleService {
                         break;
                     }
                     const targetMedia: Media = medias.find((media: Media) => media.jellyfinId === title.Id);
-                    if (targetMedia) {
+                    if (targetMedia && !iteration.includes(targetMedia.id)) {
                         const rate: number = (this.maxSimilarTitles - iteration.length) / this.maxSimilarTitles;
                         values.push(mediaId, targetMedia.id, rate);
-                        iteration.push(1);
+                        iteration.push(targetMedia.id);
                     }
                 }
                 if (iteration.length > 0) {
