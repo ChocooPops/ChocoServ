@@ -575,6 +575,7 @@ enum Role {
 | Méthode | Route | Description | Auth | Admin |
 |---------|-------|-------------|------|-------|
 | GET | `/media/research/:keyword` | Recherche globale (films + séries) | ✅ | - |
+| GET | `/media/catalog?decadeFilter=&categoryFilter=&mediaTypeFilter=&sortFilter=&orderDirection=&count=&offset=?` | Obtenir un catalogue globale selon les filtres | ✅ | - |
 | GET | `/media/null-poster` | Médias sans poster (pour maintenance) | ✅ | ✅ |
 | GET | `/media/path-dont-exist` | Médias avec répertoire inexistant (pour maintenance) | ✅ | ✅ |
 
