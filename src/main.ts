@@ -5,6 +5,7 @@ import * as bodyParser from 'body-parser';
 import * as express from 'express';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import { LoggerService } from './common-service/logger.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -72,6 +73,7 @@ async function bootstrap() {
   // ──────────────────────────────────────────
   // 4. AUTHENTIFICATION PAR HEADER SECRET
   // ──────────────────────────────────────────
+  const loggerService = app.get(LoggerService);
   app.use((req, res, next) => {
     if (req.path.startsWith('/uploads')) return next();
     if (req.path.startsWith('/stream')) return next();
@@ -83,9 +85,8 @@ async function bootstrap() {
       return next();
     }
 
-    console.warn(
-      `[AUTH FAIL] ${new Date().toISOString()} — IP: ${req.ip} — ${req.method} ${req.path}`
-    );
+    const now = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+    loggerService.warn(`🚫 403 [${now}] ${req.method} ${req.path} — IP: ${req.ip} — Raison: Header invalide`);
 
     return res.status(403).json({
       statusCode: 403,

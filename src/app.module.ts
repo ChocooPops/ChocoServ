@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { APP_GUARD } from '@nestjs/core';
@@ -29,6 +29,8 @@ import { StreamModule } from './stream/stream.module';
 import { StatUserModule } from './stat-user/stat-user.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { DocumentationModule } from './documentation/documentation.module';
+import { LoggerMiddleware } from './common-middleware/logger-middle-ware';
+import { LoggerService } from './common-service/logger.service';
 
 @Module({
   imports: [
@@ -78,6 +80,7 @@ import { DocumentationModule } from './documentation/documentation.module';
   providers: [
     MailService,
     AppService,
+    LoggerService,
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
@@ -90,11 +93,10 @@ import { DocumentationModule } from './documentation/documentation.module';
 })
 export class AppModule {
 
-  /*
-    //AJOUTER UNE LATENCE FICTIVE;
-    configure(consumer: MiddlewareConsumer) {
-      consumer.apply(DelayMiddlewareService).forRoutes('*');
-    }
-  */
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(LoggerMiddleware)
+      .forRoutes({ path: '*', method: RequestMethod.ALL });
+  }
 
 }
