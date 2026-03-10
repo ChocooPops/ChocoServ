@@ -117,12 +117,6 @@ export class JellyfinService {
         }
     }
 
-    public async getSimilarTitleByJellyfinId(jellyfinId: string): Promise<any[]> {
-        const url: string = `${this.httpPort}/${this.urlItmes}/${jellyfinId}/Similar?${this.apiKey}`;
-        const response = await lastValueFrom(this.httpService.get(url));
-        return response.data.Items;
-    }
-
     public async getInfoJellyfin(id: string): Promise<MovieJellyfinInfo> {
         try {
             const item: any = await this.getItemJellyFinByIdForMovie(id);

@@ -6,6 +6,7 @@ import { SimilarTitle } from '../dto/similar-title.interface';
 import { Link } from 'src/common-interface/link.interface';
 import { Node } from 'src/common-interface/node.interface';
 import { CurrentUser } from 'src/guard/current-user.guard';
+import { Public } from 'src/guard/public.decorator';
 
 @Controller('similar-title')
 export class SimilarTitleController {
@@ -21,11 +22,6 @@ export class SimilarTitleController {
     @Get('movie-with-less-similar-titles')
     async getAllMovieWhichHasLessThanMaxSimilarTitles(): Promise<{ movies: Node[], series: Node[] }> {
         return await this.similarTitleService.getAllMediaWhichHasLessThanMaxSimilarTitles();
-    }
-
-    @Get('links')
-    async getLinksBetweenSimilarTitle(): Promise<any[]> {
-        return await this.similarTitleService.getLinksBetweenSimilarTitle();
     }
 
     @Get(':id')

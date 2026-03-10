@@ -1,5 +1,4 @@
 import { Injectable, Inject, forwardRef } from "@nestjs/common";
-import { JellyfinService } from "src/jellyfin/service/jellyfin.service";
 import * as mariadb from 'mariadb';
 import { DATABASE_POOL } from 'src/database/database.module';
 import { Media } from "src/media/dto/media.interface";
@@ -11,6 +10,32 @@ import { MediaService } from "src/media/service/media.service";
 import { Link } from "src/common-interface/link.interface";
 import { Node } from "src/common-interface/node.interface";
 
+interface MediaRow {
+  id: number;
+  title: string;
+  description: string | null;
+  date: string;
+  mediaType: MediaType;
+  quality: string | null;
+  productionYear: number;
+  categoryIds: string | null;
+  actorIds: string | null;
+  directorIds: string | null;
+  keywords: string | null;
+}
+
+interface TranslationRow {
+  mediaId: number;
+  title: string;
+  iso_639_1: string;
+}
+
+export interface SimilarMediaResult {
+  id: number;
+  title: string;
+  similarityScore: number;
+}
+
 @Injectable()
 export class SimilarTitleService {
 
@@ -18,8 +43,6 @@ export class SimilarTitleService {
 
     constructor(@Inject(DATABASE_POOL) protected readonly pool: mariadb.Pool,
         private readonly mediaService: MediaService,
-        @Inject(forwardRef(() => JellyfinService))
-        private readonly jellyfinService: JellyfinService,
         @Inject(forwardRef(() => MovieService))
         private readonly movieService: MovieService,
         @Inject(forwardRef(() => SeriesService))
@@ -87,8 +110,42 @@ export class SimilarTitleService {
         }
     }
 
-    public async getLinksBetweenSimilarTitle(): Promise<any[]> {
-        return [];
+       private async getMediaFormated(conn: mariadb.PoolConnection): Promise<{ medias: MediaRow[], translations: TranslationRow[] }>{
+        try {
+            const medias: MediaRow[] = await conn.query(`
+                SELECT
+                m.id,
+                m.title,
+                m.description,
+                m.date,
+                m.mediaType,
+                m.quality,
+                YEAR(m.date) AS productionYear,
+                GROUP_CONCAT(DISTINCT mc.categoryId ORDER BY mc.categoryId SEPARATOR ',')                   AS categoryIds,
+                GROUP_CONCAT(DISTINCT CASE WHEN s.job = 'ACTOR'    THEN ms.staffId END SEPARATOR ',')       AS actorIds,
+                GROUP_CONCAT(DISTINCT CASE WHEN s.job = 'DIRECTOR' THEN ms.staffId END SEPARATOR ',')       AS directorIds,
+                GROUP_CONCAT(DISTINCT k.name        ORDER BY k.name        SEPARATOR ',')                   AS keywords
+                FROM Media m
+                LEFT JOIN Media_Category mc ON mc.mediaId = m.id
+                LEFT JOIN Media_Staff    ms ON ms.mediaId = m.id
+                LEFT JOIN Staff          s  ON s.id       = ms.staffId
+                LEFT JOIN Keyword        k  ON k.mediaId  = m.id
+                GROUP BY m.id
+            `);
+
+            const translations: TranslationRow[] = await conn.query(`
+                SELECT mediaId, title, iso_639_1
+                FROM Translation_Title
+                WHERE iso_639_1 IN ('VO', 'US', 'FR')
+            `);
+
+            return {
+                medias: medias,
+                translations: translations
+            }
+        } catch(error) {
+            throw error;
+        }
     }
 
     public async getAllSimilarTitlesForOneMediaByIdAndType(userId: number, sourceId: number): Promise<Media[]> {
@@ -117,9 +174,10 @@ export class SimilarTitleService {
         try {
             await conn.beginTransaction();
             await conn.query(`DELETE FROM Similar_Title;`);
+            const rows = await this.getMediaFormated(conn);
             const medias: Media[] = await conn.query(`SELECT id FROM MEDIA;`);
             for (const media of medias) {
-                await this.saveSimilarTitlesForMediaByIdWithJellyfinDataBase(media.id, conn);
+                await this.saveSimilarTitlesForMediaByIdWithJellyfinDataBase(media.id, conn, rows.medias, rows.translations);
             }
             const results: SimilarTitle[] = await conn.query(`Select id, sourceId, targetId, rate FROM Similar_Title`);
             results.forEach((result: SimilarTitle, index) => {
@@ -138,38 +196,214 @@ export class SimilarTitleService {
         }
     }
 
-    public async saveSimilarTitlesForMediaByIdWithJellyfinDataBase(mediaId: number, conn: mariadb.PoolConnection): Promise<string> {
+    public async saveSimilarTitlesForMediaByIdWithJellyfinDataBase(mediaId: number, conn: mariadb.PoolConnection, medias?: MediaRow[], translations?: TranslationRow[]): Promise<any> {
         try {
-            const currentMovie = await conn.query(`Select jellyfinId FROM Media WHERE id = ?`, [mediaId]);
-            if (currentMovie.length > 0) {
-                const medias: Media[] = await conn.query(`Select id, jellyfinId, mediaType FROM Media`);
-                const similarTitles: any[] = (await this.jellyfinService.getSimilarTitleByJellyfinId(currentMovie[0].jellyfinId));
+            if (!medias || !translations) {
+                const rows = await this.getMediaFormated(conn);
+                medias = rows.medias;
+                translations = rows.translations;
+            }
+            const similarMedias = this.getSimilarMedia(mediaId, medias, translations);
+            
+            if (similarMedias.length > 0) {
                 const values: any[] = [];
                 const iteration: number[] = [];
-                for (const title of similarTitles) {
-                    if (iteration.length >= this.maxSimilarTitles) {
-                        break;
-                    }
-                    const targetMedia: Media = medias.find((media: Media) => media.jellyfinId === title.Id);
-                    if (targetMedia && !iteration.includes(targetMedia.id)) {
-                        const rate: number = (this.maxSimilarTitles - iteration.length) / this.maxSimilarTitles;
-                        values.push(mediaId, targetMedia.id, rate);
-                        iteration.push(targetMedia.id);
-                    }
-                }
-                if (iteration.length > 0) {
-                    const query: string = `
+                similarMedias.forEach((title) => {
+                    const rate: number = (this.maxSimilarTitles - iteration.length) / this.maxSimilarTitles;
+                    values.push(mediaId, title.id, rate);
+                    iteration.push(title.id);
+                });
+                const query: string = `
                     INSERT INTO Similar_Title (sourceId, targetId, rate)
                     VALUES ${iteration.map(() => '(?, ?, ?)').join(', ')}`
                     const result = await conn.query(query, values);
                     return `Titre similaire ajouté (${result.affectedRows})`;
-                } else {
-                    return `Aucun titre similaire n'a été ajouté`
-                }
             } else {
-                return 'Aucun titre similaire a été ajouté';
+                return `Aucun titre similaire n'a été ajouté`
             }
         } catch (error) {
+            throw error;
+        }
+    }
+
+    private readonly LATIN_REGEX =
+    /^[\x00-\x7F\u00C0-\u024F\u1E00-\u1EFF\s\d.,!?'":()\-&]+$/;
+
+    private jaroWinkler(s1: string, s2: string): number {
+        if (s1 === s2) return 1;
+        if (s1.length === 0 || s2.length === 0) return 0;
+
+        const matchDistance = Math.floor(Math.max(s1.length, s2.length) / 2) - 1;
+        const s1Matches     = new Array(s1.length).fill(false);
+        const s2Matches     = new Array(s2.length).fill(false);
+
+        let matches        = 0;
+        let transpositions = 0;
+
+        for (let i = 0; i < s1.length; i++) {
+        const start = Math.max(0, i - matchDistance);
+        const end   = Math.min(i + matchDistance + 1, s2.length);
+        for (let j = start; j < end; j++) {
+            if (s2Matches[j] || s1[i] !== s2[j]) continue;
+            s1Matches[i] = true;
+            s2Matches[j] = true;
+            matches++;
+            break;
+        }
+        }
+
+        if (matches === 0) return 0;
+
+        let k = 0;
+        for (let i = 0; i < s1.length; i++) {
+        if (!s1Matches[i]) continue;
+        while (!s2Matches[k]) k++;
+        if (s1[i] !== s2[k]) transpositions++;
+        k++;
+        }
+
+        const jaro =
+        (matches / s1.length +
+            matches / s2.length +
+            (matches - transpositions / 2) / matches) /
+        3;
+
+        let prefix = 0;
+        for (let i = 0; i < Math.min(4, s1.length, s2.length); i++) {
+        if (s1[i] === s2[i]) prefix++;
+        else break;
+        }
+
+        return jaro + prefix * 0.1 * (1 - jaro);
+    }
+
+    private normalizeTitle(title: string): string {
+        const DETERMINANTS = /^(the|a|an|le|la|les|l'|un|une|des|el|la|los|las|der|die|das|il|i|gli|le|o|a|os|as)\s+/gi;
+
+        return title
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')  // accents
+            .replace(/[^a-z0-9 ]/g, ' ')     // ponctuation → espace
+            .replace(/\b\d+\b/g, '')         // ← supprime les nombres isolés
+            .replace(DETERMINANTS, '')        // ← supprime les déterminants en début
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    private toSet(val: string | null): Set<string> {
+        return new Set(
+            (val ?? '').split(',').filter(Boolean).map((s) => s.toLowerCase())
+        );
+    }
+
+    private selectBestTitle(
+        mediaTitle: string,
+        translations: { title: string; iso_639_1: string }[],
+    ): string {
+        const get = (lang: string) =>
+        translations.find((t) => t.iso_639_1 === lang)?.title ?? null;
+
+        const vo = get('VO');
+        if (vo && this.LATIN_REGEX.test(vo)) return vo;
+
+        const us = get('US');
+        if (us) return us;
+
+        const fr = get('FR');
+        if (fr) return fr;
+
+        return mediaTitle;
+    }
+
+    private computeScore(source: MediaRow, candidate: MediaRow): {
+        score: number;
+        commonCategoryIds: string[];
+        commonActorIds: string[];
+        commonDirectorIds: string[];
+        commonKeywords: string[];
+    } {
+        const commonCategoryIds = [...this.toSet(source.categoryIds)].filter((x) =>
+            this.toSet(candidate.categoryIds).has(x),
+        );
+        const commonActorIds = [...this.toSet(source.actorIds)].filter((x) =>
+            this.toSet(candidate.actorIds).has(x),
+        );
+        const commonDirectorIds = [...this.toSet(source.directorIds)].filter((x) =>
+            this.toSet(candidate.directorIds).has(x),
+        );
+        const commonKeywords = [...this.toSet(source.keywords)].filter((x) =>
+            this.toSet(candidate.keywords).has(x),
+        );
+
+        let score = 0;
+
+        // Métadonnées — algorithme Jellyfin
+        score += commonCategoryIds.length * 3; // catégories  — poids fort
+        score += commonActorIds.length    * 3; // acteurs     — poids fort
+        score += commonDirectorIds.length * 2; // réalisateur — poids moyen
+        score += commonKeywords.length    * 2; // keywords    — poids moyen
+
+        // Proximité année
+        if (source.productionYear && candidate.productionYear) {
+        const diff = Math.abs(source.productionYear - candidate.productionYear);
+        if (diff <= 1)      score += 2;
+        else if (diff <= 3) score += 1;
+        }
+
+        // Même type MOVIE / SERIES
+        if (source.mediaType === candidate.mediaType) score += 1;
+
+        // Similarité de titre — Jaro-Winkler
+        const titleSimilarity = this.jaroWinkler(
+            this.normalizeTitle(source.title),
+            this.normalizeTitle(candidate.title),
+        );
+        if (titleSimilarity >= 0.85) {
+            score += Math.round(titleSimilarity * 4); // max +4 points
+        }
+
+        return { score, commonCategoryIds, commonActorIds, commonDirectorIds, commonKeywords };
+    }
+
+    private getSimilarMedia(mediaId: number, medias: MediaRow[], translations: TranslationRow[]): SimilarMediaResult[] {
+        try {
+            const translationMap = new Map<number,
+                { title: string; iso_639_1: string }[]>();
+
+            for (const t of translations) {
+                if (!translationMap.has(t.mediaId)) translationMap.set(t.mediaId, []);
+                translationMap.get(t.mediaId)!.push({
+                title:     t.title,
+                iso_639_1: t.iso_639_1,
+                });
+            }
+
+            const source = medias.find((r) => r.id === mediaId);
+            if (!source) return [];
+
+            return medias
+                .filter((r) => r.id !== mediaId)
+                .map((candidate) => {
+                const {
+                    score
+                } = this.computeScore(source, candidate);
+
+                const bestTitle = this.selectBestTitle(
+                    candidate.title,
+                    translationMap.get(candidate.id) ?? [],
+                );
+                
+                return {
+                    id:              candidate.id,
+                    title:           bestTitle,
+                    similarityScore: score,
+                };
+                })
+                .filter((r) => r.similarityScore > 0)
+                .sort((a, b) => b.similarityScore - a.similarityScore)
+                .slice(0, this.maxSimilarTitles);
+        } catch(error) {
             throw error;
         }
     }
