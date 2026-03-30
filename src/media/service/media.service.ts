@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { TranslationTitle } from '../dto/translation-title.interface';
 import * as mariadb from 'mariadb';
-import { Staff } from '../dto/staff.enum';
+import { Staff_Job } from '../dto/staff_job.enum';
 import { CategorySimple } from 'src/category/dto/categorySimple.interface';
 import { MediaType } from '../dto/media-type.enum';
 import { SearchService } from 'src/common-service/search.service';
@@ -66,9 +66,6 @@ export class MediaService {
                 'endShow', m.endShow,
 
                 'keyWord', kw.keywords,
-                'categories', cat.categories,
-                'actors', act.actors,
-                'directors', dir.directors,
 
                 'srcLogo', pl.name,
                 'srcBackgroundImage', pb.name,
@@ -113,38 +110,17 @@ export class MediaService {
         return `
             LEFT JOIN (
                 SELECT mediaId, JSON_ARRAYAGG(name) AS keywords
-                FROM keyword
+                FROM (
+                    SELECT mediaId, name,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY mediaId 
+                            ORDER BY RAND()
+                        ) AS rn
+                    FROM keyword
+                ) ranked
+                WHERE rn <= 3
                 GROUP BY mediaId
             ) kw ON kw.mediaId = m.id
-
-            LEFT JOIN (
-                SELECT mc.mediaId,
-                    JSON_ARRAYAGG(
-                        JSON_OBJECT(
-                            'id', c.id,
-                            'name', c.name
-                        )
-                    ) AS categories
-                FROM media_category mc
-                JOIN category c ON c.id = mc.categoryId
-                GROUP BY mc.mediaId
-            ) cat ON cat.mediaId = m.id
-
-            LEFT JOIN (
-                SELECT ms.mediaId,
-                    JSON_ARRAYAGG(sa.fullName) AS actors
-                FROM media_staff ms
-                JOIN staff sa ON sa.id = ms.staffId AND sa.job = 'ACTOR'
-                GROUP BY ms.mediaId
-            ) act ON act.mediaId = m.id
-
-            LEFT JOIN (
-                SELECT ms.mediaId,
-                    JSON_ARRAYAGG(sd.fullName) AS directors
-                FROM media_staff ms
-                JOIN staff sd ON sd.id = ms.staffId AND sd.job = 'DIRECTOR'
-                GROUP BY ms.mediaId
-            ) dir ON dir.mediaId = m.id
 
             LEFT JOIN poster pl ON pl.id = m.srcLogo
             LEFT JOIN poster pb ON pb.id = m.srcBackground
@@ -348,16 +324,16 @@ export class MediaService {
     protected async insertManyStaff(mediaId: number, actors: string[], directors: string[], conn: mariadb.PoolConnection): Promise<string> {
         if (actors.length > 0 || directors.length > 0) {
             try {
-                const actorsFormated = await this.getStaffNotInserted(actors, Staff.ACTOR, conn);
-                const directorsFormated = await this.getStaffNotInserted(directors, Staff.DIRECTOR, conn);
+                const actorsFormated = await this.getStaffNotInserted(actors, Staff_Job.ACTOR, conn);
+                const directorsFormated = await this.getStaffNotInserted(directors, Staff_Job.DIRECTOR, conn);
                 const valuesStaff: any[] = [];
                 actorsFormated.newStaff.forEach((item) => {
                     valuesStaff.push(item);
-                    valuesStaff.push(Staff.ACTOR);
+                    valuesStaff.push(Staff_Job.ACTOR);
                 });
                 directorsFormated.newStaff.forEach((item) => {
                     valuesStaff.push(item);
-                    valuesStaff.push(Staff.DIRECTOR);
+                    valuesStaff.push(Staff_Job.DIRECTOR);
                 });
 
                 let insertedIds: number[] = [];
@@ -442,7 +418,7 @@ export class MediaService {
     }
 
 
-    private async getStaffNotInserted(fullName: string[], job: Staff, conn: mariadb.PoolConnection): Promise<{ oldId: number[], newStaff: string[] }> {
+    private async getStaffNotInserted(fullName: string[], job: Staff_Job, conn: mariadb.PoolConnection): Promise<{ oldId: number[], newStaff: string[] }> {
         if (fullName.length > 0) {
             const query: string = `
             SELECT id, fullName from Staff
@@ -687,4 +663,81 @@ export class MediaService {
             default: return 'RAND()';
         }
     }
+
+    public async getMediaInfoById(mediaId: number): Promise<any> {
+        const conn = await this.pool.getConnection();
+        const query: string = `SELECT
+                JSON_OBJECT(
+                    'id', m.id,
+                    
+                    'actors', act.actors,
+                    'directors', dir.directors,
+                    'categories', cat.categories,
+                    'keyWords', kw.keywords
+
+                ) AS media
+                FROM media m
+
+                LEFT JOIN (
+                    SELECT mediaId, JSON_ARRAYAGG(name) AS keywords
+                    FROM keyword
+                    GROUP BY mediaId
+                ) kw ON kw.mediaId = m.id
+
+                LEFT JOIN (
+                    SELECT mc.mediaId,
+                        JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'id', c.id,
+                                'name', c.name
+                            )
+                        ) AS categories
+                    FROM media_category mc
+                    JOIN category c ON c.id = mc.categoryId
+                    GROUP BY mc.mediaId
+                ) cat ON cat.mediaId = m.id
+
+                LEFT JOIN (
+                    SELECT ms.mediaId,
+                        JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'id', sa.id,
+                                'fullName', sa.fullName,
+                                'fullNameCharacter', ms.fullNameCharacter,
+                                'job', sa.job,
+                                'srcPoster', sa.srcPoster
+                            )
+                        ) AS actors
+                    FROM media_staff ms
+                    JOIN staff sa ON sa.id = ms.staffId AND sa.job = 'ACTOR'
+                    GROUP BY ms.mediaId
+                ) act ON act.mediaId = m.id
+
+                LEFT JOIN (
+                    SELECT ms.mediaId,
+                        JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'id', sd.id,
+                                'fullNameActor', sd.fullName,
+                                'job', sd.job, 
+                                'srcPoster', sd.srcPoster
+                            )
+                        ) AS directors
+                    FROM media_staff ms
+                    JOIN staff sd ON sd.id = ms.staffId AND sd.job = 'DIRECTOR'
+                    GROUP BY ms.mediaId
+                ) dir ON dir.mediaId = m.id
+                
+                WHERE m.id = ?`;
+
+        try {
+            const result: any[] = await conn.query(query, [mediaId]);
+            return result[0].media;
+        } catch (error) {
+            return null;
+        } finally {
+            await conn.release();
+        }
+    }
+
 }

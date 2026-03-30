@@ -64,6 +64,11 @@ export class MediaController {
         return medias;
     }
 
+    @Get('media-info/:mediaId')
+    async getMediaInfoById(@Param('mediaId', ParseIntPipe) mediaId: number): Promise<any> {
+        return await this.mediaService.getMediaInfoById(mediaId);
+    }
+
     @UseGuards(AdminUserGuard)
     @Get('null-poster')
     async getMediaWithNullPoster(): Promise<{ movies: Node[], series: Node[] }> {
