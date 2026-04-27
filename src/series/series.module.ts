@@ -10,9 +10,10 @@ import { SimilarTitleModule } from 'src/similar-title/similar-title.module';
 import { UploadImageService } from 'src/common-service/upload-image.service';
 import { UserModule } from 'src/user/user.module';
 import { StatUserModule } from 'src/stat-user/stat-user.module';
+import { CreditModule } from 'src/credit/credit.module';
 
 @Module({
-  imports: [forwardRef(() => UserModule), forwardRef(() => JellyfinModule), forwardRef(() => SimilarTitleModule), PosterModule, StatUserModule],
+  imports: [forwardRef(() => UserModule), forwardRef(() => JellyfinModule), forwardRef(() => SimilarTitleModule), PosterModule, StatUserModule, CreditModule],
   controllers: [SeriesController],
   providers: [SeriesService, SearchService, VerifTimerShowService, FormatPathService, UploadImageService],
   exports: [SeriesService]

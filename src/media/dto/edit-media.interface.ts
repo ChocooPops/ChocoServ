@@ -1,14 +1,14 @@
 import { CategorySimple } from "src/category/dto/categorySimple.interface";
 import { EditPoster } from "./edit-poster.interface";
 import { TranslationTitle } from "./translation-title.interface";
+import { Credit } from "src/credit/dto/credit.interface";
 
 export interface EditMedia {
     id: number;
     title: string,
     jellyfinId: string,
     otherTitles: TranslationTitle[],
-    directors: string[],
-    actors: string[],
+    credits: Credit[],
     categories: CategorySimple[],
     keyWords: string[],
     date: Date,

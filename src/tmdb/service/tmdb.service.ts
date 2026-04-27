@@ -16,6 +16,8 @@ import { CategoryService } from "src/category/service/category.service";
 import { SearchService } from "src/common-service/search.service";
 import { JellyfinService } from "src/jellyfin/service/jellyfin.service";
 import { ConfigService } from "@nestjs/config";
+import { Credit } from "src/credit/dto/credit.interface";
+import { Job } from "src/credit/dto/job.enum";
 
 @Injectable()
 export class TmdbService {
@@ -62,7 +64,7 @@ export class TmdbService {
         const response = await lastValueFrom(this.httpService.get(url));
 
         const categories: CategorySimple[] = await this.getCategories(response.data.genres);
-        const credit: { actors: string[], directors: string[] } = this.getCredit(response.data.credits);
+        const credits: Credit[] = this.getCredits(response.data.credits);
         const keywords: string[] = this.getKeyWords(response.data.keywords.keywords);
         const otherLanguage: TranslationTitle[] = this.getAllTitlesFromDifferentLanguage(response.data.translations.translations, MediaType.MOVIE, response.data.original_title);
 
@@ -88,8 +90,7 @@ export class TmdbService {
             description: response.data.overview,
             startShow: '00:00:00',
             endShow: '00:00:00',
-            directors: credit.directors,
-            actors: credit.actors,
+            credits: credits,
             categories: categories,
             keyWords: keywords,
             date: response.data.release_date,
@@ -116,7 +117,7 @@ export class TmdbService {
         const response = await lastValueFrom(this.httpService.get(url));
 
         const categories: CategorySimple[] = await this.getCategories(response.data.genres);
-        const credit: { actors: string[], directors: string[] } = this.getCredit(response.data.credits);
+        const credits: Credit[] = this.getCredits(response.data.credits);
         const keywords: string[] = this.getKeyWords(response.data.keywords.results);
         const otherLanguage: TranslationTitle[] = this.getAllTitlesFromDifferentLanguage(response.data.translations.translations, MediaType.SERIES, response.data.original_name);
 
@@ -144,8 +145,7 @@ export class TmdbService {
             categories: categories,
             keyWords: keywords,
             description: response.data.overview,
-            directors: response.data.created_by.map(item => item.name),
-            actors: credit.actors,
+            credits: credits,
             date: response.data.first_air_date,
             startShow: '00:00:00',
             endShow: '00:00:00',
@@ -242,7 +242,7 @@ export class TmdbService {
             const url: string = `${this.apiTMDBTv}/${id}?${this.apiKeyTMDB}&append_to_response=credits,translations,keywords&${this.paramLanguage}`;
             const response = await lastValueFrom(this.httpService.get(url));
             const categories: CategorySimple[] = await this.getCategories(response.data.genres);
-            const credit: { actors: string[], directors: string[] } = this.getCredit(response.data.credits);
+            const credits: Credit[] = this.getCredits(response.data.credits);
             const keywords: string[] = this.getKeyWords(response.data.keywords.results);
             const otherLanguage: TranslationTitle[] = this.getAllTitlesFromDifferentLanguage(response.data.translations.translations, MediaType.SERIES, response.data.original_name);
 
@@ -270,8 +270,7 @@ export class TmdbService {
                 categories: categories,
                 keyWords: keywords,
                 description: response.data.overview,
-                directors: response.data.created_by.map(item => item.name),
-                actors: credit.actors,
+                credits: credits,
                 date: response.data.first_air_date,
                 startShow: '00:00:00',
                 endShow: '00:00:00',
@@ -388,20 +387,45 @@ export class TmdbService {
         }
     }
 
-    private getCredit(credits: any): { actors: string[], directors: string[] } {
+    private getCredits(credits: any): Credit[] {
         try {
-            const actors: any[] = credits.cast.filter((item: any) => item.known_for_department === "Acting");
-            const directors: any[] = credits.crew.filter((item: any) => item.job === "Director");
-            const credit: { actors: string[], directors: string[] } = {
-                actors: actors.map(actor => actor.name).slice(0, 10),
-                directors: directors.map(director => director.name).slice(0, 10)
-            }
-            return credit;
+            const result: Credit[] = [];
+            let id: number = 0;
+            credits.cast.forEach((item: any) => {
+                id++;
+                const credit: Credit = {
+                    id: id,
+                    tmdbId: item.id,
+                    fullName: item.name,
+                    originalFullName: item.original_name,
+                    character: item.character,
+                    srcPoster: this.getUrlImageTMBD(item.profile_path),
+                    job: Job.ACTOR,
+                    order: item.order
+                }
+                result.push(credit);
+            });
+            const filteredCrew = credits.crew
+                .filter(member => Object.values(Job).includes(member.job.toUpperCase() as Job))
+                .map(member => ({ ...member, job: member.job.toUpperCase() as Job }));
+
+            filteredCrew.forEach((item: any) => {
+                id++;
+                const credit: Credit = {
+                    id: id,
+                    tmdbId: item.id,
+                    fullName: item.name,
+                    originalFullName: item.original_name,
+                    character: null,
+                    srcPoster: this.getUrlImageTMBD(item.profile_path),
+                    job: item.job,
+                    order: id
+                }
+                result.push(credit);
+            });
+            return result;
         } catch (error) {
-            return {
-                actors: [],
-                directors: null
-            }
+            return [];
         }
     }
 
@@ -534,10 +558,17 @@ export class TmdbService {
         return image;
     }
 
+    private getUrlImageTMBD(url: string): string | null {
+        if (url) {
+            return `https://image.tmdb.org/t/p/original/${url}`;
+        } else {
+            return null;
+        }
+    }
+
     private async getEntirelyUrlImagesFromTMDB(url: string): Promise<string | null | ArrayBuffer> {
         if (url) {
-            url = `https://image.tmdb.org/t/p/original/${url}`;
-            return await this.toBase64(url);
+            return await this.toBase64(this.getUrlImageTMBD(url));
         } else {
             return null;
         }

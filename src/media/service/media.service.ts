@@ -1,7 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { TranslationTitle } from '../dto/translation-title.interface';
 import * as mariadb from 'mariadb';
-import { Staff_Job } from '../dto/staff_job.enum';
 import { CategorySimple } from 'src/category/dto/categorySimple.interface';
 import { MediaType } from '../dto/media-type.enum';
 import { SearchService } from 'src/common-service/search.service';
@@ -15,6 +14,8 @@ import { PosterService } from 'src/poster/service/poster.service';
 import { Node } from 'src/common-interface/node.interface';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
 import { SortCatalog } from '../dto/sort-catalog.enum';
+import { CreditService } from 'src/credit/service/credit.service';
+import { Job } from 'src/credit/dto/job.enum';
 
 @Injectable()
 export class MediaService {
@@ -25,7 +26,8 @@ export class MediaService {
         private readonly searchService: SearchService,
         protected readonly verifTimerShowService: VerifTimerShowService,
         protected readonly formatPathService: FormatPathService,
-        protected readonly posterService: PosterService
+        protected readonly posterService: PosterService,
+        protected readonly creditService: CreditService
     ) { }
 
     protected async getNodesMediaByType(): Promise<Node[]> {
@@ -178,12 +180,13 @@ export class MediaService {
             ) su2 ON su2.movieId = m.id`
     }
 
-    private getQuerySelectMedia(WHERE: string, ORDER: string, LIMIT: string): string {
+    private getQuerySelectMedia(JOIN: string, WHERE: string, ORDER: string, LIMIT: string): string {
         return `
         SELECT
             ${this.getQuerySelectOneMedia()} AS media
             FROM media m
             ${this.getQueryJoinMedia()}
+        ${JOIN}
         ${WHERE}
         ${ORDER}
         ${LIMIT}`
@@ -321,73 +324,6 @@ export class MediaService {
         }
     }
 
-    protected async insertManyStaff(mediaId: number, actors: string[], directors: string[], conn: mariadb.PoolConnection): Promise<string> {
-        if (actors.length > 0 || directors.length > 0) {
-            try {
-                const actorsFormated = await this.getStaffNotInserted(actors, Staff_Job.ACTOR, conn);
-                const directorsFormated = await this.getStaffNotInserted(directors, Staff_Job.DIRECTOR, conn);
-                const valuesStaff: any[] = [];
-                actorsFormated.newStaff.forEach((item) => {
-                    valuesStaff.push(item);
-                    valuesStaff.push(Staff_Job.ACTOR);
-                });
-                directorsFormated.newStaff.forEach((item) => {
-                    valuesStaff.push(item);
-                    valuesStaff.push(Staff_Job.DIRECTOR);
-                });
-
-                let insertedIds: number[] = [];
-                const valuesMediaStaff: any[] = [];
-                if (valuesStaff.length > 0) {
-                    const queryInsert: string = `
-                    INSERT INTO Staff (fullName, job)
-                    VALUES ${actorsFormated.newStaff.map(() => '(?, ?)').join(', ')}
-                    ${actorsFormated.newStaff.length > 0 && directorsFormated.newStaff.length > 0 ? this.getComma(actorsFormated.newStaff) : ''} 
-                    ${directorsFormated.newStaff.map(() => '(?, ?)').join(', ')}`;
-
-                    const resultStaffInsert = await conn.query(queryInsert, valuesStaff);
-                    const startIdNumber = Number(resultStaffInsert.insertId);
-                    const count = Number(resultStaffInsert.affectedRows);
-                    insertedIds = Array.from({ length: count }, (_, i) => startIdNumber + i);
-                    insertedIds.forEach(id => {
-                        valuesMediaStaff.push(mediaId);
-                        valuesMediaStaff.push(id);
-                    });
-                }
-
-                actorsFormated.oldId.forEach((item) => {
-                    valuesMediaStaff.push(mediaId);
-                    valuesMediaStaff.push(item);
-                });
-                directorsFormated.oldId.forEach((item) => {
-                    valuesMediaStaff.push(mediaId);
-                    valuesMediaStaff.push(item);
-                });
-
-                const resultMediaStuffInsert = await conn.query(`
-                    INSERT INTO Media_Staff (mediaId, staffId)
-                    VALUES 
-                    ${insertedIds.length > 0 ? insertedIds.map(() => '(?, ?)').join(', ') : ''} ${insertedIds.length > 0 ? this.getComma([...actorsFormated.oldId, ...directorsFormated.oldId]) : ''} 
-                    ${actorsFormated.oldId.map(() => '(?, ?)').join(', ')} ${actorsFormated.oldId.length > 0 ? this.getComma(directorsFormated.oldId) : ''} 
-                    ${directorsFormated.oldId.map(() => '(?, ?)').join(', ')}`, valuesMediaStaff);
-
-                return `Les acteurs et/ou réalisateur ont été ajoutés (${resultMediaStuffInsert.affectedRows})`;
-            } catch (error) {
-                throw error;
-            }
-        } else {
-            return "Aucun acteur ou réalisateur n'est à ajouter";
-        }
-    }
-    protected async deleteAndUpdateMediaStaff(mediaId: number, actors: string[], directors: string[], conn: mariadb.PoolConnection): Promise<string> {
-        try {
-            await conn.query(`DELETE FROM Media_Staff WHERE mediaId = ?`, [mediaId]);
-            return await this.insertManyStaff(mediaId, actors, directors, conn);
-        } catch (error) {
-            throw error;
-        }
-    }
-
     protected async insertKeyword(mediaId: number, keywords: string[], conn: mariadb.PoolConnection): Promise<string> {
         if (keywords.length > 0) {
             try {
@@ -414,33 +350,6 @@ export class MediaService {
             return await this.insertKeyword(mediaId, keywords, conn);
         } catch (error) {
             throw error;
-        }
-    }
-
-
-    private async getStaffNotInserted(fullName: string[], job: Staff_Job, conn: mariadb.PoolConnection): Promise<{ oldId: number[], newStaff: string[] }> {
-        if (fullName.length > 0) {
-            const query: string = `
-            SELECT id, fullName from Staff
-            WHERE  fullName IN (${fullName.map(() => `?`).join(', ')}) AND job = ?`;
-            const result: any[] = await conn.query(query, [...fullName, job]);
-            return {
-                oldId: result ? result.map((item) => item.id) || [] : [],
-                newStaff: fullName.filter(item => !result?.some((item2 => item2.fullName === item))) || []
-            }
-        } else {
-            return {
-                oldId: [],
-                newStaff: []
-            }
-        }
-    }
-
-    private getComma(tab: any[]): string {
-        if (tab && tab.length > 0) {
-            return ', ';
-        } else {
-            return '';
         }
     }
 
@@ -478,10 +387,11 @@ export class MediaService {
             const mediaIds: number[] = this.searchService.getItemByResearch(keyWord, resultSelectAllMedias);
             const medias: Media[] = [];
             if (mediaIds.length > 0) {
+                const JOIN: string = '';
                 const WHERE: string = `WHERE m.id IN (${mediaIds.map(() => '?').join(', ')})`;
                 const ORDER: string = `ORDER BY FIELD (m.id, ${mediaIds.map(() => '?').join(', ')})`;
                 const LIMIT: string = `LIMIT 50`;
-                const queryFiltered: string = this.getQuerySelectMedia(WHERE, ORDER, LIMIT);
+                const queryFiltered: string = this.getQuerySelectMedia(JOIN, WHERE, ORDER, LIMIT);
                 const results: any[] = await conn.query(queryFiltered, [userId, userId, ...mediaIds, ...mediaIds]);
                 return results;
             }
@@ -504,7 +414,7 @@ export class MediaService {
                                                         );`, [mediaId, mediaId]);
 
             const resultTranslationTitle = await conn.query(`DELETE FROM Translation_Title WHERE mediaId = ?`, [mediaId]);
-            const resultMediaSatff = await conn.query(`DELETE FROM Media_Staff WHERE mediaId = ?`, [mediaId]);
+            const resultMediaSatff = await conn.query(`DELETE FROM Media_Credit WHERE mediaId = ?`, [mediaId]);
             const resultMediaCategory = await conn.query(`DELETE FROM Media_Category WHERE mediaId = ?`, [mediaId]);
             const resultKeyword = await conn.query(`DELETE FROM Keyword WHERE mediaId = ?`, [mediaId]);
 
@@ -611,6 +521,7 @@ export class MediaService {
         try {
             const params: any[] = [userId, userId];
             const conditions: string[] = [];
+            const JOIN: string = '';
 
             if (mediaTypeFilter != null) {
                 conditions.push(`m.mediaType = ?`);
@@ -641,7 +552,7 @@ export class MediaService {
             const LIMIT: string = `LIMIT ? OFFSET ?`;
             params.push(count, offset);
 
-            const query: string = this.getQuerySelectMedia(WHERE, ORDER, LIMIT);
+            const query: string = this.getQuerySelectMedia(JOIN, WHERE, ORDER, LIMIT);
 
             const results: any[] = await conn.query(query, params);
 
@@ -670,8 +581,8 @@ export class MediaService {
                 JSON_OBJECT(
                     'id', m.id,
                     
-                    'actors', act.actors,
-                    'directors', dir.directors,
+                    'casts', cast.casts,
+                    'crews', crew.crews,
                     'categories', cat.categories,
                     'keyWords', kw.keywords
 
@@ -698,35 +609,48 @@ export class MediaService {
                 ) cat ON cat.mediaId = m.id
 
                 LEFT JOIN (
-                    SELECT ms.mediaId,
+                    SELECT mc.mediaId,
                         JSON_ARRAYAGG(
                             JSON_OBJECT(
-                                'id', sa.id,
-                                'fullName', sa.fullName,
-                                'fullNameCharacter', ms.fullNameCharacter,
-                                'job', sa.job,
-                                'srcPoster', sa.srcPoster
+                                'id', cca.id,
+                                'tmdbId', cca.tmdbId,
+                                'fullName', cca.fullName,
+                                'originalFullName', cca.originalFullName,
+                                'character', mc.character,
+                                'job', mc.job,
+                                'srcPoster', p.name,
+                                'order', mc.order
                             )
-                        ) AS actors
-                    FROM media_staff ms
-                    JOIN staff sa ON sa.id = ms.staffId AND sa.job = 'ACTOR'
-                    GROUP BY ms.mediaId
-                ) act ON act.mediaId = m.id
+                        ) AS casts
+                    FROM media_credit mc
+                    JOIN credit cca ON cca.id = mc.creditId
+                    JOIN Poster p ON p.id = cca.srcPoster
+                    WHERE mc.job = '${Job.ACTOR}'
+                    GROUP BY mc.mediaId
+                    ORDER BY mc.order asc
+                ) cast ON cast.mediaId = m.id
 
                 LEFT JOIN (
-                    SELECT ms.mediaId,
+                    SELECT mc.mediaId,
                         JSON_ARRAYAGG(
                             JSON_OBJECT(
-                                'id', sd.id,
-                                'fullNameActor', sd.fullName,
-                                'job', sd.job, 
-                                'srcPoster', sd.srcPoster
+                                'id', ccr.id,
+                                'tmdbId', ccr.tmdbId,
+                                'fullName', ccr.fullName,
+                                'originalFullName', ccr.originalFullName,
+                                'character', mc.character,
+                                'job', mc.job,
+                                'srcPoster', p.name,
+                                'order', mc.order
                             )
-                        ) AS directors
-                    FROM media_staff ms
-                    JOIN staff sd ON sd.id = ms.staffId AND sd.job = 'DIRECTOR'
-                    GROUP BY ms.mediaId
-                ) dir ON dir.mediaId = m.id
+                        ) AS crews
+                    FROM media_credit mc
+                    JOIN credit ccr ON ccr.id = mc.creditId
+                    JOIN Poster p ON p.id = ccr.srcPoster
+                    WHERE mc.job = '${Job.DIRECTOR}'
+                    GROUP BY mc.mediaId
+                    ORDER BY mc.order asc
+                ) crew ON crew.mediaId = m.id
                 
                 WHERE m.id = ?`;
 
@@ -734,6 +658,7 @@ export class MediaService {
             const result: any[] = await conn.query(query, [mediaId]);
             return result[0].media;
         } catch (error) {
+            console.log(error)
             return null;
         } finally {
             await conn.release();

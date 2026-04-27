@@ -19,6 +19,7 @@ import { UploadImageService } from 'src/common-service/upload-image.service';
 import { promises as fs } from "fs";
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
+import { CreditService } from 'src/credit/service/credit.service';
 
 @Injectable()
 export class MovieService extends MediaService {
@@ -30,6 +31,7 @@ export class MovieService extends MediaService {
         verifTimerShowService: VerifTimerShowService,
         formatPathService: FormatPathService,
         posterService: PosterService,
+        creditService: CreditService,
         @Inject(forwardRef(() => JellyfinService))
         private readonly jellyfinService: JellyfinService,
         @Inject(forwardRef(() => SimilarTitleService))
@@ -37,7 +39,7 @@ export class MovieService extends MediaService {
         private readonly statUserService: StatUserService,
         private readonly uploadImageService: UploadImageService
     ) {
-        super(pool, searchService, verifTimerShowService, formatPathService, posterService);
+        super(pool, searchService, verifTimerShowService, formatPathService, posterService, creditService);
     }
 
     public async getNodesMovie(): Promise<Node[]> {
@@ -99,11 +101,7 @@ export class MovieService extends MediaService {
                     'endShow', m.endShow,
 
                     ${SELECT}
-                    'keyWord', kw.keywords,
-                    'categories', cat.categories,
-                    'actors', act.actors,
-                    'directors', dir.directors,
-
+ 
                     'srcLogo', pl.name,
                     'srcBackgroundImage', pb.name,
                             
@@ -118,41 +116,6 @@ export class MovieService extends MediaService {
                 FROM media m
 
                 ${JOIN}
-
-                LEFT JOIN (
-                    SELECT mediaId, JSON_ARRAYAGG(name) AS keywords
-                    FROM keyword
-                    GROUP BY mediaId
-                ) kw ON kw.mediaId = m.id
-
-                LEFT JOIN (
-                    SELECT mc.mediaId,
-                        JSON_ARRAYAGG(
-                            JSON_OBJECT(
-                                'id', c.id,
-                                'name', c.name
-                            )
-                        ) AS categories
-                    FROM media_category mc
-                    JOIN category c ON c.id = mc.categoryId
-                    GROUP BY mc.mediaId
-                ) cat ON cat.mediaId = m.id
-
-                LEFT JOIN (
-                    SELECT ms.mediaId,
-                        JSON_ARRAYAGG(sa.fullName) AS actors
-                    FROM media_staff ms
-                    JOIN staff sa ON sa.id = ms.staffId AND sa.job = 'ACTOR'
-                    GROUP BY ms.mediaId
-                ) act ON act.mediaId = m.id
-
-                LEFT JOIN (
-                    SELECT ms.mediaId,
-                        JSON_ARRAYAGG(sd.fullName) AS directors
-                    FROM media_staff ms
-                    JOIN staff sd ON sd.id = ms.staffId AND sd.job = 'DIRECTOR'
-                    GROUP BY ms.mediaId
-                ) dir ON dir.mediaId = m.id
 
                 LEFT JOIN poster pl ON pl.id = m.srcLogo
                 LEFT JOIN poster pb ON pb.id = m.srcBackground
@@ -261,7 +224,7 @@ export class MovieService extends MediaService {
                             const formatedTitle: string = this.formatPathService.formatPath(newMovie.title);
                             const messageCategory: string = await this.insertManyMediaCategory(mediaId, newMovie.categories, conn);
                             const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newMovie.otherTitles, conn);
-                            const messageStaff: string = await this.insertManyStaff(mediaId, newMovie.actors, newMovie.directors, conn);
+                            const messageStaff: string = await this.creditService.insertManyStaff(mediaId, newMovie.credits, conn);
                             const messageKeyWord: string = await this.insertKeyword(mediaId, newMovie.keyWords, conn);
                             const messagePoster: string = await this.posterService.insertManyPosterByMedia(newMovie, this.currentMediaType, formatedTitle, mediaId, conn);
 
@@ -292,7 +255,7 @@ export class MovieService extends MediaService {
                             message: 'Erreur : Un film possède déjà ce titre. Doublon impossible.'
                         }
                     }
-                } catch (error) {
+                } catch (error: any) {
                     await conn.rollback();
                     messageReturned = {
                         id: -1,
@@ -346,7 +309,7 @@ export class MovieService extends MediaService {
                             const newFormatedTitle: string = this.formatPathService.formatPath(updateMovie.title);
                             const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateMovie.id, updateMovie.categories, conn);
                             const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateMovie.id, updateMovie.otherTitles, conn);
-                            const messageStaff: string = await this.deleteAndUpdateMediaStaff(updateMovie.id, updateMovie.actors, updateMovie.directors, conn);
+                            const messageStaff: string = await this.creditService.deleteAndUpdateMediaStaff(updateMovie.id, updateMovie.credits, conn);
                             const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateMovie.id, updateMovie.keyWords, conn);
                             const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateMovie, oldMovie, this.currentMediaType, oldFormatedTitle, conn);
 
@@ -382,7 +345,7 @@ export class MovieService extends MediaService {
                         message: 'Erreur : id du film introuvable.'
                     }
                 }
-            } catch (error) {
+            } catch (error: any) {
                 await conn.rollback();
                 messageReturned = {
                     id: -1,
@@ -409,7 +372,7 @@ export class MovieService extends MediaService {
             const message: ReturnMessage = await this.deleteMediasById(id, conn);
             await conn.commit();
             return message;
-        } catch (error) {
+        } catch (error: any) {
             await conn.rollback();
             return {
                 id: -1,

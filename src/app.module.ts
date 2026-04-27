@@ -31,6 +31,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { DocumentationModule } from './documentation/documentation.module';
 import { LoggerMiddleware } from './common-middleware/logger-middle-ware';
 import { LoggerService } from './common-service/logger.service';
+import { CreditModule } from './credit/credit.module';
 
 @Module({
   imports: [
@@ -74,7 +75,8 @@ import { LoggerService } from './common-service/logger.service';
     SimilarTitleModule,
     StreamModule,
     StatUserModule,
-    DocumentationModule
+    DocumentationModule,
+    CreditModule
   ],
   controllers: [AppController],
   providers: [
