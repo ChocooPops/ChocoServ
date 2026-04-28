@@ -78,7 +78,10 @@ export class SeriesService extends MediaService {
         let SELECT: string = '';
         let JOIN: string = '';
         if (otherInfos) {
-            SELECT = `'otherTitles', ot.otherTitles,`;
+            SELECT = `'otherTitles', ot.otherTitles,
+                      'categories', cat.categories,
+                      'keyWords', kw.keywords,`;
+
             JOIN = `LEFT JOIN (
                     SELECT mediaId,
                         JSON_ARRAYAGG(
@@ -89,7 +92,26 @@ export class SeriesService extends MediaService {
                         ) AS otherTitles
                     FROM translation_title
                     GROUP BY mediaId
-                ) ot ON ot.mediaId = m.id`;
+                ) ot ON ot.mediaId = m.id
+                 
+                LEFT JOIN (
+                    SELECT mc.mediaId,
+                        JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'id', c.id,
+                                'name', c.name
+                            )
+                        ) AS categories
+                    FROM media_category mc
+                    JOIN category c ON c.id = mc.categoryId
+                    GROUP BY mc.mediaId
+                ) cat ON cat.mediaId = m.id
+                 
+                LEFT JOIN (
+                    SELECT mediaId, JSON_ARRAYAGG(name) AS keywords
+                    FROM keyword
+                    GROUP BY mediaId
+                ) kw ON kw.mediaId = m.id`;
         }
         return `
             SELECT
@@ -432,7 +454,7 @@ export class SeriesService extends MediaService {
                             const formatedTitle: string = this.formatPathService.formatPath(newSeries.title);
                             const messageCategory: string = await this.insertManyMediaCategory(mediaId, newSeries.categories, conn);
                             const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newSeries.otherTitles, conn);
-                            const messageStaff: string = await this.creditService.insertManyStaff(mediaId, newSeries.credits, conn);
+                            const messageStaff: string = await this.creditService.insertManyCredits(mediaId, newSeries.credits, conn);
                             const messageKeyWord: string = await this.insertKeyword(mediaId, newSeries.keyWords, conn);
                             const messagePoster: string = await this.posterService.insertManyPosterByMedia(newSeries, this.currentMediaType, formatedTitle, mediaId, conn);
                             const messageSeason: string = await this.insertManySeasons(newSeries.seasons, mediaId, formatedTitle, newSeries.jellyfinId, conn);
@@ -594,7 +616,7 @@ export class SeriesService extends MediaService {
                             const newFormatedTitle: string = this.formatPathService.formatPath(updateSeries.title);
                             const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateSeries.id, updateSeries.categories, conn);
                             const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateSeries.id, updateSeries.otherTitles, conn);
-                            const messageStaff: string = await this.creditService.deleteAndUpdateMediaStaff(updateSeries.id, updateSeries.credits, conn);
+                            const messageStaff: string = await this.creditService.deleteAndUpdateMediaCredit(updateSeries.id, updateSeries.credits, conn);
                             const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateSeries.id, updateSeries.keyWords, conn);
                             const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateSeries, oldSeries, this.currentMediaType, oldFormatedTitle, conn);
                             const messageSeasons: string = await this.insertUpdateOrDeleteSeasons(updateSeries.seasons, oldSeries.seasons, updateSeries.id, oldFormatedTitle, updateSeries.jellyfinId, conn);

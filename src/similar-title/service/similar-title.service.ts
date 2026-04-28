@@ -9,6 +9,7 @@ import { SeriesService } from "src/series/service/series.service";
 import { MediaService } from "src/media/service/media.service";
 import { Link } from "src/common-interface/link.interface";
 import { Node } from "src/common-interface/node.interface";
+import { Job } from "src/credit/dto/job.enum";
 
 interface MediaRow {
   id: number;
@@ -122,13 +123,12 @@ export class SimilarTitleService {
                 m.quality,
                 YEAR(m.date) AS productionYear,
                 GROUP_CONCAT(DISTINCT mc.categoryId ORDER BY mc.categoryId SEPARATOR ',')                   AS categoryIds,
-                GROUP_CONCAT(DISTINCT CASE WHEN s.job = 'ACTOR'    THEN ms.staffId END SEPARATOR ',')       AS actorIds,
-                GROUP_CONCAT(DISTINCT CASE WHEN s.job = 'DIRECTOR' THEN ms.staffId END SEPARATOR ',')       AS directorIds,
+                GROUP_CONCAT(DISTINCT CASE WHEN mcr.job = '${Job.ACTOR}'    THEN mcr.creditId END SEPARATOR ',')       AS actorIds,
+                GROUP_CONCAT(DISTINCT CASE WHEN mcr.job IN ('${Job.DIRECTOR}') THEN mcr.creditId END SEPARATOR ',')       AS directorIds,
                 GROUP_CONCAT(DISTINCT k.name        ORDER BY k.name        SEPARATOR ',')                   AS keywords
                 FROM Media m
                 LEFT JOIN Media_Category mc ON mc.mediaId = m.id
-                LEFT JOIN Media_Staff    ms ON ms.mediaId = m.id
-                LEFT JOIN Staff          s  ON s.id       = ms.staffId
+                LEFT JOIN Media_Credit    mcr ON mcr.mediaId = m.id
                 LEFT JOIN Keyword        k  ON k.mediaId  = m.id
                 GROUP BY m.id
             `);
@@ -190,7 +190,7 @@ export class SimilarTitleService {
             return results;
         } catch (error) {
             await conn.rollback();
-            return error;
+            throw error;
         } finally {
             await conn.release();
         }

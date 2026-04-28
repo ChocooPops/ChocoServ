@@ -67,7 +67,7 @@ export class MediaService {
                 'startShow', m.startShow,
                 'endShow', m.endShow,
 
-                'keyWord', kw.keywords,
+                'keyWords', kw.keywords,
 
                 'srcLogo', pl.name,
                 'srcBackgroundImage', pb.name,
@@ -619,15 +619,17 @@ export class MediaService {
                                 'character', mc.character,
                                 'job', mc.job,
                                 'srcPoster', p.name,
-                                'order', mc.order
+                                'order', mc.\`order\`
                             )
+                            ORDER BY mc.\`order\` asc
+                            LIMIT 12
                         ) AS casts
                     FROM media_credit mc
                     JOIN credit cca ON cca.id = mc.creditId
-                    JOIN Poster p ON p.id = cca.srcPoster
-                    WHERE mc.job = '${Job.ACTOR}'
+                    LEFT JOIN Poster p ON p.id = cca.srcPoster
+                    WHERE mc.job IN ('${Job.ACTOR}')
                     GROUP BY mc.mediaId
-                    ORDER BY mc.order asc
+                    ORDER BY mc.\`order\` asc
                 ) cast ON cast.mediaId = m.id
 
                 LEFT JOIN (
@@ -641,15 +643,16 @@ export class MediaService {
                                 'character', mc.character,
                                 'job', mc.job,
                                 'srcPoster', p.name,
-                                'order', mc.order
+                                'order', mc.\`order\`
                             )
+                            ${this.creditService.getQueryOrderCredit('mc')}
                         ) AS crews
                     FROM media_credit mc
                     JOIN credit ccr ON ccr.id = mc.creditId
-                    JOIN Poster p ON p.id = ccr.srcPoster
-                    WHERE mc.job = '${Job.DIRECTOR}'
+                    LEFT JOIN Poster p ON p.id = ccr.srcPoster
+                    WHERE mc.job IN ('${Job.DIRECTOR}')
                     GROUP BY mc.mediaId
-                    ORDER BY mc.order asc
+                    ORDER BY mc.\`order\` asc
                 ) crew ON crew.mediaId = m.id
                 
                 WHERE m.id = ?`;

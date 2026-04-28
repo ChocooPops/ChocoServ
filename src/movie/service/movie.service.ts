@@ -74,7 +74,11 @@ export class MovieService extends MediaService {
         let SELECT: string = '';
         let JOIN: string = '';
         if (otherInfos) {
-            SELECT = `'otherTitles', ot.otherTitles,`;
+            SELECT = `'otherTitles', ot.otherTitles,
+                      'categories', cat.categories,
+                      'keyWords', kw.keywords,
+                      ${this.creditService.getQuerySelectCredits()}`;
+
             JOIN = `LEFT JOIN (
                     SELECT mediaId,
                         JSON_ARRAYAGG(
@@ -85,7 +89,28 @@ export class MovieService extends MediaService {
                         ) AS otherTitles
                     FROM translation_title
                     GROUP BY mediaId
-                ) ot ON ot.mediaId = m.id`;
+                ) ot ON ot.mediaId = m.id
+                 
+                LEFT JOIN (
+                    SELECT mc.mediaId,
+                        JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'id', c.id,
+                                'name', c.name
+                            )
+                        ) AS categories
+                    FROM media_category mc
+                    JOIN category c ON c.id = mc.categoryId
+                    GROUP BY mc.mediaId
+                ) cat ON cat.mediaId = m.id
+                 
+                LEFT JOIN (
+                    SELECT mediaId, JSON_ARRAYAGG(name) AS keywords
+                    FROM keyword
+                    GROUP BY mediaId
+                ) kw ON kw.mediaId = m.id
+                 
+                ${this.creditService.getQueryJoinCredits()}`;
         }
         return `
             SELECT
@@ -224,7 +249,7 @@ export class MovieService extends MediaService {
                             const formatedTitle: string = this.formatPathService.formatPath(newMovie.title);
                             const messageCategory: string = await this.insertManyMediaCategory(mediaId, newMovie.categories, conn);
                             const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newMovie.otherTitles, conn);
-                            const messageStaff: string = await this.creditService.insertManyStaff(mediaId, newMovie.credits, conn);
+                            const messageStaff: string = await this.creditService.insertManyCredits(mediaId, newMovie.credits, conn);
                             const messageKeyWord: string = await this.insertKeyword(mediaId, newMovie.keyWords, conn);
                             const messagePoster: string = await this.posterService.insertManyPosterByMedia(newMovie, this.currentMediaType, formatedTitle, mediaId, conn);
 
@@ -309,7 +334,7 @@ export class MovieService extends MediaService {
                             const newFormatedTitle: string = this.formatPathService.formatPath(updateMovie.title);
                             const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateMovie.id, updateMovie.categories, conn);
                             const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateMovie.id, updateMovie.otherTitles, conn);
-                            const messageStaff: string = await this.creditService.deleteAndUpdateMediaStaff(updateMovie.id, updateMovie.credits, conn);
+                            const messageStaff: string = await this.creditService.deleteAndUpdateMediaCredit(updateMovie.id, updateMovie.credits, conn);
                             const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateMovie.id, updateMovie.keyWords, conn);
                             const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateMovie, oldMovie, this.currentMediaType, oldFormatedTitle, conn);
 
