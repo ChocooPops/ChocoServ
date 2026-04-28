@@ -168,7 +168,7 @@ export class CategoryService {
                         name: newCategory.name
                     }
                 }
-            } catch (error) {
+            } catch (error: any) {
                 await conn.rollback();
                 returnedMessage = {
                     id: -1,
@@ -220,7 +220,7 @@ export class CategoryService {
                     message: "Categorie introuvable"
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             await conn.rollback();
             return {
                 id: -1,
@@ -246,7 +246,7 @@ export class CategoryService {
                 message: 'Categorie supprimée avec succès',
                 other: categoryId
             }
-        } catch (error) {
+        } catch (error: any) {
             await conn.rollback();
             returnMessage = {
                 id: -1,
@@ -278,4 +278,5 @@ export class CategoryService {
             throw error;
         }
     }
+    
 }

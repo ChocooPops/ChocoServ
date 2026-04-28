@@ -20,6 +20,7 @@ import { promises as fs } from "fs";
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
 import { CreditService } from 'src/credit/service/credit.service';
+import { Credit } from 'src/credit/dto/credit.interface';
 
 @Injectable()
 export class MovieService extends MediaService {
@@ -182,6 +183,11 @@ export class MovieService extends MediaService {
         movie.srcPoster.special = this.formatPathService.getManyFormatedPosterUrl(movie.title, this.currentMediaType, movie.srcPoster.special);
         movie.srcPoster.license = this.formatPathService.getManyFormatedPosterUrl(movie.title, this.currentMediaType, movie.srcPoster.license);
         movie.srcPoster.horizontal = this.formatPathService.getManyFormatedPosterUrl(movie.title, this.currentMediaType, movie.srcPoster.horizontal);
+        if (movie.credits) {
+            movie.credits.forEach((credit: Credit) => {
+                credit.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(credit.id, credit.fullName, credit.srcPoster);
+            })
+        }
         delete (movie as any).seasons;
         return movie;
     }

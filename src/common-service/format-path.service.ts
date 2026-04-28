@@ -42,6 +42,15 @@ export class FormatPathService {
         }
     }
 
+    public getOneFormatedPosterUrlFromCredit(creditId: number, fullName: string, poster: string | null): string | null {
+        if (poster) {
+            const formatedTitle: string = `${creditId}-${this.formatPath(fullName)}`;
+            return `${this.folderHost}/${this.folderUploads}/${MediaType.CREDIT.toLowerCase()}/${formatedTitle}/${poster}`;
+        } else {
+            return null;
+        }
+    }
+
     public getManyFormatedPosterUrl(title: string, mediaType: MediaType, posters: string[]): string[] {
         if (posters) {
             const formatedTitle: string = this.formatPath(title);

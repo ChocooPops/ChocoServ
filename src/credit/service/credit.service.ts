@@ -1,11 +1,37 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable  } from '@nestjs/common';
 import * as mariadb from 'mariadb';
 import { Job } from '../dto/job.enum';
 import { Credit } from '../dto/credit.interface';
+import { FormatPathService } from 'src/common-service/format-path.service';
+import { PosterService } from 'src/poster/service/poster.service';
+import { LazyModuleLoader } from '@nestjs/core';
+import { TmdbService } from 'src/tmdb/service/tmdb.service';
+import { DATABASE_POOL } from 'src/database/database.module';
+import { Media } from 'src/media/dto/media.interface';
+import { Movie } from 'src/movie/dto/movie.interface';
+import { MediaType } from 'src/media/dto/media-type.enum';
+import { Series } from 'src/series/dto/series.interface';
 
 @Injectable()
 export class CreditService {
 
+    private tmdbService: TmdbService | null = null;
+
+    constructor(@Inject(DATABASE_POOL) private readonly pool: mariadb.Pool,
+        private readonly lazyModuleLoader: LazyModuleLoader,
+        private readonly formatPathService: FormatPathService,
+        private readonly posterService: PosterService
+    ) { }
+    
+    private async getTmdbService() {
+        if (!this.tmdbService) {
+            const { TmdbModule } = await import('../../tmdb/tmdb.module');
+        const { TmdbService } = await import('../../tmdb/service/tmdb.service');
+            const moduleRef = await this.lazyModuleLoader.load(() => TmdbModule);
+            this.tmdbService = moduleRef.get(TmdbService);
+        }
+        return this.tmdbService;
+    }
 
     public getQueryOrderCredit(table: string): string {
         return `
@@ -125,8 +151,8 @@ export class CreditService {
                 newCredits.forEach(c => {
                     insertValues.push(
                         c.tmdbId,
-                        c.fullName,
-                        c.originalFullName
+                        c.fullName?.trim(),
+                        c.originalFullName?.trim()
                     );
                 });
 
@@ -166,6 +192,26 @@ export class CreditService {
             }
 
             /**
+            * Ajout des posters pour les nouveaux credits
+            */
+           const uniqueNewCredits = Array.from(
+                new Map(newCredits.map(credit => [credit.tmdbId, credit])).values()
+            );
+            for (const newCredit of uniqueNewCredits) {
+                try {
+                    const creditId: number = existingMap.get(newCredit.tmdbId);
+                    if (creditId) {
+                        const formatedTitle: string = `${creditId}-${this.formatPathService.formatPath(newCredit.fullName)}`
+                        const tmdbService = await this.getTmdbService();
+                        const poster: any = await tmdbService.getEntirelyUrlImagesFromTMDB(newCredit.srcPoster);
+                        await this.posterService.insertPosterCredit(poster, creditId, formatedTitle, conn);
+                    }
+                } catch(error) {
+                    
+                }
+            }
+
+            /**
              * 5. Préparer liaison Media_Credit
              */
             const mediaCreditValues: any[] = [];
@@ -179,7 +225,7 @@ export class CreditService {
                     mediaId,
                     creditId,
                     c.job,
-                    c.character ?? null,
+                    c.character?.trim() ?? null,
                     c.order ?? -1
                 );
             });
@@ -219,6 +265,43 @@ export class CreditService {
         } catch (error) {
             throw error;
         }
+    }
+
+    public async saveAllNewCreditFromAllMedia(): Promise<any> {
+        const conn = await this.pool.getConnection();
+        const tmdbService = await this.getTmdbService();
+        const results: any[] = [];
+
+        const movies: Movie[] = await conn.query(`SELECT id, title, jellyfinId FROM Media WHERE mediaType = ?`, [MediaType.MOVIE]);
+        for (const movie of movies) {
+            try {
+                const credits: Credit[] = await tmdbService.fetchCreditForMovie(movie);
+                const message = await this.insertManyCredits(movie.id, credits, conn);
+                results.push(`${movie.title} => ${message}`);
+            } catch(error) {
+                results.push({
+                    title: movie.title,
+                    error : error
+                })
+            }
+            console.log(movie.title)
+        }
+
+        const series: Series[] = await conn.query(`SELECT id, title, jellyfinId FROM Media WHERE mediaType = ?`, [MediaType.SERIES]);
+        for (const serie of series) {
+            try {
+                const credits: Credit[] = await tmdbService.fetchCreditForSeries(serie);
+                const message = await this.insertManyCredits(serie.id, credits, conn);
+                results.push(`${serie.title} => ${message}`);
+            } catch(error) {
+                results.push({
+                    title: serie.title,
+                    error : error
+                })
+            }
+            console.log(serie.title)
+        }
+        return results;
     }
 
 }

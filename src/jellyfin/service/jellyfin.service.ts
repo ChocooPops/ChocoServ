@@ -93,10 +93,24 @@ export class JellyfinService {
         }
     }
 
-    public async getTmdbIdByJellyfinId(jellyfinId: string): Promise<number | null> {
+    public async getTmdbIdByJellyfinIdForMovie(jellyfinId: string): Promise<number | null> {
         try {
             await this.setAllJellyfinItemsMovie();
             const item: any = this.allJellyfinItemsMovie.find((item: any) => item.Id && item.Id === jellyfinId);
+            if (item.ProviderIds.Tmdb) {
+                return Number(item.ProviderIds.Tmdb);
+            } else {
+                return null;
+            }
+        } catch (error) {
+            return null;
+        }
+    }
+
+    public async getTmdbIdByJellyfinIdForSeries(jellyfinId: string): Promise<number | null> {
+        try {
+            await this.setAllJellyfinItemsSeries();
+            const item: any = this.allJellyfinItemsSeries.find((item: any) => item.Id && item.Id === jellyfinId);
             if (item.ProviderIds.Tmdb) {
                 return Number(item.ProviderIds.Tmdb);
             } else {

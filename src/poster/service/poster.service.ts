@@ -22,6 +22,7 @@ export class PosterService {
     private scaleMainPoster: number[] = [100, 300, 350, 600, 900, 1400, 1920];
     private scaleLogo: number[] = [200, 300, 500, 700];
     private scaleSeries: number[] = [300, 600, 900];
+    private scaleCredit: number[] = [300, 600, 900];
     private notDownload: string = 'notDownload';
 
     constructor(private uploadImageService: UploadImageService,
@@ -435,9 +436,12 @@ export class PosterService {
                 messagePoster = await this.uploadImageService.saveImageToMediaType(poster, formatedTitle, posterName, mediaType);
             } else if (mediaType === MediaType.LICENSE) {
                 messagePoster = await this.uploadImageService.saveImageToLicense(poster, formatedTitle, posterName);
+            } else if (mediaType === MediaType.CREDIT) {
+                messagePoster = await this.uploadImageService.saveImageToCredit(poster, formatedTitle, posterName);
             }
             return [posterId, messagePoster];
         } catch (error) {
+            console.log(error)
             throw error;
         }
     }
@@ -558,6 +562,70 @@ export class PosterService {
             for (const scale of scales) {
                 const pathCustom: string = `${formatedTitle}/${scale}${format}/${this.uploadImageService.getBasename(srcPoster)}`;
                 await this.uploadImageService.deleteFileOrDirectoryToMediaType(pathCustom, mediaType);
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    private async deletePosterByIdFromCredit(formatedTitle: string, srcPoster: string, format: 'h' = 'h'): Promise<void> {
+        try {
+            const scales: number[] = Array.from(
+                new Set([
+                    ...this.scaleMainPoster,
+                    ...this.scaleLogo,
+                    ...this.scaleSeries
+                ])
+            );
+            const originelPath: string = `${formatedTitle}/${this.uploadImageService.getBasename(srcPoster)}`;
+            await this.uploadImageService.deleteFileOrDirectoryToCredit(originelPath);
+            for (const scale of scales) {
+                const pathCustom: string = `${formatedTitle}/${scale}${format}/${this.uploadImageService.getBasename(srcPoster)}`;
+                await this.uploadImageService.deleteFileOrDirectoryToCredit(pathCustom);
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    public async insertPosterCredit(poster: string | ArrayBuffer | null, creditId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
+        if (poster && this.uploadImageService.isBase64Image(poster)) {
+            try {
+                const [posterId, messagePoster] = await this.insertOnePoster(poster, formatedTitle, MediaType.CREDIT, conn);
+                if (messagePoster.state && messagePoster.other) {
+                    await this.updateNameOnePoster(posterId, messagePoster.other, conn);
+                    const queryUpdateMedia: string = `UPDATE Credit SET srcPoster = ? WHERE id = ?`;
+                    await conn.query(queryUpdateMedia, [posterId, creditId]);
+                    await this.compressedPosterByScale(`${this.uploadImageService.getUploadDirToCredit()}/${formatedTitle}`, [messagePoster.other], this.scaleCredit, 'h');
+                    return `Poster de ${formatedTitle} inséré`;
+                }
+            } catch (error) {
+                throw error;
+            }
+        } else {
+            return "Aucun poster n'est à ajouter";
+        }
+    }
+    public async modifyOrDeletePosterFromCredit(creditId: number, newPoster: string | ArrayBuffer | null, oldPoster: string, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
+        try {
+            if (newPoster) {
+                if (this.uploadImageService.isBase64Image(newPoster)) {
+                    if (oldPoster) {
+                        const oldPosterId: number = this.getIdByPosterName(oldPoster);
+                        await conn.query(`DELETE FROM Poster WHERE id = ?`, [oldPosterId]);
+                        await this.deletePosterByIdFromCredit(formatedTitle, oldPoster);
+                    }
+                    return await this.insertPosterCredit(newPoster, creditId, formatedTitle, conn);
+                } else {
+                    return `(aucun changement du poster)`;
+                }
+            } else if (oldPoster) {
+                const oldPosterId: number = this.getIdByPosterName(oldPoster);
+                await conn.query(`DELETE FROM Poster WHERE id = ?`, [oldPosterId]);
+                await this.deletePosterByIdFromCredit(formatedTitle, oldPoster);
+                return `(poster supprimé)`;
+            } else {
+                return `(aucun changement du poster)`;
             }
         } catch (error) {
             throw error;

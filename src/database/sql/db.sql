@@ -90,7 +90,7 @@ CREATE TABLE
 CREATE TABLE
     `Credit` (
         id INT NOT NULL AUTO_INCREMENT,
-        tmdbId INT DEFAULT NULL,
+        tmdbId INT NOT NULL,
         fullName VARCHAR(255) NOT NULL,
         originalFullName VARCHAR(255) DEFAULT NULL,
         srcPoster INT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE
         CONSTRAINT CREDIT_PK PRIMARY KEY (id),
         CONSTRAINT UQ_TMDB_ID_CREDIT UNIQUE (tmdbId),
         INDEX IDX_CREDIT_SRCPOSTER (srcPoster)
-    );
+    ) AUTO_INCREMENT = 1000;
 
 -- MEDIA CREDIT
 CREATE TABLE

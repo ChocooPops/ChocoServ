@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Post } from '@nestjs/common';
 import { CreditService } from '../service/credit.service';
 import { Job } from '../dto/job.enum';
 
@@ -11,4 +11,10 @@ export class CreditController {
     public getJobToFilters(): Job[] {
         return this.creditService.getJobToFilters();
     }
+
+    @Post('save-all-new-credit')
+    public saveAllNewCreditFromAllMedia(): Promise<any> {
+        return this.creditService.saveAllNewCreditFromAllMedia();
+    }
+
 }

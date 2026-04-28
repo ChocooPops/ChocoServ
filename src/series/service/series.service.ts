@@ -1,5 +1,4 @@
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
-import { MediaService } from 'src/media/service/media.service';
 import { Series } from '../dto/series.interface';
 import { Episode } from '../dto/episode.interface';
 import { EditSeries } from '../dto/edit-series.interface';
@@ -23,6 +22,8 @@ import { promises as fs } from "fs";
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
 import { CreditService } from 'src/credit/service/credit.service';
+import { MediaService } from 'src/media/service/media.service';
+import { Credit } from 'src/credit/dto/credit.interface';
 
 @Injectable()
 export class SeriesService extends MediaService {
@@ -80,7 +81,8 @@ export class SeriesService extends MediaService {
         if (otherInfos) {
             SELECT = `'otherTitles', ot.otherTitles,
                       'categories', cat.categories,
-                      'keyWords', kw.keywords,`;
+                      'keyWords', kw.keywords,
+                      ${this.creditService.getQuerySelectCredits()}`;
 
             JOIN = `LEFT JOIN (
                     SELECT mediaId,
@@ -111,7 +113,9 @@ export class SeriesService extends MediaService {
                     SELECT mediaId, JSON_ARRAYAGG(name) AS keywords
                     FROM keyword
                     GROUP BY mediaId
-                ) kw ON kw.mediaId = m.id`;
+                ) kw ON kw.mediaId = m.id
+                 
+                ${this.creditService.getQueryJoinCredits()}`;
         }
         return `
             SELECT
@@ -191,6 +195,11 @@ export class SeriesService extends MediaService {
         series.srcPoster.special = this.formatPathService.getManyFormatedPosterUrl(series.title, this.currentMediaType, series.srcPoster.special);
         series.srcPoster.license = this.formatPathService.getManyFormatedPosterUrl(series.title, this.currentMediaType, series.srcPoster.license);
         series.srcPoster.horizontal = this.formatPathService.getManyFormatedPosterUrl(series.title, this.currentMediaType, series.srcPoster.horizontal);
+        if (series.credits) {
+            series.credits.forEach((credit: Credit) => {
+                credit.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(credit.id, credit.fullName, credit.srcPoster);
+            });
+        }
         series.seasons = this.getFormatedSeasons(series.seasons, series.title);
         delete (series as any).time;
         delete (series as any).quality;

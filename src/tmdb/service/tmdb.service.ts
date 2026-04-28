@@ -18,6 +18,8 @@ import { JellyfinService } from "src/jellyfin/service/jellyfin.service";
 import { ConfigService } from "@nestjs/config";
 import { Credit } from "src/credit/dto/credit.interface";
 import { Job } from "src/credit/dto/job.enum";
+import { Movie } from "src/movie/dto/movie.interface";
+import { Series } from "src/series/dto/series.interface";
 
 @Injectable()
 export class TmdbService {
@@ -50,7 +52,7 @@ export class TmdbService {
     }
 
     public async searchMovieByJellyfinId(jellyfinId: string): Promise<EditMovie> {
-        const tmdbId: number | null = await this.jellyfinService.getTmdbIdByJellyfinId(jellyfinId);
+        const tmdbId: number | null = await this.jellyfinService.getTmdbIdByJellyfinIdForMovie(jellyfinId);
         if (tmdbId) {
             return await this.searchMovieByTmdbId(tmdbId);
         } else {
@@ -566,7 +568,7 @@ export class TmdbService {
         }
     }
 
-    private async getEntirelyUrlImagesFromTMDB(url: string): Promise<string | null | ArrayBuffer> {
+    public async getEntirelyUrlImagesFromTMDB(url: string): Promise<string | null | ArrayBuffer> {
         if (url) {
             return await this.toBase64(this.getUrlImageTMBD(url));
         } else {
@@ -597,6 +599,22 @@ export class TmdbService {
             console.error('Erreur de conversion en base64:', error);
             return null;
         }
+    }
+
+    public async fetchCreditForMovie(movie: Movie): Promise<Credit[]> {
+        const tmdbId: number | null = await this.jellyfinService.getTmdbIdByJellyfinIdForMovie(movie.jellyfinId);
+        const url: string = `${this.apiTMDBMovie}/${tmdbId}?${this.apiKeyTMDB}&append_to_response=credits`;
+        const response = await lastValueFrom(this.httpService.get(url));
+        const credits: Credit[] = this.getCredits(response.data.credits);
+        return credits;
+    }
+
+    public async fetchCreditForSeries(series: Series): Promise<Credit[]> {
+        const tmdbId: number | null = await this.jellyfinService.getTmdbIdByJellyfinIdForSeries(series.jellyfinId);
+        const url: string = `${this.apiTMDBTv}/${tmdbId}?${this.apiKeyTMDB}&append_to_response=credits`;
+        const response = await lastValueFrom(this.httpService.get(url));
+        const credits: Credit[] = this.getCredits(response.data.credits);
+        return credits;
     }
 
 }

@@ -285,7 +285,7 @@ export class UserService {
                                 WHERE id = ?`, [currentUser.password, currentUser.id])
                         }
                         await conn.commit();
-                    } catch (error) {
+                    } catch (error: any) {
                         await conn.rollback();
                         message = error.sqlMessage;
                         return {
@@ -365,7 +365,7 @@ export class UserService {
                                     await this.mailService.sendMailSuspendedUser(user);
                                 }
                                 await conn.commit();
-                            } catch (error) {
+                            } catch (error: any) {
                                 await conn.rollback();
                                 return {
                                     id: -1,
@@ -440,7 +440,7 @@ export class UserService {
                         state: true,
                         message: "Utilisateur supprimé"
                     }
-                } catch (error) {
+                } catch (error: any) {
                     await conn.rollback();
                     return {
                         id: -1,

@@ -14,9 +14,11 @@ export class UploadImageService {
     private readonly folderMovie: string = 'movie';
     private readonly folderSeries: string = 'series';
     private readonly folderLicense: string = 'license';
+    private readonly folderCredit: string = 'credit';
     private readonly uploadDirToMovie: string = path.join(`${this.folderUploads}/${this.folderMovie}`);
     private readonly uploadDirToSeries: string = path.join(`${this.folderUploads}/${this.folderSeries}`);
     private readonly uploadDirToLicense: string = path.join(`${this.folderUploads}/${this.folderLicense}`);
+    private readonly uploadDirToCredit: string = path.join(`${this.folderUploads}/${this.folderCredit}`);
 
     public getUploadDirToMovie(): string {
         return this.uploadDirToMovie;
@@ -26,6 +28,9 @@ export class UploadImageService {
     }
     public getUploadDirToLicense(): string {
         return this.uploadDirToLicense;
+    }
+    public getUploadDirToCredit(): string {
+        return this.uploadDirToCredit;
     }
 
     public getImageExtensionFromBase64(image: string | ArrayBuffer): string | null {
@@ -79,7 +84,7 @@ export class UploadImageService {
                 state: true,
                 message: `Répertoire créé à : ${directoryPath}`
             };
-        } catch (error) {
+        } catch (error: any) {
             return {
                 id: -1,
                 state: false,
@@ -117,7 +122,7 @@ export class UploadImageService {
                 message: `Image enregistrée à : ${filePath}`,
                 other: name
             };
-        } catch (error) {
+        } catch (error: any) {
             return {
                 id: -1,
                 state: false,
@@ -142,6 +147,11 @@ export class UploadImageService {
         return await this.saveImage(image, directoryPath, filename);
     }
 
+    public async saveImageToCredit(image: string | ArrayBuffer, directory: string, filename: string): Promise<ReturnMessage> {
+        const directoryPath = path.join(`${this.uploadDirToCredit}`, directory);
+        return await this.saveImage(image, directoryPath, filename);
+    }
+
     private async renameFileOrDirectory(oldPath: string, newPath: string): Promise<ReturnMessage> {
         try {
             if (!(await fs.pathExists(oldPath))) {
@@ -157,7 +167,7 @@ export class UploadImageService {
                 state: true,
                 message: `Renommé avec succès : ${oldPath} → ${newPath}`
             }
-        } catch (error) {
+        } catch (error: any) {
             return {
                 id: -1,
                 state: false,
@@ -200,7 +210,7 @@ export class UploadImageService {
                     message: `Erreur : Le fichier ou dossier "${path}" n'existe pas.`
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             return {
                 id: 0,
                 state: true,
@@ -221,6 +231,11 @@ export class UploadImageService {
 
     public async deleteFileOrDirectoryToLicense(directory: string): Promise<ReturnMessage> {
         const pathDirecotry = path.join(`${this.uploadDirToLicense}/${directory}`);
+        return this.deleteFileOrFolder(pathDirecotry);
+    }
+
+    public async deleteFileOrDirectoryToCredit(directory: string): Promise<ReturnMessage> {
+        const pathDirecotry = path.join(`${this.uploadDirToCredit}/${directory}`);
         return this.deleteFileOrFolder(pathDirecotry);
     }
 

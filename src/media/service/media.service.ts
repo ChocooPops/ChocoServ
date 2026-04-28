@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { TranslationTitle } from '../dto/translation-title.interface';
 import * as mariadb from 'mariadb';
 import { CategorySimple } from 'src/category/dto/categorySimple.interface';
@@ -16,6 +16,8 @@ import { StatState } from 'src/stat-user/dto/stat-state.enum';
 import { SortCatalog } from '../dto/sort-catalog.enum';
 import { CreditService } from 'src/credit/service/credit.service';
 import { Job } from 'src/credit/dto/job.enum';
+import { MediaInfo } from '../dto/media-info.interface';
+import { Credit } from 'src/credit/dto/credit.interface';
 
 @Injectable()
 export class MediaService {
@@ -575,7 +577,7 @@ export class MediaService {
         }
     }
 
-    public async getMediaInfoById(mediaId: number): Promise<any> {
+    public async getMediaInfoById(mediaId: number): Promise<MediaInfo> {
         const conn = await this.pool.getConnection();
         const query: string = `SELECT
                 JSON_OBJECT(
@@ -659,9 +661,15 @@ export class MediaService {
 
         try {
             const result: any[] = await conn.query(query, [mediaId]);
-            return result[0].media;
+            const infos: MediaInfo = result[0].media;
+            infos.casts?.forEach((cast: Credit) => {
+                cast.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(cast.id, cast.fullName, cast.srcPoster);
+            });
+            infos.crews?.forEach((crew: Credit) => {
+                crew.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(crew.id, crew.fullName, crew.srcPoster);
+            });
+            return infos;
         } catch (error) {
-            console.log(error)
             return null;
         } finally {
             await conn.release();
