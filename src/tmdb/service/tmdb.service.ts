@@ -20,6 +20,7 @@ import { MediaCredit } from "src/credit/dto/media-credit.interface";
 import { Job } from "src/credit/dto/job.enum";
 import { Movie } from "src/movie/dto/movie.interface";
 import { Series } from "src/series/dto/series.interface";
+import { Credit } from "src/credit/dto/credit.interface";
 
 @Injectable()
 export class TmdbService {
@@ -42,6 +43,9 @@ export class TmdbService {
 
     private readonly apiTMDBTv: string = `${this.baseUrlTmdb}/tv`;
     private readonly apiTMDBSearchTv: string = `${this.baseUrlTmdb}/search/tv`;
+
+    private readonly apiTMDBPerson: string = `${this.baseUrlTmdb}/person`;
+    private readonly apiTMDBSearchPerson: string = `${this.baseUrlTmdb}/search/person`;
 
     public async searchMoviebByTitle(title: string): Promise<any> {
         const param: string = `&query=${title}`;
@@ -678,6 +682,37 @@ export class TmdbService {
         const response = await lastValueFrom(this.httpService.get(url));
         const credits: MediaCredit[] = this.getCreditsForSeries(response.data.aggregate_credits);
         return credits;
+    }
+
+    public async searchCreditByTmdbId(id: number): Promise<Credit> {
+        const url: string = `${this.apiTMDBPerson}/${id}?${this.apiKeyTMDB}&${this.paramLanguage}`;
+        const response = await lastValueFrom(this.httpService.get(url));
+        const data = response.data;
+        const originalName: string = data.also_known_as?.find(n => /[^\u0000-\u00ff]/.test(n))
+                            || data.also_known_as[0]
+                            || data.name;
+        const credit: Credit = {
+            id: -1,
+            tmdbId: id,
+            fullName: data.name,
+            originalFullName: originalName,
+            srcPoster: await this.getEntirelyUrlImagesFromTMDB(data.profile_path)
+        }
+        return credit;
+    }
+
+    public async searchCreditByFullName(fullName: string): Promise<Credit> {
+        const url: string = `${this.apiTMDBSearchPerson}?${this.apiKeyTMDB}&query=${fullName}&${this.paramLanguage}`;
+        const response = await lastValueFrom(this.httpService.get(url));
+        const data = response.data.results[0];
+        const credit: Credit = {
+            id: -1,
+            tmdbId: data.id,
+            fullName: data.name,
+            originalFullName: data.original_name,
+            srcPoster: await this.getEntirelyUrlImagesFromTMDB(data.profile_path)
+        }
+        return credit;
     }
 
 }

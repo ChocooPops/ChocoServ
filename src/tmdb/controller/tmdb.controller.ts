@@ -1,6 +1,7 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { TmdbService } from '../service/tmdb.service';
 import { EditMovie } from 'src/movie/dto/edit-movie.interface';
+import { Credit } from 'src/credit/dto/credit.interface';
 
 @Controller('tmdb')
 export class TmdbController {
@@ -35,6 +36,16 @@ export class TmdbController {
     @Get('search-series-jellyfin/:id')
     async searchSeriesByJellyfinId(@Param('id') id: string): Promise<EditMovie> {
         return await this.tmdbService.searchSeriesByJellyfinId(id);
+    }
+
+    @Get('search-credit-by-id/:id')
+    async searchCreditByTmdbId(@Param('id', ParseIntPipe) id: number): Promise<Credit> {
+        return await this.tmdbService.searchCreditByTmdbId(id);
+    }
+
+    @Get('search-credit-by-full-name/:name')
+    async searchCreditByFullName(@Param('name') name: string): Promise<Credit> {
+        return await this.tmdbService.searchCreditByFullName(name);
     }
 
 }

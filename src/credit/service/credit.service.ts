@@ -10,6 +10,9 @@ import { DATABASE_POOL } from 'src/database/database.module';
 import { Movie } from 'src/movie/dto/movie.interface';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { Series } from 'src/series/dto/series.interface';
+import { Credit } from '../dto/credit.interface';
+import { UploadImageService } from 'src/common-service/upload-image.service';
+import { ReturnMessage } from 'src/common-interface/return-message.interface';
 
 @Injectable()
 export class CreditService {
@@ -19,9 +22,52 @@ export class CreditService {
     constructor(@Inject(DATABASE_POOL) private readonly pool: mariadb.Pool,
         private readonly lazyModuleLoader: LazyModuleLoader,
         private readonly formatPathService: FormatPathService,
-        private readonly posterService: PosterService
+        private readonly posterService: PosterService,
+        private readonly uploadImageService: UploadImageService
     ) { }
     
+    public async getCreditByResearch(keyWord: string): Promise<Credit[]> {
+        const conn = await this.pool.getConnection();
+        try {
+            const credits: Credit[] = await conn.query(`
+                SELECT c.id, p.name as srcPoster, c.fullName 
+                FROM CREDIT c
+                LEFT JOIN Poster p ON p.id = c.srcPoster
+                WHERE c.id like '${keyWord}%'
+                OR c.tmdbId like '${keyWord}%'
+                OR c.fullName like '%${keyWord}%' 
+                OR c.originalFullName like '%${keyWord}%'
+                LIMIT 50`);
+            credits.forEach((credit: Credit) => {
+                credit.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(credit.id, credit.fullName, credit.srcPoster as string);
+            });
+            return credits;
+        } catch(error) {
+            return [];
+        } finally {
+            await conn.release();
+        }
+    }
+
+    public async getCreditById(creditId: number): Promise<Credit> {
+        const conn = await this.pool.getConnection();
+        try {
+            const credits: Credit[] = await conn.query(`
+                SELECT
+                c.id, c.tmdbId, c.fullName, c.originalFullName, p.name as srcPoster
+                FROM CREDIT c
+                LEFT JOIN Poster p ON p.id = c.srcPoster 
+                WHERE c.id = ?`, [creditId]);
+            const credit: Credit = credits[0];
+            credit.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(credit.id, credit.fullName, credit.srcPoster as string);
+            return credit;
+        } catch(error) {
+            throw error;
+        } finally {
+            await conn.release();
+        }
+    }
+
     private async getTmdbService() {
         if (!this.tmdbService) {
             const { TmdbModule } = await import('../../tmdb/tmdb.module');
@@ -286,6 +332,57 @@ export class CreditService {
             return await this.insertManyCredits(mediaId, credits, conn);
         } catch (error) {
             throw error;
+        }
+    }
+
+    public async addNewCredit(newCredit: Credit): Promise<any> {
+        const conn = await this.pool.getConnection();
+        try {
+
+        } catch(error) {
+
+        } finally {
+            await conn.release();
+        }
+    }
+
+    public async modifyCredit(updateCredit: Credit): Promise<any> {
+        const conn = await this.pool.getConnection();
+        try {
+
+        } catch(error) {
+
+        } finally {
+            await conn.release();
+        }
+    }
+
+    public async deleteCreditById(creditId: number): Promise<ReturnMessage> {
+        const conn = await this.pool.getConnection();
+        try {
+            const credits: Credit[] = await conn.query(`SELECT id, fullName, srcPoster FROM Credit WHERE id = ?`, [creditId]);
+            if (credits.length > 0) {
+                const formatedTitle: string = this.formatPathService.getFormatedTitleForCredit(credits[0].id, credits[0].fullName);
+                const mediaCredits = await conn.query(`DELETE FROM Media_Credit WHERE creditId = ?`, [creditId]);
+                const poster = await conn.query(`DELETE FROM Poster WHERE id = ?`, [credits[0].srcPoster]);
+                const credit = await conn.query(`DELETE FROM Credit WHERE id = ?`, [creditId]);
+                await this.uploadImageService.deleteFileOrDirectoryToCredit(formatedTitle);
+                return {
+                    id: 0,
+                    state: true,
+                    message: `Credit lié aux médias (${mediaCredits.affectedRows} supprimé) \n Poster supprimé (${poster.affectedRows}) \n Crédit ${credit[0].fullName} supprimé`
+                }
+            } else {
+                return {
+                    id: -1,
+                    state: false,
+                    message: 'Credit introuvable'
+                }
+            }
+        } catch(error) {
+
+        } finally {
+            await conn.release();
         }
     }
 

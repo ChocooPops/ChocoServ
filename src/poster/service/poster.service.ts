@@ -22,7 +22,7 @@ export class PosterService {
     private scaleMainPoster: number[] = [100, 300, 350, 600, 900, 1400, 1920];
     private scaleLogo: number[] = [200, 300, 500, 700];
     private scaleSeries: number[] = [300, 600, 900];
-    private scaleCredit: number[] = [300, 600, 900];
+    private scaleCredit: number[] = [100, 300, 600, 900];
     private notDownload: string = 'notDownload';
 
     constructor(private uploadImageService: UploadImageService,
@@ -574,7 +574,8 @@ export class PosterService {
                 new Set([
                     ...this.scaleMainPoster,
                     ...this.scaleLogo,
-                    ...this.scaleSeries
+                    ...this.scaleSeries,
+                    ...this.scaleCredit
                 ])
             );
             const originelPath: string = `${formatedTitle}/${this.uploadImageService.getBasename(srcPoster)}`;

@@ -42,9 +42,13 @@ export class FormatPathService {
         }
     }
 
+    public getFormatedTitleForCredit(creditId: number, fullName: string): string {
+        return `${creditId}-${this.formatPath(fullName)}`;
+    }
+
     public getOneFormatedPosterUrlFromCredit(creditId: number, fullName: string, poster: string | null): string | null {
         if (poster) {
-            const formatedTitle: string = `${creditId}-${this.formatPath(fullName)}`;
+            const formatedTitle: string = this.getFormatedTitleForCredit(creditId, fullName);
             return `${this.folderHost}/${this.folderUploads}/${MediaType.CREDIT.toLowerCase()}/${formatedTitle}/${poster}`;
         } else {
             return null;
