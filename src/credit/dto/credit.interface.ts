@@ -8,5 +8,6 @@ export interface Credit {
     character: string | null,
     srcPoster: string | null,
     job: Job,
+    episodeCount?: number,
     order: number
 }

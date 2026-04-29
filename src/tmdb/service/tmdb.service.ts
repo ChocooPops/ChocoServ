@@ -66,7 +66,7 @@ export class TmdbService {
         const response = await lastValueFrom(this.httpService.get(url));
 
         const categories: CategorySimple[] = await this.getCategories(response.data.genres);
-        const credits: Credit[] = this.getCredits(response.data.credits);
+        const credits: Credit[] = this.getCreditsForMovie(response.data.credits);
         const keywords: string[] = this.getKeyWords(response.data.keywords.keywords);
         const otherLanguage: TranslationTitle[] = this.getAllTitlesFromDifferentLanguage(response.data.translations.translations, MediaType.MOVIE, response.data.original_title);
 
@@ -115,11 +115,11 @@ export class TmdbService {
 
     public async searchSeriesByTmdbId(id: number): Promise<any> {
         const jellyfinId: string | null = await this.jellyfinService.getJellyfinIdByTmdbIdForSeries(id.toString());
-        const url: string = `${this.apiTMDBTv}/${id}?${this.apiKeyTMDB}&append_to_response=credits,translations,keywords&${this.paramLanguage}`;
+        const url: string = `${this.apiTMDBTv}/${id}?${this.apiKeyTMDB}&append_to_response=aggregate_credits,translations,keywords&${this.paramLanguage}`;
         const response = await lastValueFrom(this.httpService.get(url));
 
         const categories: CategorySimple[] = await this.getCategories(response.data.genres);
-        const credits: Credit[] = this.getCredits(response.data.credits);
+        const credits: Credit[] = this.getCreditsForSeries(response.data.aggregate_credits);
         const keywords: string[] = this.getKeyWords(response.data.keywords.results);
         const otherLanguage: TranslationTitle[] = this.getAllTitlesFromDifferentLanguage(response.data.translations.translations, MediaType.SERIES, response.data.original_name);
 
@@ -241,10 +241,10 @@ export class TmdbService {
         if (itemJellyfin && itemJellyfin.ProviderIds.Tmdb) {
 
             const id: number = Number(itemJellyfin.ProviderIds.Tmdb);
-            const url: string = `${this.apiTMDBTv}/${id}?${this.apiKeyTMDB}&append_to_response=credits,translations,keywords&${this.paramLanguage}`;
+            const url: string = `${this.apiTMDBTv}/${id}?${this.apiKeyTMDB}&append_to_response=aggregate_credits,translations,keywords&${this.paramLanguage}`;
             const response = await lastValueFrom(this.httpService.get(url));
             const categories: CategorySimple[] = await this.getCategories(response.data.genres);
-            const credits: Credit[] = this.getCredits(response.data.credits);
+            const credits: Credit[] = this.getCreditsForSeries(response.data.aggregate_credits);
             const keywords: string[] = this.getKeyWords(response.data.keywords.results);
             const otherLanguage: TranslationTitle[] = this.getAllTitlesFromDifferentLanguage(response.data.translations.translations, MediaType.SERIES, response.data.original_name);
 
@@ -389,10 +389,11 @@ export class TmdbService {
         }
     }
 
-    private getCredits(credits: any): Credit[] {
+    private getCreditsForMovie(credits: any): Credit[] {
         try {
             const result: Credit[] = [];
             let id: number = 0;
+            let order: number = 0;
             credits.cast.forEach((item: any) => {
                 id++;
                 const credit: Credit = {
@@ -405,6 +406,9 @@ export class TmdbService {
                     job: Job.ACTOR,
                     order: item.order
                 }
+                if (item.order > order) {
+                    order = item.order
+                }
                 result.push(credit);
             });
             const filteredCrew = credits.crew
@@ -413,6 +417,7 @@ export class TmdbService {
 
             filteredCrew.forEach((item: any) => {
                 id++;
+                order++;
                 const credit: Credit = {
                     id: id,
                     tmdbId: item.id,
@@ -421,12 +426,70 @@ export class TmdbService {
                     character: null,
                     srcPoster: this.getUrlImageTMBD(item.profile_path),
                     job: item.job,
-                    order: id
+                    order: order
                 }
                 result.push(credit);
             });
             return result;
         } catch (error) {
+            return [];
+        }
+    }
+
+    private getCreditsForSeries(credits: any): Credit[] {
+        try {
+            const result: Credit[] = [];
+            let id: number = 0;
+            let order: number = 0;
+            credits.cast.forEach((item: any) => {
+                if (item.roles) {
+                    item.roles.forEach((role: any) => {
+                        id++;
+                        const credit: Credit = {
+                            id: id,
+                            tmdbId: item.id,
+                            fullName: item.name,
+                            originalFullName: item.original_name,
+                            character: role.character,
+                            srcPoster: this.getUrlImageTMBD(item.profile_path),
+                            job: Job.ACTOR,
+                            episodeCount: role.episode_count,
+                            order: item.order
+                        }
+                        result.push(credit);
+                        if (item.order > order) {
+                            order = item.order
+                        }
+                    });
+                }
+            });
+            const jobs: Job[] = Object.values(Job);
+            credits.crew.forEach((item: any) => {
+                if (item.jobs) {
+                    item.jobs.forEach((job: any) => {
+                        const jobFormated: Job = job.job?.toUpperCase() as Job;
+                        if (jobs.includes(jobFormated)) {
+                            id++;
+                            order++;
+                            const credit: Credit = {
+                                id: id,
+                                tmdbId: item.id,
+                                fullName: item.name,
+                                originalFullName: item.original_name,
+                                character: null,
+                                srcPoster: this.getUrlImageTMBD(item.profile_path),
+                                job: jobFormated,
+                                episodeCount: job.episode_count,
+                                order: order
+                            }
+                            result.push(credit);
+                        }
+                    })
+                }
+            })
+            return result;
+        } catch (error) {
+            console.log(error)
             return [];
         }
     }
@@ -569,7 +632,7 @@ export class TmdbService {
     }
 
     public async getEntirelyUrlImagesFromTMDB(url: string): Promise<string | null | ArrayBuffer> {
-        if (url) {
+        if (url && url.trim() !== '') {
             return await this.toBase64(this.getUrlImageTMBD(url));
         } else {
             return null;
@@ -605,15 +668,15 @@ export class TmdbService {
         const tmdbId: number | null = await this.jellyfinService.getTmdbIdByJellyfinIdForMovie(movie.jellyfinId);
         const url: string = `${this.apiTMDBMovie}/${tmdbId}?${this.apiKeyTMDB}&append_to_response=credits`;
         const response = await lastValueFrom(this.httpService.get(url));
-        const credits: Credit[] = this.getCredits(response.data.credits);
+        const credits: Credit[] = this.getCreditsForMovie(response.data.credits);
         return credits;
     }
 
     public async fetchCreditForSeries(series: Series): Promise<Credit[]> {
         const tmdbId: number | null = await this.jellyfinService.getTmdbIdByJellyfinIdForSeries(series.jellyfinId);
-        const url: string = `${this.apiTMDBTv}/${tmdbId}?${this.apiKeyTMDB}&append_to_response=credits`;
+        const url: string = `${this.apiTMDBTv}/${tmdbId}?${this.apiKeyTMDB}&append_to_response=aggregate_credits`;
         const response = await lastValueFrom(this.httpService.get(url));
-        const credits: Credit[] = this.getCredits(response.data.credits);
+        const credits: Credit[] = this.getCreditsForSeries(response.data.aggregate_credits);
         return credits;
     }
 

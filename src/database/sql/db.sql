@@ -38,11 +38,11 @@ DROP TABLE IF EXISTS `User_Media_List`;
 
 DROP TABLE IF EXISTS `Media`;
 
-DROP TABLE IF EXISTS `Poster`;
-
 DROP TABLE IF EXISTS `Category`;
 
 DROP TABLE IF EXISTS `Credit`;
+
+DROP TABLE IF EXISTS `Poster`;
 
 DROP TABLE IF EXISTS `User`;
 
@@ -117,6 +117,9 @@ CREATE TABLE
             'MUSIC SUPERVISOR',
             'PRODUCER',
             'DIRECTOR OF PHOTOGRAPHY',
+            'ASSISTANT DIRECTOR OF PHOTOGRAPHY',
+            'VFX DIRECTOR OF PHOTOGRAPHY',
+            'AERIAL DIRECTOR OF PHOTOGRAPHY',
 
             'CHARACTER DESIGN',
             'SERIES DIRECTOR',
@@ -129,12 +132,30 @@ CREATE TABLE
             'ANIMATION DIRECTOR',
             'ORIGINAL STORY',
             'ANIMATION',
+            'SUPERVISING ANIMATION DIRECTOR',
+            'ANIMATION SUPERVISOR',
 
             'VISUAL EFFECTS TECHNICAL DIRECTOR',
             'SPECIAL EFFECTS SUPERVISOR',
             'VISUAL EFFECTS SUPERVISOR',
-            'VISUAL EFFECTS') NOT NULL,
+            'VISUAL EFFECTS',
+
+            'ADDITIONAL STORYBOARDING',
+            'STORYBOARD ARTIST',
+            'LEAD CHARACTER DESIGNER',
+            'BACKGROUND DESIGNER',
+            'MAIN TITLE THEME COMPOSER',
+            'OPENING/ENDING ANIMATION',
+            '3D ANIMATOR',
+            '3D DIRECTOR',
+            'MECHANICAL DESIGNER',
+
+            'SOUND MIXER',
+            'SOUND EFFECTS',
+            'SOUND DIRECTOR',
+            'SOUND DESIGNER') NOT NULL,
         `character` VARCHAR(255) DEFAULT NULL,
+        episodeCount INT DEFAULT NULL,
         `order` INT DEFAULT 0,
         createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
         updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -580,7 +601,7 @@ VALUES
     ('Science Fiction', 'Science Fiction'),
     ('Action', 'Action'),
     ('Horreur', 'Horreur'),
-    ('Guerre', 'Thriller'),
+    ('Guerre', 'Guerre'),
     ('Crime', 'Crime'),
     ('Aventure', 'Aventure'),
     ('Romance', 'Romance'),
@@ -588,4 +609,5 @@ VALUES
     ('Mystère', 'Mystère'),
     ('Musique', 'Musique'),
     ('Western', 'Western'),
+    ('Thriller', 'Thriller'),
     ('Familiale', 'Familiale');

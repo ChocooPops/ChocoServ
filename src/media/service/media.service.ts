@@ -620,6 +620,7 @@ export class MediaService {
                                 'originalFullName', cca.originalFullName,
                                 'character', mc.character,
                                 'job', mc.job,
+                                'episodeCount', mc.episodeCount,
                                 'srcPoster', p.name,
                                 'order', mc.\`order\`
                             )
@@ -644,6 +645,7 @@ export class MediaService {
                                 'originalFullName', ccr.originalFullName,
                                 'character', mc.character,
                                 'job', mc.job,
+                                'episodeCount', mc.episodeCount,
                                 'srcPoster', p.name,
                                 'order', mc.\`order\`
                             )

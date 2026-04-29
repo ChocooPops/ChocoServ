@@ -7,7 +7,6 @@ import { PosterService } from 'src/poster/service/poster.service';
 import { LazyModuleLoader } from '@nestjs/core';
 import { TmdbService } from 'src/tmdb/service/tmdb.service';
 import { DATABASE_POOL } from 'src/database/database.module';
-import { Media } from 'src/media/dto/media.interface';
 import { Movie } from 'src/movie/dto/movie.interface';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { Series } from 'src/series/dto/series.interface';
@@ -68,6 +67,7 @@ export class CreditService {
                                 'originalFullName', Credit.originalFullName,
                                 'character', mcr.character,
                                 'job', mcr.job,
+                                'episodeCount', mcr.episodeCount,
                                 'srcPoster', p.name,
                                 'order', mcr.\`order\`
                             )
@@ -226,27 +226,28 @@ export class CreditService {
                     creditId,
                     c.job,
                     c.character?.trim() ?? null,
+                    c.episodeCount ?? null,
                     c.order ?? -1
                 );
             });
-
             if (!mediaCreditValues.length) {
                 await conn.rollback();
                 return "Aucun acteur ou réalisateur n'est à ajouter";
             }
 
-            const rowsMediaCredit = mediaCreditValues.length / 5;
+            const rowsMediaCredit = mediaCreditValues.length / 6;
 
             const result: any = await conn.query(
                 `
-                INSERT IGNORE INTO Media_Credit (
+                INSERT INTO Media_Credit (
                     mediaId,
                     creditId,
                     job,
                     \`character\`,
+                    episodeCount,
                     \`order\`
                 )
-                VALUES ${Array(rowsMediaCredit).fill("(?, ?, ?, ?, ?)").join(",")}
+                VALUES ${Array(rowsMediaCredit).fill("(?, ?, ?, ?, ?, ?)").join(",")}
                 `,
                 mediaCreditValues
             );
@@ -276,31 +277,34 @@ export class CreditService {
         for (const movie of movies) {
             try {
                 const credits: Credit[] = await tmdbService.fetchCreditForMovie(movie);
-                const message = await this.insertManyCredits(movie.id, credits, conn);
+                const message = await this.deleteAndUpdateMediaCredit(movie.id, credits, conn);
                 results.push(`${movie.title} => ${message}`);
+                console.log(`${movie.title} => ${message}`);
             } catch(error) {
                 results.push({
                     title: movie.title,
                     error : error
                 })
+                console.log(`${movie.title} => error`);
             }
-            console.log(movie.title)
         }
 
         const series: Series[] = await conn.query(`SELECT id, title, jellyfinId FROM Media WHERE mediaType = ?`, [MediaType.SERIES]);
         for (const serie of series) {
             try {
                 const credits: Credit[] = await tmdbService.fetchCreditForSeries(serie);
-                const message = await this.insertManyCredits(serie.id, credits, conn);
+                const message = await this.deleteAndUpdateMediaCredit(serie.id, credits, conn);
                 results.push(`${serie.title} => ${message}`);
+                console.log(`${serie.title} => ${message}`);
             } catch(error) {
                 results.push({
                     title: serie.title,
                     error : error
-                })
+                });
+                console.log(`${serie.title} => error`);
             }
-            console.log(serie.title)
         }
+        await conn.release();
         return results;
     }
 
