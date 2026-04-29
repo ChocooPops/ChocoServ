@@ -17,7 +17,7 @@ import { SortCatalog } from '../dto/sort-catalog.enum';
 import { CreditService } from 'src/credit/service/credit.service';
 import { Job } from 'src/credit/dto/job.enum';
 import { MediaInfo } from '../dto/media-info.interface';
-import { Credit } from 'src/credit/dto/credit.interface';
+import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 
 @Injectable()
 export class MediaService {
@@ -579,6 +579,7 @@ export class MediaService {
 
     public async getMediaInfoById(mediaId: number): Promise<MediaInfo> {
         const conn = await this.pool.getConnection();
+        const mediaType: MediaType = await conn.query(`Select mediaType From Media WHERE id = ?`, [mediaId]);
         const query: string = `SELECT
                 JSON_OBJECT(
                     'id', m.id,
@@ -649,7 +650,10 @@ export class MediaService {
                                 'srcPoster', p.name,
                                 'order', mc.\`order\`
                             )
-                            ${this.creditService.getQueryOrderCredit('mc')}
+                            
+                            ${mediaType === MediaType.MOVIE ? this.creditService.getQueryOrderCreditForMovie('mc') : 
+                            mediaType === MediaType.SERIES ? this.creditService.getQueryOrderCreditForSeries('mc') :
+                            ''}
                         ) AS crews
                     FROM media_credit mc
                     JOIN credit ccr ON ccr.id = mc.creditId
@@ -664,10 +668,10 @@ export class MediaService {
         try {
             const result: any[] = await conn.query(query, [mediaId]);
             const infos: MediaInfo = result[0].media;
-            infos.casts?.forEach((cast: Credit) => {
+            infos.casts?.forEach((cast: MediaCredit) => {
                 cast.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(cast.id, cast.fullName, cast.srcPoster);
             });
-            infos.crews?.forEach((crew: Credit) => {
+            infos.crews?.forEach((crew: MediaCredit) => {
                 crew.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(crew.id, crew.fullName, crew.srcPoster);
             });
             return infos;

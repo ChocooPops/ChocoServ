@@ -1,7 +1,7 @@
 import { Inject, Injectable  } from '@nestjs/common';
 import * as mariadb from 'mariadb';
 import { Job } from '../dto/job.enum';
-import { Credit } from '../dto/credit.interface';
+import { MediaCredit } from '../dto/media-credit.interface';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { PosterService } from 'src/poster/service/poster.service';
 import { LazyModuleLoader } from '@nestjs/core';
@@ -32,7 +32,7 @@ export class CreditService {
         return this.tmdbService;
     }
 
-    public getQueryOrderCredit(table: string): string {
+    public getQueryOrderCreditForMovie(table: string): string {
         return `
                 ORDER BY
                     CASE ${table}.job
@@ -51,12 +51,31 @@ export class CreditService {
                     ${table}.\`order\` ASC
         `
     }
+    public getQueryOrderCreditForSeries(table: string): string {
+        return `
+                ORDER BY
+                    CASE ${table}.job
+                        WHEN 'ACTOR' THEN 1
+                        WHEN 'WRITER' THEN 2
+                        WHEN 'STORY' THEN 3
+                        WHEN 'COMIC_BOOK' THEN 4
+                        WHEN 'DIRECTOR' THEN 5
+                        WHEN 'PRODUCER' THEN 6
+                        WHEN 'DIRECTOR_OF_PHOTOGRAPHY' THEN 7
+                        WHEN 'ORIGINAL_MUSIC_COMPOSER' THEN 8
+                        WHEN 'SCREENPLAY' THEN 9
+                        WHEN 'VISUAL_EFFECTS_TECHNICAL_DIRECTOR' THEN 10
+                        ELSE 999
+                        END ASC,
+                    ${table}.\`order\` ASC
+        `
+    }
 
     public getQuerySelectCredits(): string {
         return `'credits', cre.credits,`;
     }
 
-    public getQueryJoinCredits(): string {
+    public getQueryJoinCredits(mediaType: MediaType): string {
         return `LEFT JOIN (
                     SELECT mcr.mediaId,
                         JSON_ARRAYAGG(
@@ -71,7 +90,9 @@ export class CreditService {
                                 'srcPoster', p.name,
                                 'order', mcr.\`order\`
                             )
-                            ${this.getQueryOrderCredit('mcr')}
+                            ${mediaType === MediaType.MOVIE ? this.getQueryOrderCreditForMovie('mcr') : 
+                            mediaType === MediaType.SERIES ? this.getQueryOrderCreditForSeries('mcr') :
+                            ''}
                         ) AS credits
                     FROM Media_Credit mcr
                     JOIN Credit ON credit.id = mcr.creditId
@@ -96,7 +117,7 @@ export class CreditService {
         ]
     }
 
-    public async insertManyCredits(mediaId: number, credits: Credit[], conn: mariadb.PoolConnection): Promise<string> {
+    public async insertManyCredits(mediaId: number, credits: MediaCredit[], conn: mariadb.PoolConnection): Promise<string> {
         if (!credits.length) {
             return "Aucun credit n'est à ajouter";
         }
@@ -259,7 +280,7 @@ export class CreditService {
         }
     }
 
-    public async deleteAndUpdateMediaCredit(mediaId: number, credits: Credit[], conn: mariadb.PoolConnection): Promise<string> {
+    public async deleteAndUpdateMediaCredit(mediaId: number, credits: MediaCredit[], conn: mariadb.PoolConnection): Promise<string> {
         try {
             await conn.query(`DELETE FROM Media_Credit WHERE mediaId = ?`, [mediaId]);
             return await this.insertManyCredits(mediaId, credits, conn);
@@ -276,7 +297,7 @@ export class CreditService {
         const movies: Movie[] = await conn.query(`SELECT id, title, jellyfinId FROM Media WHERE mediaType = ?`, [MediaType.MOVIE]);
         for (const movie of movies) {
             try {
-                const credits: Credit[] = await tmdbService.fetchCreditForMovie(movie);
+                const credits: MediaCredit[] = await tmdbService.fetchCreditForMovie(movie);
                 const message = await this.deleteAndUpdateMediaCredit(movie.id, credits, conn);
                 results.push(`${movie.title} => ${message}`);
                 console.log(`${movie.title} => ${message}`);
@@ -292,7 +313,7 @@ export class CreditService {
         const series: Series[] = await conn.query(`SELECT id, title, jellyfinId FROM Media WHERE mediaType = ?`, [MediaType.SERIES]);
         for (const serie of series) {
             try {
-                const credits: Credit[] = await tmdbService.fetchCreditForSeries(serie);
+                const credits: MediaCredit[] = await tmdbService.fetchCreditForSeries(serie);
                 const message = await this.deleteAndUpdateMediaCredit(serie.id, credits, conn);
                 results.push(`${serie.title} => ${message}`);
                 console.log(`${serie.title} => ${message}`);

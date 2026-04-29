@@ -20,7 +20,7 @@ import { promises as fs } from "fs";
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
 import { CreditService } from 'src/credit/service/credit.service';
-import { Credit } from 'src/credit/dto/credit.interface';
+import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 
 @Injectable()
 export class MovieService extends MediaService {
@@ -111,7 +111,7 @@ export class MovieService extends MediaService {
                     GROUP BY mediaId
                 ) kw ON kw.mediaId = m.id
                  
-                ${this.creditService.getQueryJoinCredits()}`;
+                ${this.creditService.getQueryJoinCredits(this.currentMediaType)}`;
         }
         return `
             SELECT
@@ -184,7 +184,7 @@ export class MovieService extends MediaService {
         movie.srcPoster.license = this.formatPathService.getManyFormatedPosterUrl(movie.title, this.currentMediaType, movie.srcPoster.license);
         movie.srcPoster.horizontal = this.formatPathService.getManyFormatedPosterUrl(movie.title, this.currentMediaType, movie.srcPoster.horizontal);
         if (movie.credits) {
-            movie.credits.forEach((credit: Credit) => {
+            movie.credits.forEach((credit: MediaCredit) => {
                 credit.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(credit.id, credit.fullName, credit.srcPoster);
             })
         }

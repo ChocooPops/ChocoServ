@@ -1,6 +1,6 @@
 import { Job } from "./job.enum"
 
-export interface Credit {
+export interface MediaCredit {
     id: number,
     tmdbId: number,
     fullName: string,

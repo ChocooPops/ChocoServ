@@ -2,7 +2,7 @@ import { CategorySimple } from "src/category/dto/categorySimple.interface"
 import { TranslationTitle } from "./translation-title.interface"
 import { MediaType } from "./media-type.enum"
 import { Poster } from "./poster.interface"
-import { Credit } from "src/credit/dto/credit.interface"
+import { MediaCredit } from "src/credit/dto/media-credit.interface"
 
 export interface Media {
     id: number,
@@ -12,7 +12,7 @@ export interface Media {
     categories: CategorySimple[],
     keyWord: string[],
     description: string,
-    credits: Credit[],
+    credits: MediaCredit[],
     date: Date,
     startShow: string | null,
     endShow: string | null,

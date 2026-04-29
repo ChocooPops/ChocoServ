@@ -1,10 +1,10 @@
-import { Credit } from "src/credit/dto/credit.interface"
+import { MediaCredit } from "src/credit/dto/media-credit.interface"
 import { CategorySimple } from "src/category/dto/categorySimple.interface"
 
 export interface MediaInfo {
     id: number,
-    casts: Credit[],
-    crews: Credit[],
+    casts: MediaCredit[],
+    crews: MediaCredit[],
     categories: CategorySimple[],
     keyWords: string[]
 }

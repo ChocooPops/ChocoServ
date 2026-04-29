@@ -23,7 +23,7 @@ import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
 import { CreditService } from 'src/credit/service/credit.service';
 import { MediaService } from 'src/media/service/media.service';
-import { Credit } from 'src/credit/dto/credit.interface';
+import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 
 @Injectable()
 export class SeriesService extends MediaService {
@@ -115,7 +115,7 @@ export class SeriesService extends MediaService {
                     GROUP BY mediaId
                 ) kw ON kw.mediaId = m.id
                  
-                ${this.creditService.getQueryJoinCredits()}`;
+                ${this.creditService.getQueryJoinCredits(this.currentMediaType)}`;
         }
         return `
             SELECT
@@ -196,7 +196,7 @@ export class SeriesService extends MediaService {
         series.srcPoster.license = this.formatPathService.getManyFormatedPosterUrl(series.title, this.currentMediaType, series.srcPoster.license);
         series.srcPoster.horizontal = this.formatPathService.getManyFormatedPosterUrl(series.title, this.currentMediaType, series.srcPoster.horizontal);
         if (series.credits) {
-            series.credits.forEach((credit: Credit) => {
+            series.credits.forEach((credit: MediaCredit) => {
                 credit.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(credit.id, credit.fullName, credit.srcPoster);
             });
         }
