@@ -23,6 +23,7 @@ import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 export class MediaService {
 
     protected currentMediaType !: MediaType;
+    private readonly LIMIT_CREDIT: number = 12;
 
     constructor(@Inject(DATABASE_POOL) protected readonly pool: mariadb.Pool,
         private readonly searchService: SearchService,
@@ -579,7 +580,15 @@ export class MediaService {
 
     public async getMediaInfoById(mediaId: number): Promise<MediaInfo> {
         const conn = await this.pool.getConnection();
-        const mediaType: MediaType = await conn.query(`Select mediaType From Media WHERE id = ?`, [mediaId]);
+        const jobFilters: string = `${this.creditService.getJobToFilters().map((item) => `'${item}'`).join(', ')}`
+        const medias: Media[] = await conn.query(`Select mediaType From Media WHERE id = ?`, [mediaId]);
+        const mediaType: MediaType | null = medias?.length > 0 ? medias[0].mediaType : null;
+        let ORDER: string = '';
+        if (mediaType === MediaType.MOVIE) {
+            ORDER = this.creditService.getQueryOrderCreditForMovie('mc');
+        } else if (mediaType === MediaType.SERIES) {
+            ORDER = this.creditService.getQueryOrderCreditForSeries('mc');
+        }
         const query: string = `SELECT
                 JSON_OBJECT(
                     'id', m.id,
@@ -625,8 +634,10 @@ export class MediaService {
                                 'srcPoster', p.name,
                                 'order', mc.\`order\`
                             )
-                            ORDER BY mc.\`order\` asc
-                            LIMIT 12
+                            ORDER BY
+                                mc.episodeCount desc,
+                                mc.\`order\` asc
+                            LIMIT 40
                         ) AS casts
                     FROM media_credit mc
                     JOIN credit cca ON cca.id = mc.creditId
@@ -650,15 +661,13 @@ export class MediaService {
                                 'srcPoster', p.name,
                                 'order', mc.\`order\`
                             )
-                            
-                            ${mediaType === MediaType.MOVIE ? this.creditService.getQueryOrderCreditForMovie('mc') : 
-                            mediaType === MediaType.SERIES ? this.creditService.getQueryOrderCreditForSeries('mc') :
-                            ''}
+                            ${ORDER}
+                            LIMIT 40
                         ) AS crews
                     FROM media_credit mc
                     JOIN credit ccr ON ccr.id = mc.creditId
                     LEFT JOIN Poster p ON p.id = ccr.srcPoster
-                    WHERE mc.job IN ('${Job.DIRECTOR}')
+                    WHERE mc.job IN (${jobFilters}) AND mc.job NOT LIKE '${Job.ACTOR}'
                     GROUP BY mc.mediaId
                     ORDER BY mc.\`order\` asc
                 ) crew ON crew.mediaId = m.id
@@ -674,6 +683,44 @@ export class MediaService {
             infos.crews?.forEach((crew: MediaCredit) => {
                 crew.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(crew.id, crew.fullName, crew.srcPoster);
             });
+            if (infos.casts) {
+                const castsMap = new Map<number, MediaCredit>();
+                for (const cast of infos.casts) {
+                    if (castsMap.has(cast.id)) {
+                        const existing = castsMap.get(cast.id)!;
+                        if (cast.character) {
+                            existing.character = existing.character
+                                ? `${existing.character} \\ ${cast.character}`
+                                : cast.character;
+                        }
+                    } else {
+                        castsMap.set(cast.id, { ...cast });
+                    }
+                    if (castsMap.size >= this.LIMIT_CREDIT) {
+                        break;
+                    }
+                }
+                infos.casts = Array.from(castsMap.values());
+            }
+            if (infos.crews) {
+                const crewsMap = new Map<number, MediaCredit>();
+                for (const crew of infos.crews) {
+                    if (crewsMap.has(crew.id)) {
+                        const existing = crewsMap.get(crew.id)!;
+                        if (crew.job) {
+                            existing.job = existing.job
+                                ? `${existing.job} \\ ${crew.job}` as Job
+                                : crew.job;
+                        }
+                    } else {
+                        crewsMap.set(crew.id, { ...crew });
+                    }
+                    if (crewsMap.size >= this.LIMIT_CREDIT) {
+                        break;
+                    }
+                }
+                infos.crews = Array.from(crewsMap.values());
+            }
             return infos;
         } catch (error) {
             return null;

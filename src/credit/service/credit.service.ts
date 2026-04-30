@@ -26,6 +26,22 @@ export class CreditService {
         private readonly uploadImageService: UploadImageService
     ) { }
     
+    public getJobToFilters(): Job[] {
+        return [
+            Job.ACTOR,
+            Job.DIRECTOR,
+            Job.PRODUCER,
+            Job.DIRECTOR_OF_PHOTOGRAPHY,
+            Job.ORIGINAL_MUSIC_COMPOSER,
+            Job.WRITER,
+            Job.STORY,
+            Job.SCREENPLAY,
+            Job.COMIC_BOOK,
+            Job.ORIGINAL_STORY,
+            Job.VISUAL_EFFECTS_TECHNICAL_DIRECTOR
+        ]
+    }
+
     public async getCreditByResearch(keyWord: string): Promise<Credit[]> {
         const conn = await this.pool.getConnection();
         try {
@@ -85,13 +101,14 @@ export class CreditService {
                         WHEN 'ACTOR' THEN 1
                         WHEN 'DIRECTOR' THEN 2
                         WHEN 'PRODUCER' THEN 3
-                        WHEN 'DIRECTOR_OF_PHOTOGRAPHY' THEN 4
-                        WHEN 'ORIGINAL_MUSIC_COMPOSER' THEN 5
+                        WHEN 'DIRECTOR OF PHOTOGRAPHY' THEN 4
+                        WHEN 'ORIGINAL MUSIC COMPOSER' THEN 5
                         WHEN 'WRITER' THEN 6
-                        WHEN 'STORY' THEN 7
-                        WHEN 'SCREENPLAY' THEN 8
-                        WHEN 'COMIC_BOOK' THEN 9
-                        WHEN 'VISUAL_EFFECTS_TECHNICAL_DIRECTOR' THEN 10
+                        WHEN 'ORIGINAL STORY' THEN 7
+                        WHEN 'STORY' THEN 8
+                        WHEN 'SCREENPLAY' THEN 9
+                        WHEN 'COMIC BOOK' THEN 10
+                        WHEN 'VISUAL EFFECTS TECHNICAL DIRECTOR' THEN 11
                         ELSE 999
                         END ASC,
                     ${table}.\`order\` ASC
@@ -104,15 +121,17 @@ export class CreditService {
                         WHEN 'ACTOR' THEN 1
                         WHEN 'WRITER' THEN 2
                         WHEN 'STORY' THEN 3
-                        WHEN 'COMIC_BOOK' THEN 4
-                        WHEN 'DIRECTOR' THEN 5
-                        WHEN 'PRODUCER' THEN 6
-                        WHEN 'DIRECTOR_OF_PHOTOGRAPHY' THEN 7
-                        WHEN 'ORIGINAL_MUSIC_COMPOSER' THEN 8
-                        WHEN 'SCREENPLAY' THEN 9
-                        WHEN 'VISUAL_EFFECTS_TECHNICAL_DIRECTOR' THEN 10
+                        WHEN 'COMIC BOOK' THEN 4
+                        WHEN 'ORIGINAL STORY' THEN 5
+                        WHEN 'DIRECTOR' THEN 6
+                        WHEN 'PRODUCER' THEN 7
+                        WHEN 'DIRECTOR OF PHOTOGRAPHY' THEN 8
+                        WHEN 'ORIGINAL MUSIC COMPOSER' THEN 9
+                        WHEN 'SCREENPLAY' THEN 10
+                        WHEN 'VISUAL EFFECTS TECHNICAL DIRECTOR' THEN 11
                         ELSE 999
                         END ASC,
+                    ${table}.episodeCount DESC,
                     ${table}.\`order\` ASC
         `
     }
@@ -146,22 +165,6 @@ export class CreditService {
                     GROUP BY mcr.mediaId
                     ORDER BY mcr.order asc
                 ) cre ON cre.mediaId = m.id`;
-    }
-
-    public getJobToFilters(): Job[] {
-        return [
-            Job.ACTOR,
-            Job.DIRECTOR,
-            Job.PRODUCER,
-            Job.DIRECTOR_OF_PHOTOGRAPHY,
-            Job.ORIGINAL_MUSIC_COMPOSER,
-            Job.WRITER,
-            Job.STORY,
-            Job.SCREENPLAY,
-            Job.COMIC_BOOK,
-            Job.ORIGINAL_STORY,
-            Job.VISUAL_EFFECTS_TECHNICAL_DIRECTOR
-        ]
     }
 
     public async insertManyCredits(mediaId: number, credits: MediaCredit[], conn: mariadb.PoolConnection): Promise<string> {
