@@ -255,7 +255,7 @@ export class MovieService extends MediaService {
                             const formatedTitle: string = this.formatPathService.formatPath(newMovie.title);
                             const messageCategory: string = await this.insertManyMediaCategory(mediaId, newMovie.categories, conn);
                             const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newMovie.otherTitles, conn);
-                            const messageStaff: string = await this.creditService.insertManyCredits(mediaId, newMovie.credits, conn);
+                            const messageCredit: string = await this.creditService.insertManyCredits(mediaId, newMovie.credits, conn);
                             const messageKeyWord: string = await this.insertKeyword(mediaId, newMovie.keyWords, conn);
                             const messagePoster: string = await this.posterService.insertManyPosterByMedia(newMovie, this.currentMediaType, formatedTitle, mediaId, conn);
 
@@ -264,7 +264,7 @@ export class MovieService extends MediaService {
                                 messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaByIdWithJellyfinDataBase(mediaId, conn);
                             }
 
-                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageStaff} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSimilarTitle}`;
+                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSimilarTitle}`;
                             messageReturned = {
                                 id: 0,
                                 state: true,
@@ -340,14 +340,14 @@ export class MovieService extends MediaService {
                             const newFormatedTitle: string = this.formatPathService.formatPath(updateMovie.title);
                             const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateMovie.id, updateMovie.categories, conn);
                             const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateMovie.id, updateMovie.otherTitles, conn);
-                            const messageStaff: string = await this.creditService.deleteAndUpdateMediaCredit(updateMovie.id, updateMovie.credits, conn);
+                            const messageCredit: string = await this.creditService.deleteAndUpdateMediaCredit(updateMovie.id, updateMovie.credits, conn);
                             const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateMovie.id, updateMovie.keyWords, conn);
                             const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateMovie, oldMovie, this.currentMediaType, oldFormatedTitle, conn);
 
                             if (oldFormatedTitle !== newFormatedTitle) {
                                 await this.uploadImageService.renameFileOrdirectoryToMediaType(oldFormatedTitle, newFormatedTitle, this.currentMediaType);
                             }
-                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageStaff} \n ${messageKeyWord} \n ${messagePoster}`;
+                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster}`;
                             messageReturned = {
                                 id: 0,
                                 state: true,

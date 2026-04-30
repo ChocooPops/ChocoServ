@@ -30,6 +30,7 @@ export class CreditService {
         return [
             Job.ACTOR,
             Job.DIRECTOR,
+            Job.CREATOR,
             Job.PRODUCER,
             Job.DIRECTOR_OF_PHOTOGRAPHY,
             Job.ORIGINAL_MUSIC_COMPOSER,
@@ -100,15 +101,16 @@ export class CreditService {
                     CASE ${table}.job
                         WHEN 'ACTOR' THEN 1
                         WHEN 'DIRECTOR' THEN 2
-                        WHEN 'PRODUCER' THEN 3
-                        WHEN 'DIRECTOR OF PHOTOGRAPHY' THEN 4
-                        WHEN 'ORIGINAL MUSIC COMPOSER' THEN 5
-                        WHEN 'WRITER' THEN 6
-                        WHEN 'ORIGINAL STORY' THEN 7
-                        WHEN 'STORY' THEN 8
-                        WHEN 'SCREENPLAY' THEN 9
-                        WHEN 'COMIC BOOK' THEN 10
-                        WHEN 'VISUAL EFFECTS TECHNICAL DIRECTOR' THEN 11
+                        WHEN 'CREATOR' THEN 3
+                        WHEN 'PRODUCER' THEN 4
+                        WHEN 'DIRECTOR OF PHOTOGRAPHY' THEN 5
+                        WHEN 'ORIGINAL MUSIC COMPOSER' THEN 6
+                        WHEN 'WRITER' THEN 7
+                        WHEN 'ORIGINAL STORY' THEN 8
+                        WHEN 'STORY' THEN 9
+                        WHEN 'SCREENPLAY' THEN 10
+                        WHEN 'COMIC BOOK' THEN 11
+                        WHEN 'VISUAL EFFECTS TECHNICAL DIRECTOR' THEN 12
                         ELSE 999
                         END ASC,
                     ${table}.\`order\` ASC
@@ -119,16 +121,17 @@ export class CreditService {
                 ORDER BY
                     CASE ${table}.job
                         WHEN 'ACTOR' THEN 1
-                        WHEN 'WRITER' THEN 2
-                        WHEN 'STORY' THEN 3
-                        WHEN 'COMIC BOOK' THEN 4
-                        WHEN 'ORIGINAL STORY' THEN 5
-                        WHEN 'DIRECTOR' THEN 6
-                        WHEN 'PRODUCER' THEN 7
-                        WHEN 'DIRECTOR OF PHOTOGRAPHY' THEN 8
-                        WHEN 'ORIGINAL MUSIC COMPOSER' THEN 9
-                        WHEN 'SCREENPLAY' THEN 10
-                        WHEN 'VISUAL EFFECTS TECHNICAL DIRECTOR' THEN 11
+                        WHEN 'CREATOR' THEN 2
+                        WHEN 'WRITER' THEN 3
+                        WHEN 'STORY' THEN 4
+                        WHEN 'COMIC BOOK' THEN 5
+                        WHEN 'ORIGINAL STORY' THEN 6
+                        WHEN 'DIRECTOR' THEN 7
+                        WHEN 'PRODUCER' THEN 8
+                        WHEN 'DIRECTOR OF PHOTOGRAPHY' THEN 9
+                        WHEN 'ORIGINAL MUSIC COMPOSER' THEN 10
+                        WHEN 'SCREENPLAY' THEN 11
+                        WHEN 'VISUAL EFFECTS TECHNICAL DIRECTOR' THEN 12
                         ELSE 999
                         END ASC,
                     ${table}.episodeCount DESC,

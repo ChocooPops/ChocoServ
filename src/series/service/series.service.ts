@@ -463,7 +463,7 @@ export class SeriesService extends MediaService {
                             const formatedTitle: string = this.formatPathService.formatPath(newSeries.title);
                             const messageCategory: string = await this.insertManyMediaCategory(mediaId, newSeries.categories, conn);
                             const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newSeries.otherTitles, conn);
-                            const messageStaff: string = await this.creditService.insertManyCredits(mediaId, newSeries.credits, conn);
+                            const messageCredit: string = await this.creditService.insertManyCredits(mediaId, newSeries.credits, conn);
                             const messageKeyWord: string = await this.insertKeyword(mediaId, newSeries.keyWords, conn);
                             const messagePoster: string = await this.posterService.insertManyPosterByMedia(newSeries, this.currentMediaType, formatedTitle, mediaId, conn);
                             const messageSeason: string = await this.insertManySeasons(newSeries.seasons, mediaId, formatedTitle, newSeries.jellyfinId, conn);
@@ -473,7 +473,7 @@ export class SeriesService extends MediaService {
                                 messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaByIdWithJellyfinDataBase(mediaId, conn);
                             }
 
-                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageStaff} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeason} \n ${messageSimilarTitle}`;
+                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeason} \n ${messageSimilarTitle}`;
                             messageReturned = {
                                 id: 0,
                                 state: true,
@@ -625,7 +625,7 @@ export class SeriesService extends MediaService {
                             const newFormatedTitle: string = this.formatPathService.formatPath(updateSeries.title);
                             const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateSeries.id, updateSeries.categories, conn);
                             const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateSeries.id, updateSeries.otherTitles, conn);
-                            const messageStaff: string = await this.creditService.deleteAndUpdateMediaCredit(updateSeries.id, updateSeries.credits, conn);
+                            const messageCredit: string = await this.creditService.deleteAndUpdateMediaCredit(updateSeries.id, updateSeries.credits, conn);
                             const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateSeries.id, updateSeries.keyWords, conn);
                             const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateSeries, oldSeries, this.currentMediaType, oldFormatedTitle, conn);
                             const messageSeasons: string = await this.insertUpdateOrDeleteSeasons(updateSeries.seasons, oldSeries.seasons, updateSeries.id, oldFormatedTitle, updateSeries.jellyfinId, conn);
@@ -633,7 +633,7 @@ export class SeriesService extends MediaService {
                             if (oldFormatedTitle !== newFormatedTitle) {
                                 await this.uploadImageService.renameFileOrdirectoryToMediaType(oldFormatedTitle, newFormatedTitle, this.currentMediaType);
                             }
-                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageStaff} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeasons}`;
+                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeasons}`;
                             messageReturned = {
                                 id: 0,
                                 state: true,

@@ -110,6 +110,7 @@ CREATE TABLE
         job ENUM (
             'ACTOR', 
             'DIRECTOR',
+            'CREATOR',
             'SCREENPLAY',
             'WRITER',
             'STORY',

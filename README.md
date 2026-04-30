@@ -40,23 +40,23 @@ L'API suit l'architecture modulaire de NestJS avec une structure en couches :
 
 ```
 ┌──────────────────────────────────────────────┐
-│            Controllers Layer                  │
+│            Controllers Layer                 │
 │   (Routes HTTP, Validation, Guards)          │
 └──────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────┐
-│             Services Layer                    │
+│             Services Layer                   │
 │   (Business Logic, Data Processing)          │
 └──────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────┐
-│      Database Layer (MariaDB Pool)            │
+│      Database Layer (MariaDB Pool)           │
 │   Direct SQL queries via mariadb driver      │
-│         MariaDB Database                      │
+│         MariaDB Database                     │
 └──────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────┐
-│          External Services                    │
+│          External Services                   │
 │   - Jellyfin API                             │
 │   - TMDB API                                 │
 │   - Mail Service (SMTP)                      │
@@ -125,38 +125,38 @@ La base de données MariaDB est le cœur du système ChocoPlus. Elle est organis
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                          DOMAINE UTILISATEURS                              │
-│  Profil_Photo ←──── User ────→ User_Media_List                            │
-│                        │                  │                               │
-│                        └──────────────────┼──→ Stat_User                 │
-└────────────────────────────────────────────┼───────────────────────────── ┘
+│  Profil_Photo ←──── User ────→ User_Media_List                             │
+│                        │                  │                                │
+│                        └──────────────────┼──→ Stat_User                   │
+└────────────────────────────────────────────┼───────────────────────────────┘
                                              │
 ┌────────────────────────────────────────────┼───────────────────────────────┐
 │                          DOMAINE MÉDIAS    │                               │
 │                                            ↓                               │
-│  Poster ←──── Media (MOVIE | SERIES) ────→ Translation_Title              │
+│  Poster ←──── Media (MOVIE | SERIES) ────→ Translation_Title               │
 │    ↑              │                        │                               │
 │    │              ├──→ Season ──→ Episode  │                               │
-│    │              ├──→ Media_Staff         │                               │
+│    │              ├──→ Media_Credit        │                               │
 │    │              ├──→ Media_Category      │                               │
 │    │              ├──→ Media_Poster        │                               │
 │    │              ├──→ Keyword             │                               │
 │    │              └──→ Similar_Title       │                               │
-└────┼──────────────────────────────────────────────────────────────────────┘
+└────┼───────────────────────────────────────────────────────────────────────┘
      │
 ┌────┼──────────────────────────────────────────────────────────────────────┐
 │    │                   DOMAINE ORGANISATION                               │
-│    ↓                                                                       │
+│    ↓                                                                      │
 │  License ────→ License_Media ────→ Media                                  │
 │     └────────→ License_Selection ──→ Selection ──→ Selection_Media        │
 │                                         └──────────→ Selection_Page       │
-└────────────────────────────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────────────────────────┘
      │
 ┌────┼──────────────────────────────────────────────────────────────────────┐
-│    │                   DOMAINE ACTUALITÉS                                  │
-│    ↓                                                                       │
+│    │                   DOMAINE ACTUALITÉS                                 │
+│    ↓                                                                      │
 │  News ────────────────────────────→ Media                                 │
 │  News_Video_Running ──────────────→ Media                                 │
-└────────────────────────────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -273,7 +273,7 @@ Table de jointure Many-to-Many entre `Media` et `Category`.
 
 **Contrainte** : La combinaison `(mediaId, categoryId)` est unique.
 
-#### `Staff`
+#### `Credit`
 Acteurs et réalisateurs liés aux médias.
 
 | Colonne | Type | Description |
@@ -281,10 +281,10 @@ Acteurs et réalisateurs liés aux médias.
 | `fullName` | VARCHAR(255) | Nom complet |
 | `job` | ENUM | `ACTOR` ou `DIRECTOR` |
 
-#### `Media_Staff`
-Table de jointure Many-to-Many entre `Media` et `Staff`.
+#### `Media_Credit`
+Table de jointure Many-to-Many entre `Media` et `Credit`.
 
-**Contrainte** : La combinaison `(mediaId, staffId)` est unique.
+**Contrainte** : La combinaison `(mediaId, creditId)` est unique.
 
 #### `Keyword`
 Mots-clés associés à un média pour améliorer la recherche.
