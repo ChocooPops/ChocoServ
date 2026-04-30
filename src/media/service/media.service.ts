@@ -528,7 +528,6 @@ export class MediaService {
             const whereParams: any[] = [userId, userId];
             const orBlocks: string[] = [];
             let JOIN: string = '';
-            let creditJoinIndex = 0;
 
             for (const filter of filters ?? []) {
                 const values = filter.value ?? [];
@@ -556,14 +555,27 @@ export class MediaService {
                             break;
                         }
 
-                        case FilterType.DECADE: {
-                            const d = Number(val.value);
+                        case FilterType.YEAR: {
                             if (filter.operation === Operation.CONTAIN) {
                                 andConditions.push(`(YEAR(m.date) = ?)`);
-                                whereParams.push(d);
+                                whereParams.push(val.value);
                             } else if (filter.operation === Operation.NOT_CONTAIN) {
                                 andConditions.push(`(YEAR(m.date) != ?)`);
-                                whereParams.push(d);
+                                whereParams.push(val.value);
+                            }
+                            break;
+                        }
+
+                        case FilterType.DECADE: {
+                            if (isNumber) {
+                                const d = Number(val.value);
+                                if (filter.operation === Operation.CONTAIN) {
+                                    andConditions.push(`(YEAR(m.date) >= ? AND YEAR(m.date) < ?)`);
+                                    whereParams.push(d, d + 10);
+                                } else if (filter.operation === Operation.NOT_CONTAIN) {
+                                    andConditions.push(`(YEAR(m.date) < ? OR YEAR(m.date) >= ?)`);
+                                    whereParams.push(d, d + 10);
+                                }
                             }
                             break;
                         }
@@ -581,8 +593,6 @@ export class MediaService {
                                     : `NOT EXISTS (SELECT 1 FROM media_category mc JOIN category c ON c.id = mc.categoryId WHERE mc.mediaId = m.id AND c.name LIKE ?)`
                                 );
                                 whereParams.push(isNumber ? val.value : `%${val.value}%`);
-                            } else if (filter.operation === Operation.NOT_NULL) {
-                                andConditions.push(`EXISTS (SELECT 1 FROM media_category mc WHERE mc.mediaId = m.id)`);
                             }
                             break;
                         }
@@ -600,8 +610,6 @@ export class MediaService {
                                     : `NOT EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id AND k.name LIKE ?)`
                                 );
                                 whereParams.push(isNumber ? val.value : `%${val.value}%`);
-                            } else if (filter.operation === Operation.NOT_NULL) {
-                                andConditions.push(`EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id)`);
                             }
                             break;
                         }
@@ -637,11 +645,6 @@ export class MediaService {
                                 );
                                 whereParams.push(isNumber ? val.value : `%${val.value}%`);
 
-                            } else if (filter.operation === Operation.NOT_NULL) {
-                                andConditions.push(`EXISTS (
-                                    SELECT 1 FROM Media_Credit mc_any
-                                    WHERE mc_any.mediaId = m.id)`
-                                );
                             }
                             break;
                         }
@@ -649,15 +652,7 @@ export class MediaService {
                         default: {
                             const job = filter.typeData as Job;
 
-                            if (filter.operation === Operation.NOT_NULL) {
-                                const alias = `mc${creditJoinIndex++}`;
-                                JOIN += `
-                                    INNER JOIN Media_Credit ${alias}
-                                        ON ${alias}.mediaId = m.id
-                                        AND ${alias}.job = ?`;
-                                joinParams.push(job);
-
-                            } else if (filter.operation === Operation.CONTAIN) {
+                            if (filter.operation === Operation.CONTAIN) {
                                 andConditions.push(isNumber
                                     ? `EXISTS (
                                         SELECT 1 FROM Media_Credit mc_sub
@@ -694,18 +689,6 @@ export class MediaService {
                     }
                 }
 
-                // NOT_NULL sans value[] : cas sans boucle sur values
-                if (values.length === 0 && filter.operation === Operation.NOT_NULL) {
-                    switch (filter.typeData) {
-                        case FilterType.KEY_WORD:
-                            orBlocks.push(`EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id)`);
-                            break;
-                        case FilterType.CATEGORY:
-                            orBlocks.push(`EXISTS (SELECT 1 FROM media_category mc WHERE mc.mediaId = m.id)`);
-                            break;
-                    }
-                }
-
                 if (andConditions.length > 0) {
                     orBlocks.push(`(${andConditions.join(' OR ')})`);
                 }
@@ -723,7 +706,7 @@ export class MediaService {
 
             return results;
         } catch (error) {
-            console.error('getMediaByCatalogFilters error:', error);
+            console.log(error)
             return [];
         } finally {
             await conn.release();
