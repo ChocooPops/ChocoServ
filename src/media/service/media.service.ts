@@ -1,4 +1,4 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { TranslationTitle } from '../dto/translation-title.interface';
 import * as mariadb from 'mariadb';
 import { CategorySimple } from 'src/category/dto/categorySimple.interface';
@@ -13,11 +13,14 @@ import { FormatPathService } from 'src/common-service/format-path.service';
 import { PosterService } from 'src/poster/service/poster.service';
 import { Node } from 'src/common-interface/node.interface';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
-import { SortCatalog } from '../dto/sort-catalog.enum';
 import { CreditService } from 'src/credit/service/credit.service';
 import { Job } from 'src/credit/dto/job.enum';
 import { MediaInfo } from '../dto/media-info.interface';
 import { MediaCredit } from 'src/credit/dto/media-credit.interface';
+import { FILTERS } from '../dto/catalog/filters.interface';
+import { FilterType } from '../dto/catalog/filter-type.enum';
+import { Operation } from '../dto/catalog/operation.enum';
+import { SortCatalog } from '../dto/catalog/sort-catalog.enum';
 
 @Injectable()
 export class MediaService {
@@ -509,58 +512,218 @@ export class MediaService {
         }
     }
 
-
     public async getMediaByCatalogFilters(
         userId: number,
-        decadeFilter: number,
-        categoryFilter: number,
-        mediaTypeFilter: MediaType,
         sortFilter: SortCatalog,
         orderDirection: boolean,
         count: number,
-        offset: number
-    ): Promise<Media[]> {
+        offset: number,
+        filters: FILTERS[]
+    ): Promise<any[]> {
         const conn = await this.pool.getConnection();
+        const jobFilters: string = `${this.creditService.getJobToFilters().map((item) => `'${item}'`).join(', ')}`;
+
         try {
-            const params: any[] = [userId, userId];
-            const conditions: string[] = [];
-            const JOIN: string = '';
+            const joinParams: any[] = [];
+            const whereParams: any[] = [userId, userId];
+            const orBlocks: string[] = [];
+            let JOIN: string = '';
+            let creditJoinIndex = 0;
 
-            if (mediaTypeFilter != null) {
-                conditions.push(`m.mediaType = ?`);
-                params.push(mediaTypeFilter);
+            for (const filter of filters ?? []) {
+                const values = filter.value ?? [];
+                const andConditions: string[] = [];
+
+                for (const val of values) {
+                    const isNumber = typeof val.value === 'number';
+                    switch (filter.typeData) {
+                        case FilterType.MEDIA: {
+                            if ((val.value) != MediaType.ALL.toString()) {
+                                if (filter.operation === Operation.CONTAIN) {
+                                    andConditions.push(isNumber
+                                        ? `m.id = ?`
+                                        : `m.mediaType LIKE ?`
+                                    );
+                                    whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                                } else if (filter.operation === Operation.NOT_CONTAIN) {
+                                    andConditions.push(isNumber
+                                        ? `m.id != ?`
+                                        : `m.mediaType NOT LIKE ?`
+                                    );
+                                    whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                                }
+                            }
+                            break;
+                        }
+
+                        case FilterType.DECADE: {
+                            const d = Number(val.value);
+                            if (filter.operation === Operation.CONTAIN) {
+                                andConditions.push(`(YEAR(m.date) = ?)`);
+                                whereParams.push(d);
+                            } else if (filter.operation === Operation.NOT_CONTAIN) {
+                                andConditions.push(`(YEAR(m.date) != ?)`);
+                                whereParams.push(d);
+                            }
+                            break;
+                        }
+
+                        case FilterType.CATEGORY: {
+                            if (filter.operation === Operation.CONTAIN) {
+                                andConditions.push(isNumber
+                                    ? `EXISTS (SELECT 1 FROM media_category mc WHERE mc.mediaId = m.id AND mc.categoryId = ?)`
+                                    : `EXISTS (SELECT 1 FROM media_category mc JOIN category c ON c.id = mc.categoryId WHERE mc.mediaId = m.id AND c.name LIKE ?)`
+                                );
+                                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                            } else if (filter.operation === Operation.NOT_CONTAIN) {
+                                andConditions.push(isNumber
+                                    ? `NOT EXISTS (SELECT 1 FROM media_category mc WHERE mc.mediaId = m.id AND mc.categoryId = ?)`
+                                    : `NOT EXISTS (SELECT 1 FROM media_category mc JOIN category c ON c.id = mc.categoryId WHERE mc.mediaId = m.id AND c.name LIKE ?)`
+                                );
+                                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                            } else if (filter.operation === Operation.NOT_NULL) {
+                                andConditions.push(`EXISTS (SELECT 1 FROM media_category mc WHERE mc.mediaId = m.id)`);
+                            }
+                            break;
+                        }
+
+                        case FilterType.KEY_WORD: {
+                            if (filter.operation === Operation.CONTAIN) {
+                                andConditions.push(isNumber
+                                    ? `EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id AND k.id = ?)`
+                                    : `EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id AND k.name LIKE ?)`
+                                );
+                                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                            } else if (filter.operation === Operation.NOT_CONTAIN) {
+                                andConditions.push(isNumber
+                                    ? `NOT EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id AND k.id = ?)`
+                                    : `NOT EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id AND k.name LIKE ?)`
+                                );
+                                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                            } else if (filter.operation === Operation.NOT_NULL) {
+                                andConditions.push(`EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id)`);
+                            }
+                            break;
+                        }
+
+                        case FilterType.CREDIT: {
+                            if (filter.operation === Operation.CONTAIN) {
+                                andConditions.push(isNumber
+                                    ? `EXISTS (
+                                        SELECT 1 FROM Media_Credit mc_any
+                                        WHERE mc_any.mediaId = m.id
+                                        AND mc_any.creditId = ?
+                                        AND mc_any.job IN (${jobFilters}) )`
+                                    : `EXISTS (
+                                        SELECT 1 FROM Media_Credit mc_any
+                                        INNER JOIN Credit c_any ON c_any.id = mc_any.creditId
+                                        WHERE mc_any.mediaId = m.id
+                                        AND c_any.fullName LIKE ?
+                                        AND mc_any.job IN (${jobFilters}))`
+                                );
+                                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+
+                            } else if (filter.operation === Operation.NOT_CONTAIN) {
+                                andConditions.push(isNumber
+                                    ? `NOT EXISTS (
+                                        SELECT 1 FROM Media_Credit mc_any
+                                        WHERE mc_any.mediaId = m.id
+                                        AND mc_any.creditId = ?)`
+                                    : `NOT EXISTS (
+                                        SELECT 1 FROM Media_Credit mc_any
+                                        INNER JOIN Credit c_any ON c_any.id = mc_any.creditId
+                                        WHERE mc_any.mediaId = m.id
+                                        AND c_any.fullName LIKE ?)`
+                                );
+                                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+
+                            } else if (filter.operation === Operation.NOT_NULL) {
+                                andConditions.push(`EXISTS (
+                                    SELECT 1 FROM Media_Credit mc_any
+                                    WHERE mc_any.mediaId = m.id)`
+                                );
+                            }
+                            break;
+                        }
+
+                        default: {
+                            const job = filter.typeData as Job;
+
+                            if (filter.operation === Operation.NOT_NULL) {
+                                const alias = `mc${creditJoinIndex++}`;
+                                JOIN += `
+                                    INNER JOIN Media_Credit ${alias}
+                                        ON ${alias}.mediaId = m.id
+                                        AND ${alias}.job = ?`;
+                                joinParams.push(job);
+
+                            } else if (filter.operation === Operation.CONTAIN) {
+                                andConditions.push(isNumber
+                                    ? `EXISTS (
+                                        SELECT 1 FROM Media_Credit mc_sub
+                                        WHERE mc_sub.mediaId = m.id
+                                        AND mc_sub.job = ?
+                                        AND mc_sub.creditId = ?)`
+                                    : `EXISTS (
+                                        SELECT 1 FROM Media_Credit mc_sub
+                                        INNER JOIN Credit c ON c.id = mc_sub.creditId
+                                        WHERE mc_sub.mediaId = m.id
+                                        AND mc_sub.job = ?
+                                        AND c.fullName LIKE ?)`
+                                );
+                                whereParams.push(job, isNumber ? val.value : `%${val.value}%`);
+
+                            } else if (filter.operation === Operation.NOT_CONTAIN) {
+                                andConditions.push(isNumber
+                                    ? `NOT EXISTS (
+                                        SELECT 1 FROM Media_Credit mc_sub
+                                        WHERE mc_sub.mediaId = m.id
+                                        AND mc_sub.job = ?
+                                        AND mc_sub.creditId = ?)`
+                                    : `NOT EXISTS (
+                                        SELECT 1 FROM Media_Credit mc_sub
+                                        INNER JOIN Credit c ON c.id = mc_sub.creditId
+                                        WHERE mc_sub.mediaId = m.id
+                                        AND mc_sub.job = ?
+                                        AND c.fullName LIKE ?)`
+                                );
+                                whereParams.push(job, isNumber ? val.value : `%${val.value}%`);
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // NOT_NULL sans value[] : cas sans boucle sur values
+                if (values.length === 0 && filter.operation === Operation.NOT_NULL) {
+                    switch (filter.typeData) {
+                        case FilterType.KEY_WORD:
+                            orBlocks.push(`EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id)`);
+                            break;
+                        case FilterType.CATEGORY:
+                            orBlocks.push(`EXISTS (SELECT 1 FROM media_category mc WHERE mc.mediaId = m.id)`);
+                            break;
+                    }
+                }
+
+                if (andConditions.length > 0) {
+                    orBlocks.push(`(${andConditions.join(' OR ')})`);
+                }
             }
 
-            if (decadeFilter != null) {
-                conditions.push(`YEAR(m.date) >= ? AND YEAR(m.date) < ?`);
-                params.push(decadeFilter, decadeFilter + 10);
-            }
-
-            if (categoryFilter != null) {
-                conditions.push(
-                    `EXISTS (
-                        SELECT 1 FROM media_category mc
-                        WHERE mc.mediaId = m.id AND mc.categoryId = ?
-                    )`,
-                );
-                params.push(categoryFilter);
-            }
-
-            const WHERE: string =
-                conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
+            const finalParams: any[] = [...joinParams, ...whereParams];
+            const WHERE: string = orBlocks.length > 0 ? `WHERE ${orBlocks.join(' AND ')}` : '';
             const direction: string = orderDirection ? 'ASC' : 'DESC';
             const ORDER: string = `ORDER BY ${this.resolveSortColumn(sortFilter)} ${direction}`;
-
             const LIMIT: string = `LIMIT ? OFFSET ?`;
-            params.push(count, offset);
+            finalParams.push(count, offset);
 
             const query: string = this.getQuerySelectMedia(JOIN, WHERE, ORDER, LIMIT);
-
-            const results: any[] = await conn.query(query, params);
+            const results: any[] = await conn.query(query, finalParams);
 
             return results;
         } catch (error) {
+            console.error('getMediaByCatalogFilters error:', error);
             return [];
         } finally {
             await conn.release();
