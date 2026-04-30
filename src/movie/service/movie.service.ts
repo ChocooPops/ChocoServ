@@ -162,7 +162,7 @@ export class MovieService extends MediaService {
             ${LIMIT}`
     }
 
-    async getMovieById(id: number): Promise<Movie> {
+    async getMovieById(id: number): Promise<Movie | null> {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectMovies(true, `WHERE m.id = ?`, ``, ``);

@@ -49,7 +49,7 @@ export class CreditService {
         }
     }
 
-    public async getCreditById(creditId: number): Promise<Credit> {
+    public async getCreditById(creditId: number): Promise<Credit | null> {
         const conn = await this.pool.getConnection();
         try {
             const credits: Credit[] = await conn.query(`
@@ -62,7 +62,7 @@ export class CreditService {
             credit.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(credit.id, credit.fullName, credit.srcPoster as string);
             return credit;
         } catch(error) {
-            throw error;
+            return null;
         } finally {
             await conn.release();
         }
@@ -159,6 +159,7 @@ export class CreditService {
             Job.STORY,
             Job.SCREENPLAY,
             Job.COMIC_BOOK,
+            Job.ORIGINAL_STORY,
             Job.VISUAL_EFFECTS_TECHNICAL_DIRECTOR
         ]
     }
@@ -335,12 +336,58 @@ export class CreditService {
         }
     }
 
-    public async addNewCredit(newCredit: Credit): Promise<any> {
+    public async addNewCredit(newCredit: Credit): Promise<ReturnMessage> {
         const conn = await this.pool.getConnection();
         try {
-
-        } catch(error) {
-
+            await conn.beginTransaction();
+            const credits: Credit[] = await conn.query(`SELECT id FROM Credit WHERE tmdbID = ?`, [newCredit.tmdbId]);
+            if (credits.length <= 0) {
+                const fullName: string | null = newCredit.fullName?.trim();
+                if (fullName) {
+                    const insertCredit = await conn.query(`
+                        INSERT INTO Credit
+                        (tmdbId, fullName, originalFullName)
+                        VALUES (?, ?, ?)`,
+                    [newCredit.tmdbId, fullName, newCredit.originalFullName?.trim()]);
+                    const creditId: number | null = insertCredit ? Number(insertCredit.insertId) : null;
+                    if (creditId) {
+                        const formatedTitle: string = `${creditId}-${this.formatPathService.formatPath(fullName)}`;
+                        const messagePoster: string = await this.posterService.insertPosterCredit(newCredit.srcPoster, creditId, formatedTitle, conn);
+                        await conn.commit();
+                        return {
+                            id: 0,
+                            state: true,
+                            message: `Le crédit a été inséré \n ${messagePoster}`,
+                            other: { id: creditId }
+                        }
+                    } else {
+                        return {
+                            id: -1,
+                            state: false,
+                            message: `Erreur: Echec de l'enregistrement du film`
+                        }
+                    }
+                } else {
+                    return {
+                        id: -1,
+                        state: false,
+                        message: `Le nom complet du crédit ne doit pas être vide`
+                    }
+                }
+            } else {
+                return {
+                    id: -1,
+                    state: false,
+                    message: `L'id TMDB est déjà référencé, il doit être unique`
+                }
+            }
+        } catch(error: any) {
+            await conn.rollback();
+            return {
+                id: -1,
+                state: false,
+                message: `Erreur : ${error.sqlMessage}`
+            }
         } finally {
             await conn.release();
         }
@@ -349,9 +396,62 @@ export class CreditService {
     public async modifyCredit(updateCredit: Credit): Promise<any> {
         const conn = await this.pool.getConnection();
         try {
+            await conn.beginTransaction();
+            const oldCredit: Credit = await this.getCreditById(updateCredit.id);
+            if (oldCredit && oldCredit.id) {
+                const creditIfExits: Credit[] = await conn.query(`SELECT id FROM Credit WHERE tmdbId = ? AND id != ?`, [updateCredit.tmdbId, updateCredit.id]);
+                if (creditIfExits.length <= 0) {
+                    const newFullName: string | null = updateCredit.fullName?.trim();
+                    if (newFullName) {
+                        await conn.query(`
+                            UPDATE Credit
+                            SET tmdbId = ?, fullName = ?, originalFullName = ?
+                            WHERE id = ?`,
+                        [updateCredit.tmdbId, updateCredit.fullName, updateCredit.originalFullName, updateCredit.id]);
+                        
+                        const oldFormatedTitle: string = `${oldCredit.id}-${this.formatPathService.formatPath(oldCredit.fullName)}`;
+                        const newFormatedTitle: string = `${updateCredit.id}-${this.formatPathService.formatPath(newFullName)}`;
 
-        } catch(error) {
-
+                        const messagePoster: string = await this.posterService.modifyOrDeletePosterFromCredit(updateCredit.id, updateCredit.srcPoster, oldCredit.srcPoster as string, oldFormatedTitle, conn);
+                        
+                        if (oldFormatedTitle !== newFormatedTitle) {
+                            await this.uploadImageService.renameFileOrDirectorToCredit(oldFormatedTitle, newFormatedTitle);
+                        }
+                        await conn.commit();
+                        return {
+                            id: 0,
+                            state: true,
+                            message: `Le crédit a été modifié \n ${messagePoster}`,
+                            other: { id: updateCredit.id }
+                        }
+                    } else {
+                        return {
+                            id: -1,
+                            state: false,
+                            message: `Le nom du crédit ne doit pas être vide`
+                        }
+                    }
+                } else {
+                    return {
+                        id: -1,
+                        state: false,
+                        message: `L'id TMDB est déjà référencé, il doit être unique`
+                    }
+                }
+            } else {
+                return {
+                    id: -1,
+                    state: false,
+                    message: 'Crédit introuvable'
+                }
+            }
+        } catch(error: any) {
+            await conn.rollback();
+            return {
+                id: -1,
+                state: false,
+                message: `Erreur : ${error.sqlMessage}`
+            }
         } finally {
             await conn.release();
         }
@@ -360,6 +460,7 @@ export class CreditService {
     public async deleteCreditById(creditId: number): Promise<ReturnMessage> {
         const conn = await this.pool.getConnection();
         try {
+            await conn.beginTransaction();
             const credits: Credit[] = await conn.query(`SELECT id, fullName, srcPoster FROM Credit WHERE id = ?`, [creditId]);
             if (credits.length > 0) {
                 const formatedTitle: string = this.formatPathService.getFormatedTitleForCredit(credits[0].id, credits[0].fullName);
@@ -367,10 +468,11 @@ export class CreditService {
                 const poster = await conn.query(`DELETE FROM Poster WHERE id = ?`, [credits[0].srcPoster]);
                 const credit = await conn.query(`DELETE FROM Credit WHERE id = ?`, [creditId]);
                 await this.uploadImageService.deleteFileOrDirectoryToCredit(formatedTitle);
+                await conn.commit();
                 return {
                     id: 0,
                     state: true,
-                    message: `Credit lié aux médias (${mediaCredits.affectedRows} supprimé) \n Poster supprimé (${poster.affectedRows}) \n Crédit ${credit[0].fullName} supprimé`
+                    message: `Credit lié aux médias (${mediaCredits.affectedRows} supprimé) \n Poster supprimé (${poster.affectedRows}) \n Crédit ${credits[0].fullName} supprimé`
                 }
             } else {
                 return {
@@ -379,8 +481,13 @@ export class CreditService {
                     message: 'Credit introuvable'
                 }
             }
-        } catch(error) {
-
+        } catch(error: any) {
+            await conn.rollback();
+            return {
+                id: -1,
+                state: false,
+                message: `Erreur : ${error.sqlMessage}`
+            }
         } finally {
             await conn.release();
         }

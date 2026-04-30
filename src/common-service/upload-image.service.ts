@@ -194,6 +194,12 @@ export class UploadImageService {
         return await this.renameFileOrDirectory(oldPathDirecotry, newPathDirectory);
     }
 
+    public async renameFileOrDirectorToCredit(oldPath: string, newPath: string): Promise<ReturnMessage> {
+        const oldPathDirecotry = path.join(`${this.uploadDirToCredit}/${oldPath}`);
+        const newPathDirectory = path.join(`${this.uploadDirToCredit}/${newPath}`);
+        return await this.renameFileOrDirectory(oldPathDirecotry, newPathDirectory);
+    }
+
     private async deleteFileOrFolder(path: string): Promise<ReturnMessage> {
         try {
             if (await fs.pathExists(path)) {

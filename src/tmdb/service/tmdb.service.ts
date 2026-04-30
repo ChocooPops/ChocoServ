@@ -685,7 +685,7 @@ export class TmdbService {
     }
 
     public async searchCreditByTmdbId(id: number): Promise<Credit> {
-        const url: string = `${this.apiTMDBPerson}/${id}?${this.apiKeyTMDB}&${this.paramLanguage}`;
+        const url: string = `${this.apiTMDBPerson}/${id}?${this.apiKeyTMDB}`;
         const response = await lastValueFrom(this.httpService.get(url));
         const data = response.data;
         const originalName: string = data.also_known_as?.find(n => /[^\u0000-\u00ff]/.test(n))
@@ -702,7 +702,7 @@ export class TmdbService {
     }
 
     public async searchCreditByFullName(fullName: string): Promise<Credit> {
-        const url: string = `${this.apiTMDBSearchPerson}?${this.apiKeyTMDB}&query=${fullName}&${this.paramLanguage}`;
+        const url: string = `${this.apiTMDBSearchPerson}?${this.apiKeyTMDB}&query=${fullName}`;
         const response = await lastValueFrom(this.httpService.get(url));
         const data = response.data.results[0];
         const credit: Credit = {
