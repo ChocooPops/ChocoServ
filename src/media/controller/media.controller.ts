@@ -1,6 +1,5 @@
 import { Controller, Get, Param, UseGuards, Query, ParseIntPipe, Body, Post } from '@nestjs/common';
 import { Media } from '../dto/media.interface';
-import { MediaService } from '../service/media.service';
 import { MovieService } from 'src/movie/service/movie.service';
 import { SeriesService } from 'src/series/service/series.service';
 import { MediaType } from '../dto/media-type.enum';
@@ -9,7 +8,8 @@ import { Node } from 'src/common-interface/node.interface';
 import { CurrentUser } from 'src/guard/current-user.guard';
 import { FILTERS } from '../dto/catalog/filters.interface';
 import { SortCatalog } from '../dto/catalog/sort-catalog.enum';
-import { MediaSubstitutionSerivce } from '../service/media-substitution.service';
+import { MediaSubstitutionSerivce } from '../service/media-substitution/media-substitution.service';
+import { MediaService } from '../service/media/media.service';
 
 @Controller('media')
 export class MediaController {

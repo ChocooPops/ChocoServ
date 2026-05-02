@@ -4,7 +4,6 @@ import { DATABASE_POOL } from 'src/database/database.module';
 import * as mariadb from 'mariadb';
 import { StatState } from '../dto/stat-state.enum';
 import { StatUser } from '../dto/stat-user.enum';
-import { MediaService } from 'src/media/service/media.service';
 import { MovieService } from 'src/movie/service/movie.service';
 import { SeriesService } from 'src/series/service/series.service';
 import { MediaType } from 'src/media/dto/media-type.enum';
@@ -21,6 +20,7 @@ import { TopMedia } from '../dto/top-media.interface';
 import { TopMediaResponse } from '../dto/top-media-response.interface';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { MediaTypeFilter } from '../dto/media-type-filter.interface';
+import { MediaService } from 'src/media/service/media/media.service';
 
 @Injectable()
 export class StatUserService {

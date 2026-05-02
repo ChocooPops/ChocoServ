@@ -11,7 +11,6 @@ import { SearchService } from 'src/common-service/search.service';
 import { SearchItem } from 'src/common-interface/search-item.interface';
 import { Media } from 'src/media/dto/media.interface';
 import { MediaType } from 'src/media/dto/media-type.enum';
-import { MediaService } from 'src/media/service/media.service';
 import { Graph } from 'src/common-interface/graph.intrface';
 import { Node } from 'src/common-interface/node.interface';
 import { Link } from 'src/common-interface/link.interface';
@@ -19,6 +18,7 @@ import { PageType } from '../dto/page-type.enum';
 import { CategoryService } from 'src/category/service/category.service';
 import { CategoryEntirely } from 'src/category/dto/categoryEntirely.interface';
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
+import { MediaService } from 'src/media/service/media/media.service';
 
 @Injectable()
 export class SelectionService {

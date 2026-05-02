@@ -8,7 +8,7 @@ import { MovieService } from 'src/movie/service/movie.service';
 import { SeriesService } from 'src/series/service/series.service';
 import * as mariadb from 'mariadb';
 import { MediaType } from 'src/media/dto/media-type.enum';
-import { MediaService } from 'src/media/service/media.service';
+import { MediaService } from 'src/media/service/media/media.service';
 
 @Injectable()
 export class NewsService {

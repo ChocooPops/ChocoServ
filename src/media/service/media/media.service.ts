@@ -1,18 +1,18 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { TranslationTitle } from '../dto/translation-title.interface';
 import * as mariadb from 'mariadb';
 import { CategorySimple } from 'src/category/dto/categorySimple.interface';
-import { MediaType } from '../dto/media-type.enum';
 import { SearchService } from 'src/common-service/search.service';
 import { VerifTimerShowService } from 'src/common-service/verif-timer-show.service';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { SearchItem } from 'src/common-interface/search-item.interface';
-import { Media } from '../dto/media.interface';
 import { DATABASE_POOL } from 'src/database/database.module';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { PosterService } from 'src/poster/service/poster.service';
 import { Node } from 'src/common-interface/node.interface';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
+import { Media } from 'src/media/dto/media.interface';
+import { MediaType } from 'src/media/dto/media-type.enum';
+import { TranslationTitle } from 'src/media/dto/translation-title.interface';
 
 @Injectable()
 export class MediaService {

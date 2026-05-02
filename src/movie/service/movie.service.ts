@@ -1,5 +1,4 @@
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
-import { MediaService } from 'src/media/service/media.service';
 import { Movie } from '../dto/movie.interface';
 import { EditMovie } from '../dto/edit-movie.interface';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
@@ -21,6 +20,7 @@ import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
 import { CreditService } from 'src/credit/service/credit.service';
 import { MediaCredit } from 'src/credit/dto/media-credit.interface';
+import { MediaService } from 'src/media/service/media/media.service';
 
 @Injectable()
 export class MovieService extends MediaService {

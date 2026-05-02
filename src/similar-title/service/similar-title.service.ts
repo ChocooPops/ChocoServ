@@ -6,10 +6,10 @@ import { SimilarTitle } from "../dto/similar-title.interface";
 import { MediaType } from "src/media/dto/media-type.enum";
 import { MovieService } from "src/movie/service/movie.service";
 import { SeriesService } from "src/series/service/series.service";
-import { MediaService } from "src/media/service/media.service";
 import { Link } from "src/common-interface/link.interface";
 import { Node } from "src/common-interface/node.interface";
 import { Job } from "src/credit/dto/job.enum";
+import { MediaService } from "src/media/service/media/media.service";
 
 interface MediaRow {
   id: number;

@@ -14,11 +14,11 @@ import { MovieService } from 'src/movie/service/movie.service';
 import { SeriesService } from 'src/series/service/series.service';
 import { SelectionService } from 'src/selection/service/selection.service';
 import { Selection } from 'src/selection/dto/selection.interface';
-import { MediaService } from 'src/media/service/media.service';
 import { Graph } from 'src/common-interface/graph.intrface';
 import { Node } from 'src/common-interface/node.interface';
 import { Link } from 'src/common-interface/link.interface';
 import { UploadImageService } from 'src/common-service/upload-image.service';
+import { MediaService } from 'src/media/service/media/media.service';
 
 @Injectable()
 export class LicenseService {

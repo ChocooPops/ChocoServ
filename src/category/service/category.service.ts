@@ -11,10 +11,10 @@ import { MovieService } from 'src/movie/service/movie.service';
 import { SeriesService } from 'src/series/service/series.service';
 import { Movie } from 'src/movie/dto/movie.interface';
 import { Series } from 'src/series/dto/series.interface';
-import { MediaService } from 'src/media/service/media.service';
 import { Link } from 'src/common-interface/link.interface';
 import { Graph } from 'src/common-interface/graph.intrface';
 import { Node } from 'src/common-interface/node.interface';
+import { MediaService } from 'src/media/service/media/media.service';
 
 @Injectable()
 export class CategoryService {

@@ -6,15 +6,15 @@ import { FILTERS } from 'src/media/dto/catalog/filters.interface';
 import { CreditService } from 'src/credit/service/credit.service';
 import { FilterType } from 'src/media/dto/catalog/filter-type.enum';
 import { Operation } from 'src/media/dto/catalog/operation.enum';
-import { MediaService } from 'src/media/service/media.service';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { Job } from 'src/credit/dto/job.enum';
 import { MediaInfo } from 'src/media/dto/media-info.interface';
 import { Media } from 'src/media/dto/media.interface';
 import { MediaCredit } from 'src/credit/dto/media-credit.interface';
-import { FormatPathService } from '../../common-service/format-path.service';
+import { FormatPathService } from '../../../common-service/format-path.service';
 import { SearchItem } from 'src/common-interface/search-item.interface';
 import { SearchService } from 'src/common-service/search.service';
+import { MediaService } from '../media/media.service';
 
 @Injectable()
 export class MediaSubstitutionSerivce {

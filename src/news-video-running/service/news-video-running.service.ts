@@ -10,11 +10,11 @@ import { VerifTimerShowService } from 'src/common-service/verif-timer-show.servi
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { MovieService } from 'src/movie/service/movie.service';
 import { SeriesService } from 'src/series/service/series.service';
-import { MediaService } from 'src/media/service/media.service';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { MediaService } from 'src/media/service/media/media.service';
 
 const execAsync = promisify(exec);
 

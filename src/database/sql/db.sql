@@ -48,6 +48,8 @@ DROP TABLE IF EXISTS `User`;
 
 DROP TABLE IF EXISTS `Profil_Photo`;
 
+DROP TABLE IF EXISTS `Version`;
+
 -- PROFIL PHOTO
 CREATE TABLE
     `Profil_Photo` (
@@ -484,6 +486,18 @@ CREATE TABLE
         INDEX IDX_SU_USER (userId)
     );
 
+-- VERSION
+CREATE TABLE
+    `Version` (
+        id INT NOT NULL AUTO_INCREMENT,
+        num VARCHAR(255) NOT NULL,
+        os ENUM ('WINDOWS', 'LINUX', 'MACOS') NOT NULL,
+        link VARCHAR(555) NOT NULL,
+        createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        CONSTRAINT VERSION_PK PRIMARY KEY (id)
+    );
+
 -- ====================================================================
 -- AJOUT DES CLÉS ÉTRANGÈRES
 -- ====================================================================
@@ -612,3 +626,10 @@ VALUES
     ('Western', 'Western'),
     ('Thriller', 'Thriller'),
     ('Familiale', 'Familiale');
+
+INSERT INTO VERSION 
+	(num, os, link)
+VALUES 
+	("1.0.0", "WINDOWS", "NOTHING"), 
+	("1.0.0", "LINUX", "NOTHING"), 
+	("1.0.0", "MACOS", "NOTHING");

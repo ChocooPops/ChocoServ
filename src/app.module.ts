@@ -32,6 +32,7 @@ import { DocumentationModule } from './documentation/documentation.module';
 import { LoggerMiddleware } from './common-middleware/logger-middle-ware';
 import { LoggerService } from './common-service/logger.service';
 import { CreditModule } from './credit/credit.module';
+import { VersionModule } from './version/version.module';
 
 @Module({
   imports: [
@@ -76,7 +77,8 @@ import { CreditModule } from './credit/credit.module';
     StreamModule,
     StatUserModule,
     DocumentationModule,
-    CreditModule
+    CreditModule,
+    VersionModule
   ],
   controllers: [AppController],
   providers: [
