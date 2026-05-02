@@ -32,15 +32,15 @@ export class MovieService extends MediaService {
         verifTimerShowService: VerifTimerShowService,
         formatPathService: FormatPathService,
         posterService: PosterService,
-        creditService: CreditService,
         @Inject(forwardRef(() => JellyfinService))
         private readonly jellyfinService: JellyfinService,
         @Inject(forwardRef(() => SimilarTitleService))
         private readonly similarTitleService: SimilarTitleService,
         private readonly statUserService: StatUserService,
-        private readonly uploadImageService: UploadImageService
+        private readonly uploadImageService: UploadImageService,
+        private readonly creditService: CreditService,
     ) {
-        super(pool, searchService, verifTimerShowService, formatPathService, posterService, creditService);
+        super(pool, searchService, verifTimerShowService, formatPathService, posterService);
     }
 
     public async getNodesMovie(): Promise<Node[]> {

@@ -1,11 +1,9 @@
-import { Inject, Injectable  } from '@nestjs/common';
+import { forwardRef, Inject, Injectable  } from '@nestjs/common';
 import * as mariadb from 'mariadb';
 import { Job } from '../dto/job.enum';
 import { MediaCredit } from '../dto/media-credit.interface';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { PosterService } from 'src/poster/service/poster.service';
-import { LazyModuleLoader } from '@nestjs/core';
-import { TmdbService } from 'src/tmdb/service/tmdb.service';
 import { DATABASE_POOL } from 'src/database/database.module';
 import { Movie } from 'src/movie/dto/movie.interface';
 import { MediaType } from 'src/media/dto/media-type.enum';
@@ -13,17 +11,17 @@ import { Series } from 'src/series/dto/series.interface';
 import { Credit } from '../dto/credit.interface';
 import { UploadImageService } from 'src/common-service/upload-image.service';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
+import { TmdbService } from 'src/tmdb/service/tmdb.service';
 
 @Injectable()
 export class CreditService {
 
-    private tmdbService: TmdbService | null = null;
-
     constructor(@Inject(DATABASE_POOL) private readonly pool: mariadb.Pool,
-        private readonly lazyModuleLoader: LazyModuleLoader,
         private readonly formatPathService: FormatPathService,
         private readonly posterService: PosterService,
-        private readonly uploadImageService: UploadImageService
+        private readonly uploadImageService: UploadImageService,
+        @Inject(forwardRef(() => TmdbService))
+        private readonly tmdbService: TmdbService
     ) { }
     
     public getJobToFilters(): Job[] {
@@ -83,16 +81,6 @@ export class CreditService {
         } finally {
             await conn.release();
         }
-    }
-
-    private async getTmdbService() {
-        if (!this.tmdbService) {
-            const { TmdbModule } = await import('../../tmdb/tmdb.module');
-        const { TmdbService } = await import('../../tmdb/service/tmdb.service');
-            const moduleRef = await this.lazyModuleLoader.load(() => TmdbModule);
-            this.tmdbService = moduleRef.get(TmdbService);
-        }
-        return this.tmdbService;
     }
 
     public getQueryOrderCreditForMovie(table: string): string {
@@ -276,8 +264,7 @@ export class CreditService {
                     const creditId: number = existingMap.get(newCredit.tmdbId);
                     if (creditId) {
                         const formatedTitle: string = `${creditId}-${this.formatPathService.formatPath(newCredit.fullName)}`
-                        const tmdbService = await this.getTmdbService();
-                        const poster: any = await tmdbService.getEntirelyUrlImagesFromTMDB(newCredit.srcPoster);
+                        const poster: any = await this.tmdbService.getEntirelyUrlImagesFromTMDB(newCredit.srcPoster);
                         await this.posterService.insertPosterCredit(poster, creditId, formatedTitle, conn);
                     }
                 } catch(error) {
@@ -501,13 +488,12 @@ export class CreditService {
 
     public async saveAllNewCreditFromAllMedia(): Promise<any> {
         const conn = await this.pool.getConnection();
-        const tmdbService = await this.getTmdbService();
         const results: any[] = [];
 
         const movies: Movie[] = await conn.query(`SELECT id, title, jellyfinId FROM Media WHERE mediaType = ?`, [MediaType.MOVIE]);
         for (const movie of movies) {
             try {
-                const credits: MediaCredit[] = await tmdbService.fetchCreditForMovie(movie);
+                const credits: MediaCredit[] = await this.tmdbService.fetchCreditForMovie(movie);
                 const message = await this.deleteAndUpdateMediaCredit(movie.id, credits, conn);
                 results.push(`${movie.title} => ${message}`);
                 console.log(`${movie.title} => ${message}`);
@@ -523,7 +509,7 @@ export class CreditService {
         const series: Series[] = await conn.query(`SELECT id, title, jellyfinId FROM Media WHERE mediaType = ?`, [MediaType.SERIES]);
         for (const serie of series) {
             try {
-                const credits: MediaCredit[] = await tmdbService.fetchCreditForSeries(serie);
+                const credits: MediaCredit[] = await this.tmdbService.fetchCreditForSeries(serie);
                 const message = await this.deleteAndUpdateMediaCredit(serie.id, credits, conn);
                 results.push(`${serie.title} => ${message}`);
                 console.log(`${serie.title} => ${message}`);

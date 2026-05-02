@@ -9,19 +9,21 @@ import { Node } from 'src/common-interface/node.interface';
 import { CurrentUser } from 'src/guard/current-user.guard';
 import { FILTERS } from '../dto/catalog/filters.interface';
 import { SortCatalog } from '../dto/catalog/sort-catalog.enum';
+import { MediaSubstitutionSerivce } from '../service/media-substitution.service';
 
 @Controller('media')
 export class MediaController {
 
     constructor(private readonly mediaService: MediaService,
         private readonly movieService: MovieService,
-        private readonly seriesService: SeriesService
+        private readonly seriesService: SeriesService,
+        private readonly mediaSubstitutionSerivce: MediaSubstitutionSerivce
     ) { }
 
     @Get('research/:keyword')
     async getMediaByResearch(@CurrentUser('sub') userId: number, @Param('keyword') keyword: string): Promise<Media[]> {
         const medias: Media[] = [];
-        const items: any[] = await this.mediaService.getMoviesAndSeriesByResearch(userId, keyword);
+        const items: any[] = await this.mediaSubstitutionSerivce.getMoviesAndSeriesByResearch(userId, keyword);
         items.forEach((item: any) => {
             if (item.media.mediaType === MediaType.MOVIE) {
                 medias.push(this.movieService.getFormatedMovie(item));
@@ -42,7 +44,7 @@ export class MediaController {
         @Body() filters: FILTERS[]
     ) {
         const medias: Media[] = [];
-        const items: any[] = await this.mediaService.getMediaByCatalogFilters(
+        const items: any[] = await this.mediaSubstitutionSerivce.getMediaByCatalogFilters(
             userId,
             sortFilter ?? SortCatalog.SHUFFLE,
             orderDirection !== 'false',
@@ -62,7 +64,7 @@ export class MediaController {
 
     @Get('media-info/:mediaId')
     async getMediaInfoById(@Param('mediaId', ParseIntPipe) mediaId: number): Promise<any> {
-        return await this.mediaService.getMediaInfoById(mediaId);
+        return await this.mediaSubstitutionSerivce.getMediaInfoById(mediaId);
     }
 
     @UseGuards(AdminUserGuard)
