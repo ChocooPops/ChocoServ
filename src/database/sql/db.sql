@@ -630,6 +630,6 @@ VALUES
 INSERT INTO VERSION 
 	(num, os, link)
 VALUES 
-	("1.0.0", "WINDOWS", "NOTHING"), 
-	("1.0.0", "LINUX", "NOTHING"), 
-	("1.0.0", "MACOS", "NOTHING");
+	("1.0.0", "WINDOWS", "NULL"), 
+	("1.0.0", "LINUX", "NULL"), 
+	("1.0.0", "MACOS", "NULL");
