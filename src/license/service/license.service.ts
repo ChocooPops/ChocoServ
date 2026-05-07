@@ -126,9 +126,9 @@ export class LicenseService {
     private getFormatedLicense(license: any): License {
         const formatedLicense: License = license.license ? license.license : license;
         formatedLicense.position = formatedLicense.position && (formatedLicense.position as any) === 1 ? true : false;
-        formatedLicense.srcIcon = this.formatPathService.getOneFormatedPosterUrl(formatedLicense.name, MediaType.LICENSE, formatedLicense.srcIcon);
-        formatedLicense.srcLogo = this.formatPathService.getOneFormatedPosterUrl(formatedLicense.name, MediaType.LICENSE, formatedLicense.srcLogo);
-        formatedLicense.srcBackground = this.formatPathService.getOneFormatedPosterUrl(formatedLicense.name, MediaType.LICENSE, formatedLicense.srcBackground);
+        formatedLicense.srcIcon = this.formatPathService.getOneFormatedPosterUrl(formatedLicense.id, MediaType.LICENSE, formatedLicense.srcIcon);
+        formatedLicense.srcLogo = this.formatPathService.getOneFormatedPosterUrl(formatedLicense.id, MediaType.LICENSE, formatedLicense.srcLogo);
+        formatedLicense.srcBackground = this.formatPathService.getOneFormatedPosterUrl(formatedLicense.id, MediaType.LICENSE, formatedLicense.srcBackground);
         if (formatedLicense.mediaList) {
             formatedLicense.mediaList.forEach((media: Media, index) => {
                 if (media.mediaType === MediaType.MOVIE) {
@@ -229,35 +229,29 @@ export class LicenseService {
             const conn = await this.pool.getConnection();
             try {
                 await conn.beginTransaction();
-                if (!(await this.getIfLicenseNameExist(newLicense.name, -1, conn))) {
-                    const formatedTitle: string = this.formatPathService.formatPath(newLicense.name);
-                    const maxLicense = await conn.query('Select count(id) as orderIndex FROM License');
-                    const newOrderIndex = maxLicense[0]?.orderIndex !== null ? Number(maxLicense[0].orderIndex) + 1 : 1000;
-                    const queryInsertLicense: string = `INSERT INTO License (name, position, orderIndex) VALUES (?, ?, ?)`;
-                    const resultInsertLicense = await conn.query(queryInsertLicense, [newLicense.name.trim(), newLicense.position ? 1 : 0, newOrderIndex]);
-                    const licenseId: number = Number(resultInsertLicense.insertId);
+                const maxLicense = await conn.query('Select count(id) as orderIndex FROM License');
+                const newOrderIndex = maxLicense[0]?.orderIndex !== null ? Number(maxLicense[0].orderIndex) + 1 : 1000;
+                const queryInsertLicense: string = `INSERT INTO License (name, position, orderIndex) VALUES (?, ?, ?)`;
+                const resultInsertLicense = await conn.query(queryInsertLicense, [newLicense.name.trim(), newLicense.position ? 1 : 0, newOrderIndex]);
+                const licenseId: number = Number(resultInsertLicense.insertId);
+                    
+                const formatedPath: string = licenseId.toString();
 
-                    const messageMediaLicense: string = await this.insertManyMediasIntoLicense(newLicense.mediaList, licenseId, conn);
-                    const messageSelectonLicense: string = await this.insertManySelectionsIntoLicense(newLicense.selectionList, licenseId, conn);
-                    const messageSrcIcon: string = await this.posterService.insertPosterLicense(newLicense.srcIcon, formatedTitle, licenseId, 'srcIcon', conn);
-                    const messageSrcLogo: string = await this.posterService.insertPosterLicense(newLicense.srcLogo, formatedTitle, licenseId, 'srcLogo', conn);
-                    const messageSrcBackground: string = await this.posterService.insertPosterLicense(newLicense.srcBackground, formatedTitle, licenseId, 'srcBackground', conn);
+                const messageMediaLicense: string = await this.insertManyMediasIntoLicense(newLicense.mediaList, licenseId, conn);
+                const messageSelectonLicense: string = await this.insertManySelectionsIntoLicense(newLicense.selectionList, licenseId, conn);
+                const messageSrcIcon: string = await this.posterService.insertPosterLicense(newLicense.srcIcon, formatedPath, licenseId, 'srcIcon', conn);
+                const messageSrcLogo: string = await this.posterService.insertPosterLicense(newLicense.srcLogo, formatedPath, licenseId, 'srcLogo', conn);
+                const messageSrcBackground: string = await this.posterService.insertPosterLicense(newLicense.srcBackground, formatedPath, licenseId, 'srcBackground', conn);
 
-                    await conn.commit();
-                    returnMessage = {
-                        id: 1,
-                        state: true,
-                        message: `License insérée \n ${messageMediaLicense} \n ${messageSelectonLicense} \n ${messageSrcIcon} \n ${messageSrcLogo} \n ${messageSrcBackground}`,
-                        other: { id: licenseId }
-                    }
-                } else {
-                    returnMessage = {
-                        id: -1,
-                        state: false,
-                        message: "Une licence possède déjà ce nom, doublon impossible"
-                    }
+                await conn.commit();
+                returnMessage = {
+                    id: 1,
+                    state: true,
+                    message: `License insérée \n ${messageMediaLicense} \n ${messageSelectonLicense} \n ${messageSrcIcon} \n ${messageSrcLogo} \n ${messageSrcBackground}`,
+                    other: { id: licenseId }
                 }
-            } catch (error) {
+
+            } catch (error: any) {
                 await conn.rollback();
                 returnMessage = {
                     id: -1,
@@ -284,38 +278,26 @@ export class LicenseService {
             try {
                 const oldLicense: License = await this.getEntirelyLicenseById(-1, updateLicense.id);
                 if (oldLicense && oldLicense.id) {
-                    if (!(await this.getIfLicenseNameExist(updateLicense.name, updateLicense.id, conn))) {
-                        const formatedTitle: string = this.formatPathService.formatPath(oldLicense.name);
-                        const queryUpdate: string = `UPDATE LICENSE 
-                            SET name = ?,
-                            position = ?
-                            WHERE id = ?`
-                        await conn.query(queryUpdate, [updateLicense.name.trim(), updateLicense.position ? 1 : 0, updateLicense.id]);
-                        const messageSrcIcon: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcIcon, oldLicense.srcIcon, formatedTitle, 'srcIcon', conn);
-                        const messageSrcLogo: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcLogo, oldLicense.srcLogo, formatedTitle, 'srcLogo', conn);
-                        const messageSrcBackground: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcBackground, oldLicense.srcBackground, formatedTitle, 'srcBackground', conn);
-                        await conn.query(`DELETE FROM License_Media WHERE licenseId = ?`, [updateLicense.id]);
-                        await conn.query(`DELETE FROM License_Selection WHERE licenseId = ?`, [updateLicense.id]);
-                        const messageMediaLicense: string = await this.insertManyMediasIntoLicense(updateLicense.mediaList, updateLicense.id, conn);
-                        const messageSelectonLicense: string = await this.insertManySelectionsIntoLicense(updateLicense.selectionList, updateLicense.id, conn);
+                    const formatedPath: string = oldLicense.id.toString();
+                    const queryUpdate: string = `UPDATE LICENSE 
+                        SET name = ?,
+                        position = ?
+                        WHERE id = ?`
+                    await conn.query(queryUpdate, [updateLicense.name.trim(), updateLicense.position ? 1 : 0, updateLicense.id]);
+                    const messageSrcIcon: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcIcon, oldLicense.srcIcon, formatedPath, 'srcIcon', conn);
+                    const messageSrcLogo: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcLogo, oldLicense.srcLogo, formatedPath, 'srcLogo', conn);
+                    const messageSrcBackground: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcBackground, oldLicense.srcBackground, formatedPath, 'srcBackground', conn);
+                    await conn.query(`DELETE FROM License_Media WHERE licenseId = ?`, [updateLicense.id]);
+                    await conn.query(`DELETE FROM License_Selection WHERE licenseId = ?`, [updateLicense.id]);
+                    const messageMediaLicense: string = await this.insertManyMediasIntoLicense(updateLicense.mediaList, updateLicense.id, conn);
+                    const messageSelectonLicense: string = await this.insertManySelectionsIntoLicense(updateLicense.selectionList, updateLicense.id, conn);
 
-                        const newFormatedTitle: string = this.formatPathService.formatPath(updateLicense.name);
-                        if (newFormatedTitle != formatedTitle) {
-                            await this.uploadImageService.renameFileOrDirectorToLicense(formatedTitle, newFormatedTitle);
-                        }
-                        await conn.commit();
-                        returnMessage = {
-                            id: 1,
-                            state: true,
-                            message: `License insérée \n ${messageMediaLicense} \n ${messageSelectonLicense} \n ${messageSrcIcon} \n ${messageSrcLogo} \n ${messageSrcBackground}`,
-                            other: { id: updateLicense.id }
-                        }
-                    } else {
-                        returnMessage = {
-                            id: -1,
-                            state: false,
-                            message: "Le nom de la license existe déjà (doublon impossible)"
-                        }
+                    await conn.commit();
+                    returnMessage = {
+                        id: 1,
+                        state: true,
+                        message: `License insérée \n ${messageMediaLicense} \n ${messageSelectonLicense} \n ${messageSrcIcon} \n ${messageSrcLogo} \n ${messageSrcBackground}`,
+                        other: { id: updateLicense.id }
                     }
                 } else {
                     returnMessage = {
@@ -324,7 +306,7 @@ export class LicenseService {
                         message: "License introuvable"
                     }
                 }
-            } catch (error) {
+            } catch (error: any) {
                 await conn.rollback();
                 returnMessage = {
                     id: -1,
@@ -363,7 +345,7 @@ export class LicenseService {
                 state: true,
                 message: message
             }
-        } catch (error) {
+        } catch (error: any) {
             await conn.rollback();
             return {
                 id: -1,
@@ -390,7 +372,7 @@ export class LicenseService {
                 state: true,
                 message: `License supprimée avec succès \n ${resultDeleteLicenseMedia.affectedRows} \n ${resultDeleteLicenseSelection.affectedRows} \n ${resultDeletePoster}`
             }
-        } catch (error) {
+        } catch (error: any) {
             await conn.rollback();
             returnMessage = {
                 id: -1,
@@ -437,22 +419,6 @@ export class LicenseService {
                 return `${selections.length} sélections ont été ajouté dans la license`;
             } else {
                 return "Aucune sélection n'est à ajouter dans la license";
-            }
-        } catch (error) {
-            throw error;
-        }
-    }
-
-    protected async getIfLicenseNameExist(title: string, id: number, conn: mariadb.PoolConnection): Promise<boolean> {
-        try {
-            const formatedTitle: string = this.formatPathService.formatPath(title);
-            const query = `SELECT name from License WHERE id != ?;`
-            const result: any[] = await conn.query(query, [id]);
-            const medias: any[] = result.filter((item) => this.formatPathService.formatPath(item.name) === formatedTitle);
-            if (medias.length > 0) {
-                return true;
-            } else {
-                return false;
             }
         } catch (error) {
             throw error;

@@ -12,13 +12,13 @@ export class FormatPathService {
     private folderUploads: string = 'uploads';
     private folderProfilPhoto: string = 'profil-photo';
 
-    public formatPath(title: string): string {
-        let formattedTitle = title.toLowerCase();
-        formattedTitle = formattedTitle.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        formattedTitle = formattedTitle.replace(/[^a-z0-9]+/g, '-');
-        formattedTitle = formattedTitle.replace(/^-+|-+$/g, '');
-        return formattedTitle;
-    }
+    // public formatPath(title: string): string {
+    //     let formattedTitle = title.toLowerCase();
+    //     formattedTitle = formattedTitle.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    //     formattedTitle = formattedTitle.replace(/[^a-z0-9]+/g, '-');
+    //     formattedTitle = formattedTitle.replace(/^-+|-+$/g, '');
+    //     return formattedTitle;
+    // }
 
     public getFolderUploads(): string {
         return this.folderUploads;
@@ -33,35 +33,20 @@ export class FormatPathService {
         return Number(idString);
     }
 
-    public getOneFormatedPosterUrl(title: string, mediaType: MediaType, poster: string | null): string | null {
+    public getOneFormatedPosterUrl(mediaId: number, mediaType: MediaType, poster: string | null): string | null {
         if (poster) {
-            const formatedTitle: string = this.formatPath(title);
-            return `${this.folderHost}/${this.folderUploads}/${mediaType.toLowerCase()}/${formatedTitle}/${poster}`
+            return `${this.folderHost}/${this.folderUploads}/${mediaType.toLowerCase()}/${mediaId}/${poster}`
         } else {
             return null;
         }
     }
 
-    public getFormatedTitleForCredit(creditId: number, fullName: string): string {
-        return `${creditId}-${this.formatPath(fullName)}`;
-    }
-
-    public getOneFormatedPosterUrlFromCredit(creditId: number, fullName: string, poster: string | null): string | null {
-        if (poster) {
-            const formatedTitle: string = this.getFormatedTitleForCredit(creditId, fullName);
-            return `${this.folderHost}/${this.folderUploads}/${MediaType.CREDIT.toLowerCase()}/${formatedTitle}/${poster}`;
-        } else {
-            return null;
-        }
-    }
-
-    public getManyFormatedPosterUrl(title: string, mediaType: MediaType, posters: string[]): string[] {
+    public getManyFormatedPosterUrl(mediaId: number, mediaType: MediaType, posters: string[]): string[] {
         if (posters) {
-            const formatedTitle: string = this.formatPath(title);
             const postersFormated: string[] = [];
             posters.forEach((poster: string) => {
                 if (poster) {
-                    postersFormated.push(`${this.folderHost}/${this.folderUploads}/${mediaType.toLowerCase()}/${formatedTitle}/${poster}`);
+                    postersFormated.push(`${this.folderHost}/${this.folderUploads}/${mediaType.toLowerCase()}/${mediaId}/${poster}`);
                 }
             });
             return postersFormated;

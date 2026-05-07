@@ -152,54 +152,6 @@ export class UploadImageService {
         return await this.saveImage(image, directoryPath, filename);
     }
 
-    private async renameFileOrDirectory(oldPath: string, newPath: string): Promise<ReturnMessage> {
-        try {
-            if (!(await fs.pathExists(oldPath))) {
-                return {
-                    id: -1,
-                    state: false,
-                    message: `Le fichier ou répertoire "${oldPath}" n'existe pas.`
-                }
-            }
-            await fs.rename(oldPath, newPath);
-            return {
-                id: -1,
-                state: true,
-                message: `Renommé avec succès : ${oldPath} → ${newPath}`
-            }
-        } catch (error: any) {
-            return {
-                id: -1,
-                state: false,
-                message: 'Erreur lors du renommage :' + error.message
-            }
-        }
-    }
-
-    public async renameFileOrdirectoryToMediaType(oldPath: string, newPath: string, mediaType: MediaType): Promise<ReturnMessage> {
-        if (mediaType === MediaType.MOVIE) {
-            const oldPathDirecotry = path.join(`${this.uploadDirToMovie}/${oldPath}`);
-            const newPathDirectory = path.join(`${this.uploadDirToMovie}/${newPath}`);
-            return await this.renameFileOrDirectory(oldPathDirecotry, newPathDirectory);
-        } else if (mediaType === MediaType.SERIES) {
-            const oldPathDirecotry = path.join(`${this.uploadDirToSeries}/${oldPath}`);
-            const newPathDirectory = path.join(`${this.uploadDirToSeries}/${newPath}`);
-            return await this.renameFileOrDirectory(oldPathDirecotry, newPathDirectory);
-        }
-    }
-
-    public async renameFileOrDirectorToLicense(oldPath: string, newPath: string): Promise<ReturnMessage> {
-        const oldPathDirecotry = path.join(`${this.uploadDirToLicense}/${oldPath}`);
-        const newPathDirectory = path.join(`${this.uploadDirToLicense}/${newPath}`);
-        return await this.renameFileOrDirectory(oldPathDirecotry, newPathDirectory);
-    }
-
-    public async renameFileOrDirectorToCredit(oldPath: string, newPath: string): Promise<ReturnMessage> {
-        const oldPathDirecotry = path.join(`${this.uploadDirToCredit}/${oldPath}`);
-        const newPathDirectory = path.join(`${this.uploadDirToCredit}/${newPath}`);
-        return await this.renameFileOrDirectory(oldPathDirecotry, newPathDirectory);
-    }
-
     private async deleteFileOrFolder(path: string): Promise<ReturnMessage> {
         try {
             if (await fs.pathExists(path)) {

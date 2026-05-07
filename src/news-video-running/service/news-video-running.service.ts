@@ -70,7 +70,7 @@ export class NewsVideoRunningService {
 
     private getFormatedNewsVideoRunning(news: any): NewsVideoRunning {
         const formatedNews: NewsVideoRunning = news.news ? news.news : news;
-        formatedNews.srcBackground = this.formatPathService.getOneFormatedPosterUrl(formatedNews.media.title, formatedNews.media.mediaType, formatedNews.srcBackground);
+        formatedNews.srcBackground = this.formatPathService.getOneFormatedPosterUrl(formatedNews.media.id, formatedNews.media.mediaType, formatedNews.srcBackground);
         if (formatedNews.media.mediaType === MediaType.MOVIE) {
             formatedNews.media = this.movieService.getFormatedMovie(formatedNews.media);
         } else if (formatedNews.media.mediaType === MediaType.SERIES) {

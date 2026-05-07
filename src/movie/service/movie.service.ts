@@ -175,16 +175,16 @@ export class MovieService extends MediaService {
 
     public getFormatedMovie(media: any): Movie {
         const movie: Movie = media.media ? media.media : media;
-        movie.srcLogo = this.formatPathService.getOneFormatedPosterUrl(movie.title, this.currentMediaType, movie.srcLogo);
-        movie.srcBackgroundImage = this.formatPathService.getOneFormatedPosterUrl(movie.title, this.currentMediaType, movie.srcBackgroundImage);
-        movie.srcPoster.normal = this.formatPathService.getManyFormatedPosterUrl(movie.title, this.currentMediaType, movie.srcPoster.normal);
-        movie.srcPoster.special = this.formatPathService.getManyFormatedPosterUrl(movie.title, this.currentMediaType, movie.srcPoster.special);
-        movie.srcPoster.license = this.formatPathService.getManyFormatedPosterUrl(movie.title, this.currentMediaType, movie.srcPoster.license);
-        movie.srcPoster.horizontal = this.formatPathService.getManyFormatedPosterUrl(movie.title, this.currentMediaType, movie.srcPoster.horizontal);
+        movie.srcLogo = this.formatPathService.getOneFormatedPosterUrl(movie.id, this.currentMediaType, movie.srcLogo);
+        movie.srcBackgroundImage = this.formatPathService.getOneFormatedPosterUrl(movie.id, this.currentMediaType, movie.srcBackgroundImage);
+        movie.srcPoster.normal = this.formatPathService.getManyFormatedPosterUrl(movie.id, this.currentMediaType, movie.srcPoster.normal);
+        movie.srcPoster.special = this.formatPathService.getManyFormatedPosterUrl(movie.id, this.currentMediaType, movie.srcPoster.special);
+        movie.srcPoster.license = this.formatPathService.getManyFormatedPosterUrl(movie.id, this.currentMediaType, movie.srcPoster.license);
+        movie.srcPoster.horizontal = this.formatPathService.getManyFormatedPosterUrl(movie.id, this.currentMediaType, movie.srcPoster.horizontal);
         if (movie.credits) {
             movie.credits.forEach((credit: MediaCredit) => {
-                credit.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(credit.id, credit.fullName, credit.srcPoster);
-            })
+                credit.srcPoster = this.formatPathService.getOneFormatedPosterUrl(credit.id, MediaType.CREDIT, credit.srcPoster);
+            });
         }
         delete (movie as any).seasons;
         return movie;
@@ -229,74 +229,60 @@ export class MovieService extends MediaService {
     async insertNewMovie(newMovie: EditMovie, insertSimilarTitle: boolean): Promise<ReturnMessage> {
         let messageReturned !: ReturnMessage;
         if (newMovie.title && newMovie.title.trim() !== '') {
-            if (true) {
-                const conn = await this.pool.getConnection();
-                try {
-                    await conn.beginTransaction();
-                    if (!(await this.getIfMediaExistByTitleType(newMovie.title, -1, conn))) {
-                        const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(newMovie.startShow, newMovie.endShow);
+            const conn = await this.pool.getConnection();
+            try {
+                await conn.beginTransaction();
+                    
+                const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(newMovie.startShow, newMovie.endShow);
 
-                        const query: string = `
-                            INSERT INTO Media 
-                            (title, mediaLibraryId, description, date, startShow, endShow, mediaType)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)`;
+                const query: string = `
+                    INSERT INTO Media 
+                    (title, mediaLibraryId, description, date, startShow, endShow, mediaType)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
-                        const result: any = await conn.query(query,
-                            [newMovie.title.trim(), newMovie.mediaLibraryId, newMovie.description, this.getStringFromDate(newMovie.date), interval.start, interval.end, this.currentMediaType]
-                        );
-                        const mediaId: number | null = result ? Number(result.insertId) || null : null;
-                        if (mediaId) {
-                            let message: string = 'Le film a été enregistré \n';
-                            const formatedTitle: string = this.formatPathService.formatPath(newMovie.title);
-                            const messageCategory: string = await this.insertManyMediaCategory(mediaId, newMovie.categories, conn);
-                            const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newMovie.otherTitles, conn);
-                            const messageCredit: string = await this.creditService.insertManyCredits(mediaId, newMovie.credits, conn);
-                            const messageKeyWord: string = await this.insertKeyword(mediaId, newMovie.keyWords, conn);
-                            const messagePoster: string = await this.posterService.insertManyPosterByMedia(newMovie, this.currentMediaType, formatedTitle, mediaId, conn);
+                const result: any = await conn.query(query,
+                    [newMovie.title.trim(), newMovie.mediaLibraryId, newMovie.description, this.getStringFromDate(newMovie.date), interval.start, interval.end, this.currentMediaType]
+                );
+                const mediaId: number | null = result ? Number(result.insertId) || null : null;
+                if (mediaId) {
+                    let message: string = 'Le film a été enregistré \n';
+                    const formatedPath: string = mediaId.toString();
+                    const messageCategory: string = await this.insertManyMediaCategory(mediaId, newMovie.categories, conn);
+                    const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newMovie.otherTitles, conn);
+                    const messageCredit: string = await this.creditService.insertManyCredits(mediaId, newMovie.credits, conn);
+                    const messageKeyWord: string = await this.insertKeyword(mediaId, newMovie.keyWords, conn);
+                    const messagePoster: string = await this.posterService.insertManyPosterByMedia(newMovie, this.currentMediaType, formatedPath, mediaId, conn);
 
-                            let messageSimilarTitle: string = `Titre similaire ajouté (0)`;
-                            if (insertSimilarTitle) {
-                                messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(mediaId, conn);
-                            }
-
-                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSimilarTitle}`;
-                            messageReturned = {
-                                id: 0,
-                                state: true,
-                                message: message,
-                                other: { id: mediaId }
-                            }
-                            await conn.commit();
-                        } else {
-                            messageReturned = {
-                                id: -1,
-                                state: false,
-                                message: "Erreur : Echec de l'enregistrement du film."
-                            }
-                        }
-                    } else {
-                        messageReturned = {
-                            id: -1,
-                            state: false,
-                            message: 'Erreur : Un film possède déjà ce titre. Doublon impossible.'
-                        }
+                    let messageSimilarTitle: string = `Titre similaire ajouté (0)`;
+                    if (insertSimilarTitle) {
+                        messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(mediaId, conn);
                     }
-                } catch (error: any) {
-                    await conn.rollback();
+
+                    message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSimilarTitle}`;
+                    messageReturned = {
+                        id: 0,
+                        state: true,
+                        message: message,
+                        other: { id: mediaId }
+                    }
+                    await conn.commit();
+                    } else {
                     messageReturned = {
                         id: -1,
                         state: false,
-                        message: `Erreur : ${error.sqlMessage}`
+                        message: "Erreur : Echec de l'enregistrement du film."
                     }
-                } finally {
-                    await conn.release();
                 }
-            } else {
+                    
+            } catch (error: any) {
+                await conn.rollback();
                 messageReturned = {
                     id: -1,
                     state: false,
-                    message: 'Erreur : le fichier est introuvable'
+                    message: `Erreur : ${error.sqlMessage}`
                 }
+            } finally {
+                await conn.release();
             }
         } else {
             messageReturned = {
@@ -316,51 +302,31 @@ export class MovieService extends MediaService {
                 await conn.beginTransaction();
                 const oldMovie: Movie = await this.getMovieById(updateMovie.id);
                 if (oldMovie && oldMovie.id) {
-                    if (true) {
-                        if (!(await this.getIfMediaExistByTitleType(updateMovie.title, updateMovie.id, conn))) {
-                            const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(updateMovie.startShow, updateMovie.endShow);
+                    const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(updateMovie.startShow, updateMovie.endShow);
 
-                            const query: string = `
-                                UPDATE Media
-                                SET title = ?, mediaLibraryId = ?, description = ?, date = ?, startShow = ?, endShow = ?
-                                WHERE id = ?`;
-                            await conn.query(query,
-                                [updateMovie.title.trim(), updateMovie.mediaLibraryId, updateMovie.description, this.getStringFromDate(updateMovie.date), interval.start, interval.end, updateMovie.id]
-                            );
-                            let message: string = 'Le film a été modifié \n';
-                            const oldFormatedTitle: string = this.formatPathService.formatPath(oldMovie.title);
-                            const newFormatedTitle: string = this.formatPathService.formatPath(updateMovie.title);
-                            const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateMovie.id, updateMovie.categories, conn);
-                            const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateMovie.id, updateMovie.otherTitles, conn);
-                            const messageCredit: string = await this.creditService.deleteAndUpdateMediaCredit(updateMovie.id, updateMovie.credits, conn);
-                            const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateMovie.id, updateMovie.keyWords, conn);
-                            const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateMovie, oldMovie, this.currentMediaType, oldFormatedTitle, conn);
+                    const query: string = `
+                        UPDATE Media
+                        SET title = ?, mediaLibraryId = ?, description = ?, date = ?, startShow = ?, endShow = ?
+                        WHERE id = ?`;
+                    await conn.query(query,
+                        [updateMovie.title.trim(), updateMovie.mediaLibraryId, updateMovie.description, this.getStringFromDate(updateMovie.date), interval.start, interval.end, updateMovie.id]
+                    );
+                    let message: string = 'Le film a été modifié \n';
+                    const formatedPath: string = oldMovie.id.toString();
+                    const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateMovie.id, updateMovie.categories, conn);
+                    const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateMovie.id, updateMovie.otherTitles, conn);
+                    const messageCredit: string = await this.creditService.deleteAndUpdateMediaCredit(updateMovie.id, updateMovie.credits, conn);
+                    const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateMovie.id, updateMovie.keyWords, conn);
+                    const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateMovie, oldMovie, this.currentMediaType, formatedPath, conn);
 
-                            if (oldFormatedTitle !== newFormatedTitle) {
-                                await this.uploadImageService.renameFileOrdirectoryToMediaType(oldFormatedTitle, newFormatedTitle, this.currentMediaType);
-                            }
-                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster}`;
-                            messageReturned = {
-                                id: 0,
-                                state: true,
-                                message: message,
-                                other: { id: updateMovie.id }
-                            }
-                            await conn.commit();
-                        } else {
-                            messageReturned = {
-                                id: -1,
-                                state: false,
-                                message: 'Erreur : Un film possède déjà ce titre. Doublon impossible.'
-                            }
-                        }
-                    } else {
-                        messageReturned = {
-                            id: -1,
-                            state: false,
-                            message: 'Erreur : le fichier est introuvable'
-                        }
+                    message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster}`;
+                    messageReturned = {
+                        id: 0,
+                        state: true,
+                        message: message,
+                        other: { id: updateMovie.id }
                     }
+                    await conn.commit();
                 } else {
                     messageReturned = {
                         id: -1,

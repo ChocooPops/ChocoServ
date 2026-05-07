@@ -182,18 +182,18 @@ export class SeriesService extends MediaService {
 
     public getFormatedSeries(media: any): Series {
         const series: Series = media.media ? media.media : media;
-        series.srcLogo = this.formatPathService.getOneFormatedPosterUrl(series.title, this.currentMediaType, series.srcLogo);
-        series.srcBackgroundImage = this.formatPathService.getOneFormatedPosterUrl(series.title, this.currentMediaType, series.srcBackgroundImage);
-        series.srcPoster.normal = this.formatPathService.getManyFormatedPosterUrl(series.title, this.currentMediaType, series.srcPoster.normal);
-        series.srcPoster.special = this.formatPathService.getManyFormatedPosterUrl(series.title, this.currentMediaType, series.srcPoster.special);
-        series.srcPoster.license = this.formatPathService.getManyFormatedPosterUrl(series.title, this.currentMediaType, series.srcPoster.license);
-        series.srcPoster.horizontal = this.formatPathService.getManyFormatedPosterUrl(series.title, this.currentMediaType, series.srcPoster.horizontal);
+        series.srcLogo = this.formatPathService.getOneFormatedPosterUrl(series.id, this.currentMediaType, series.srcLogo);
+        series.srcBackgroundImage = this.formatPathService.getOneFormatedPosterUrl(series.id, this.currentMediaType, series.srcBackgroundImage);
+        series.srcPoster.normal = this.formatPathService.getManyFormatedPosterUrl(series.id, this.currentMediaType, series.srcPoster.normal);
+        series.srcPoster.special = this.formatPathService.getManyFormatedPosterUrl(series.id, this.currentMediaType, series.srcPoster.special);
+        series.srcPoster.license = this.formatPathService.getManyFormatedPosterUrl(series.id, this.currentMediaType, series.srcPoster.license);
+        series.srcPoster.horizontal = this.formatPathService.getManyFormatedPosterUrl(series.id, this.currentMediaType, series.srcPoster.horizontal);
         if (series.credits) {
             series.credits.forEach((credit: MediaCredit) => {
-                credit.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(credit.id, credit.fullName, credit.srcPoster);
+                credit.srcPoster = this.formatPathService.getOneFormatedPosterUrl(credit.id, MediaType.CREDIT, credit.srcPoster);
             });
         }
-        series.seasons = this.getFormatedSeasons(series.seasons, series.title);
+        series.seasons = this.getFormatedSeasons(series.seasons, series.id);
         delete (series as any).time;
         delete (series as any).quality;
         delete (series as any).watchProgress;
@@ -201,10 +201,10 @@ export class SeriesService extends MediaService {
         return series;
     }
 
-    private getFormatedSeasons(seasons: Season[], title: string): Season[] {
+    private getFormatedSeasons(seasons: Season[], seriesId: number): Season[] {
         if (seasons) {
             seasons.forEach((season: Season, index) => {
-                seasons[index].srcPoster = this.formatPathService.getOneFormatedPosterUrl(title, this.currentMediaType, season.srcPoster);
+                seasons[index].srcPoster = this.formatPathService.getOneFormatedPosterUrl(seriesId, this.currentMediaType, season.srcPoster);
             })
             return seasons;
         } else {
@@ -433,73 +433,57 @@ export class SeriesService extends MediaService {
     public async insertNewSeries(newSeries: EditSeries, insertSimilarTitle: boolean): Promise<ReturnMessage> {
         let messageReturned !: ReturnMessage;
         if (newSeries.title && newSeries.title.trim() !== '') {
-            if (true) {
-                const conn = await this.pool.getConnection();
-                try {
-                    await conn.beginTransaction();
-                    if (!(await this.getIfMediaExistByTitleType(newSeries.title, -1, conn))) {
-                        const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(newSeries.startShow, newSeries.endShow);
-                        const query: string = `
-                                    INSERT INTO Media 
-                                    (title, description, date, startShow, endShow, mediaType)
-                                    VALUES (?, ?, ?, ?, ?, ?);`;
-                        const result: any = await conn.query(query,
-                            [newSeries.title, newSeries.description, this.getStringFromDate(newSeries.date), interval.start, interval.end, this.currentMediaType]
-                        );
-                        const mediaId: number | null = result ? Number(result.insertId) || null : null;
-                        if (mediaId) {
-                            let message: string = 'La série a été enregistrée \n';
-                            const formatedTitle: string = this.formatPathService.formatPath(newSeries.title);
-                            const messageCategory: string = await this.insertManyMediaCategory(mediaId, newSeries.categories, conn);
-                            const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newSeries.otherTitles, conn);
-                            const messageCredit: string = await this.creditService.insertManyCredits(mediaId, newSeries.credits, conn);
-                            const messageKeyWord: string = await this.insertKeyword(mediaId, newSeries.keyWords, conn);
-                            const messagePoster: string = await this.posterService.insertManyPosterByMedia(newSeries, this.currentMediaType, formatedTitle, mediaId, conn);
-                            const messageSeason: string = await this.insertManySeasons(newSeries.seasons, mediaId, formatedTitle, newSeries.mediaLibraryId, conn);
+            const conn = await this.pool.getConnection();
+            try {
+                await conn.beginTransaction();
+                const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(newSeries.startShow, newSeries.endShow);
+                const query: string = `
+                        INSERT INTO Media 
+                        (title, description, date, startShow, endShow, mediaType)
+                        VALUES (?, ?, ?, ?, ?, ?);`;
+                const result: any = await conn.query(query,
+                    [newSeries.title, newSeries.description, this.getStringFromDate(newSeries.date), interval.start, interval.end, this.currentMediaType]
+                );
+                const mediaId: number | null = result ? Number(result.insertId) || null : null;
+                if (mediaId) {
+                    let message: string = 'La série a été enregistrée \n';
+                    const formatedPath: string = mediaId.toString();
+                    const messageCategory: string = await this.insertManyMediaCategory(mediaId, newSeries.categories, conn);
+                    const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newSeries.otherTitles, conn);
+                    const messageCredit: string = await this.creditService.insertManyCredits(mediaId, newSeries.credits, conn);
+                    const messageKeyWord: string = await this.insertKeyword(mediaId, newSeries.keyWords, conn);
+                    const messagePoster: string = await this.posterService.insertManyPosterByMedia(newSeries, this.currentMediaType, formatedPath, mediaId, conn);
+                    const messageSeason: string = await this.insertManySeasons(newSeries.seasons, mediaId, formatedPath, newSeries.mediaLibraryId, conn);
 
-                            let messageSimilarTitle: string = `Titre similaire ajouté (0)`;
-                            if (insertSimilarTitle) {
-                                messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(mediaId, conn);
-                            }
-
-                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeason} \n ${messageSimilarTitle}`;
-                            messageReturned = {
-                                id: 0,
-                                state: true,
-                                message: message,
-                                other: { id: mediaId }
-                            }
-                            await conn.commit();
-                        } else {
-                            messageReturned = {
-                                id: -1,
-                                state: false,
-                                message: "Erreur : Echec de l'enregistrement de la série."
-                            }
-                        }
-                    } else {
-                        messageReturned = {
-                            id: -1,
-                            state: false,
-                            message: 'Erreur : Une série possède déjà ce titre. Doublon impossible.'
-                        }
+                    let messageSimilarTitle: string = `Titre similaire ajouté (0)`;
+                    if (insertSimilarTitle) {
+                        messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(mediaId, conn);
                     }
-                } catch (error: any) {
-                    await conn.rollback();
-                    return messageReturned = {
+
+                    message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeason} \n ${messageSimilarTitle}`;
+                    messageReturned = {
+                        id: 0,
+                        state: true,
+                        message: message,
+                        other: { id: mediaId }
+                    }
+                    await conn.commit();
+                } else {
+                    messageReturned = {
                         id: -1,
                         state: false,
-                        message: error.sqlMessage
+                        message: "Erreur : Echec de l'enregistrement de la série."
                     }
-                } finally {
-                    await conn.release();
                 }
-            } else {
-                messageReturned = {
+            } catch (error: any) {
+                await conn.rollback();
+                return messageReturned = {
                     id: -1,
                     state: false,
-                    message: 'Erreur : le fichier est introuvable'
+                    message: error.sqlMessage
                 }
+            } finally {
+                await conn.release();
             }
         } else {
             messageReturned = {
@@ -597,51 +581,31 @@ export class SeriesService extends MediaService {
                 await conn.beginTransaction();
                 const oldSeries: Series = await this.getSeriesById(updateSeries.id);
                 if (oldSeries && oldSeries.id) {
-                    if (true) {
-                        if (!(await this.getIfMediaExistByTitleType(updateSeries.title, updateSeries.id, conn))) {
-                            const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(updateSeries.startShow, updateSeries.endShow);
-                            const query: string = `
-                                        UPDATE Media
-                                        SET title = ?, description = ?, date = ?, startShow = ?, endShow = ?
-                                        WHERE id = ?`;
-                            await conn.query(query,
-                                [updateSeries.title.trim(), updateSeries.description, this.getStringFromDate(updateSeries.date), interval.start, interval.end, updateSeries.id]
-                            );
-                            let message: string = 'La série a été modifié \n';
-                            const oldFormatedTitle: string = this.formatPathService.formatPath(oldSeries.title);
-                            const newFormatedTitle: string = this.formatPathService.formatPath(updateSeries.title);
-                            const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateSeries.id, updateSeries.categories, conn);
-                            const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateSeries.id, updateSeries.otherTitles, conn);
-                            const messageCredit: string = await this.creditService.deleteAndUpdateMediaCredit(updateSeries.id, updateSeries.credits, conn);
-                            const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateSeries.id, updateSeries.keyWords, conn);
-                            const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateSeries, oldSeries, this.currentMediaType, oldFormatedTitle, conn);
-                            const messageSeasons: string = await this.insertUpdateOrDeleteSeasons(updateSeries.seasons, oldSeries.seasons, updateSeries.id, oldFormatedTitle, updateSeries.mediaLibraryId, conn);
+                    const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(updateSeries.startShow, updateSeries.endShow);
+                    const query: string = `
+                            UPDATE Media
+                            SET title = ?, description = ?, date = ?, startShow = ?, endShow = ?
+                            WHERE id = ?`;
+                    await conn.query(query,
+                        [updateSeries.title.trim(), updateSeries.description, this.getStringFromDate(updateSeries.date), interval.start, interval.end, updateSeries.id]
+                    );
+                    let message: string = 'La série a été modifié \n';
+                    const formatedPath: string = oldSeries.id.toString();
+                    const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateSeries.id, updateSeries.categories, conn);
+                    const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateSeries.id, updateSeries.otherTitles, conn);
+                    const messageCredit: string = await this.creditService.deleteAndUpdateMediaCredit(updateSeries.id, updateSeries.credits, conn);
+                    const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateSeries.id, updateSeries.keyWords, conn);
+                    const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateSeries, oldSeries, this.currentMediaType, formatedPath, conn);
+                    const messageSeasons: string = await this.insertUpdateOrDeleteSeasons(updateSeries.seasons, oldSeries.seasons, updateSeries.id, formatedPath, updateSeries.mediaLibraryId, conn);
 
-                            if (oldFormatedTitle !== newFormatedTitle) {
-                                await this.uploadImageService.renameFileOrdirectoryToMediaType(oldFormatedTitle, newFormatedTitle, this.currentMediaType);
-                            }
-                            message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeasons}`;
-                            messageReturned = {
-                                id: 0,
-                                state: true,
-                                message: message,
-                                other: { id: oldSeries.id }
-                            }
-                            await conn.commit();
-                        } else {
-                            messageReturned = {
-                                id: -1,
-                                state: false,
-                                message: 'Erreur : Une série possède déjà ce titre. Doublon impossible.'
-                            }
-                        }
-                    } else {
-                        messageReturned = {
-                            id: -1,
-                            state: false,
-                            message: 'Erreur : Le fichier est introuvable'
-                        }
+                    message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeasons}`;
+                    messageReturned = {
+                        id: 0,
+                        state: true,
+                        message: message,
+                        other: { id: oldSeries.id }
                     }
+                    await conn.commit();
                 } else {
                     messageReturned = {
                         id: -1,

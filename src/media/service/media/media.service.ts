@@ -351,22 +351,6 @@ export class MediaService {
         }
     }
 
-    protected async getIfMediaExistByTitleType(title: string, id: number, conn: mariadb.PoolConnection): Promise<boolean> {
-        try {
-            const formatedTitle: string = this.formatPathService.formatPath(title);
-            const query = `SELECT title from Media WHERE id != ? AND mediaType = ?;`
-            const result: any[] = await conn.query(query, [id, this.currentMediaType]);
-            const medias: any[] = result.filter((item) => this.formatPathService.formatPath(item.title) === formatedTitle);
-            if (medias.length > 0) {
-                return true;
-            } else {
-                return false;
-            }
-        } catch (error) {
-            throw error;
-        }
-    }
-
     protected async getMediaByResearch(keyWord: string, conn: mariadb.PoolConnection): Promise<number[]> {
         try {
             const query: string = `SELECT id, title FROM Media WHERE mediaType = ?`
@@ -379,7 +363,7 @@ export class MediaService {
 
     protected async deleteMediasById(mediaId: number, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
         try {
-            const [title, mediaType, posterId] = await this.getAllPosterIdLinkedToMedia(mediaId, conn);
+            const [mediaType, posterId] = await this.getAllPosterIdLinkedToMedia(mediaId, conn);
             const resulMediaStatUser = await conn.query(`DELETE su FROM Stat_User su WHERE su.movieId = ?
                                                         OR su.episodeId IN (
                                                             SELECT e.id
@@ -404,7 +388,7 @@ export class MediaService {
 
             const resulMediaUserList = await conn.query(`DELETE FROM User_Media_List WHERE mediaId = ?`, [mediaId]);
 
-            const resultPoster = await this.posterService.deteleAllPostersLinkedToMedia(mediaId, posterId, this.formatPathService.formatPath(title), mediaType, conn);
+            const resultPoster = await this.posterService.deteleAllPostersLinkedToMedia(mediaId, posterId, mediaId.toString(), mediaType, conn);
             await conn.query(`DELETE FROM Media WHERE id = ?`, [mediaId]);
             const message: string = `${this.currentMediaType} supprimé \n Traduction de titre (${resultTranslationTitle.affectedRows}) \n Acteurs/Réalisateur (${resultMediaSatff.affectedRows}) \n Categories (${resultMediaCategory.affectedRows}) \n Mots clés (${resultKeyword.affectedRows})
             \n Selection Media (${resultSelectionMedia.affectedRows}) \n License Media (${resultLicenseMedia.affectedRows}) \n News (${resultNews.affectedRows}) \n News Video Running (${resultNewsVideoRunning.affectedRows})
@@ -420,10 +404,11 @@ export class MediaService {
         }
     }
 
-    private async getAllPosterIdLinkedToMedia(mediaId: number, conn: mariadb.PoolConnection): Promise<[string, MediaType, number[]]> {
+    private async getAllPosterIdLinkedToMedia(mediaId: number, conn: mariadb.PoolConnection): Promise<[MediaType, number[]]> {
         try {
             const querySelectAllPosterId: string = `
-                SELECT m.title, 
+                SELECT m.id,
+                    m.title, 
                     m.mediaType, 
                     m.srcLogo, 
                     m.srcBackground, 
@@ -443,7 +428,7 @@ export class MediaService {
             if (series.poster) posterIds.push(...series.poster.split(';').map((item) => Number(item)));
             if (series.posterSeason) posterIds.push(...series.posterSeason.split(';').map((item) => Number(item)));
             if (series.posterEpisode) posterIds.push(...series.posterEpisode.split(';').map((item) => Number(item)));
-            return [series.title, series.mediaType, posterIds];
+            return [series.mediaType, posterIds];
         } catch (error) {
             throw error;
         }

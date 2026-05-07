@@ -410,17 +410,17 @@ export class MediaSubstitutionSerivce {
       const infos: MediaInfo = result[0].media;
       infos.casts?.forEach((cast: MediaCredit) => {
         cast.srcPoster =
-          this.formatPathService.getOneFormatedPosterUrlFromCredit(
+          this.formatPathService.getOneFormatedPosterUrl(
             cast.id,
-            cast.fullName,
+            MediaType.CREDIT,
             cast.srcPoster,
           );
       });
       infos.crews?.forEach((crew: MediaCredit) => {
         crew.srcPoster =
-          this.formatPathService.getOneFormatedPosterUrlFromCredit(
+          this.formatPathService.getOneFormatedPosterUrl(
             crew.id,
-            crew.fullName,
+            MediaType.CREDIT,
             crew.srcPoster,
           );
       });

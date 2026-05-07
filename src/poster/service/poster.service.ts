@@ -514,8 +514,8 @@ export class PosterService {
             if (resultSelect[0].srcIcon) posterIds.push(Number(resultSelect[0].srcIcon));
             if (resultSelect[0].srcLogo) posterIds.push(Number(resultSelect[0].srcLogo));
             if (resultSelect[0].srcBackground) posterIds.push(Number(resultSelect[0].srcBackground));
-            const formatedTitle: string = this.formatPathService.formatPath(resultSelect[0].name);
-            await this.uploadImageService.deleteFileOrDirectoryToLicense(formatedTitle);
+            const formatedPath: string = licenseId.toString();
+            await this.uploadImageService.deleteFileOrDirectoryToLicense(formatedPath);
             if (posterIds.length > 0) {
                 const queryDeletePoster: string = `DELETE FROM Poster WHERE id IN (${posterIds.map(() => '?').join(', ')})`;
                 const resultDeletePoster = await conn.query(queryDeletePoster, posterIds);

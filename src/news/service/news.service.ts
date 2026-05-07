@@ -38,7 +38,7 @@ export class NewsService {
 
     private getFormatedNews(news: any): News {
         const formatedNews: News = news.news ? news.news : news;
-        formatedNews.srcBackground = this.formatPathService.getOneFormatedPosterUrl(formatedNews.media.title, formatedNews.media.mediaType, formatedNews.srcBackground);
+        formatedNews.srcBackground = this.formatPathService.getOneFormatedPosterUrl(formatedNews.media.id, formatedNews.media.mediaType, formatedNews.srcBackground);
         if (formatedNews.media.mediaType === MediaType.MOVIE) {
             formatedNews.media = this.movieService.getFormatedMovie(formatedNews.media);
         } else if (formatedNews.media.mediaType === MediaType.SERIES) {
@@ -89,7 +89,7 @@ export class NewsService {
                     message: `Aucune News n'a été insérée`
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             await conn.rollback();
             return {
                 id: -1,

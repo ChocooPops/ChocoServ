@@ -54,7 +54,7 @@ export class CreditService {
                 OR c.originalFullName like '%${keyWord}%'
                 LIMIT 50`);
             credits.forEach((credit: Credit) => {
-                credit.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(credit.id, credit.fullName, credit.srcPoster as string);
+                credit.srcPoster = this.formatPathService.getOneFormatedPosterUrl(credit.id, MediaType.CREDIT, credit.srcPoster as string);
             });
             return credits;
         } catch(error) {
@@ -74,7 +74,7 @@ export class CreditService {
                 LEFT JOIN Poster p ON p.id = c.srcPoster 
                 WHERE c.id = ?`, [creditId]);
             const credit: Credit = credits[0];
-            credit.srcPoster = this.formatPathService.getOneFormatedPosterUrlFromCredit(credit.id, credit.fullName, credit.srcPoster as string);
+            credit.srcPoster = this.formatPathService.getOneFormatedPosterUrl(credit.id, MediaType.CREDIT, credit.srcPoster as string);
             return credit;
         } catch(error) {
             return null;
@@ -263,9 +263,9 @@ export class CreditService {
                 try {
                     const creditId: number = existingMap.get(newCredit.tmdbId);
                     if (creditId) {
-                        const formatedTitle: string = `${creditId}-${this.formatPathService.formatPath(newCredit.fullName)}`
+                        const formatedPath: string = creditId.toString();
                         const poster: any = await this.tmdbService.getEntirelyUrlImagesFromTMDB(newCredit.srcPoster);
-                        await this.posterService.insertPosterCredit(poster, creditId, formatedTitle, conn);
+                        await this.posterService.insertPosterCredit(poster, creditId, formatedPath, conn);
                     }
                 } catch(error) {
                     
@@ -344,8 +344,8 @@ export class CreditService {
                     [newCredit.tmdbId, fullName, newCredit.originalFullName?.trim()]);
                     const creditId: number | null = insertCredit ? Number(insertCredit.insertId) : null;
                     if (creditId) {
-                        const formatedTitle: string = `${creditId}-${this.formatPathService.formatPath(fullName)}`;
-                        const messagePoster: string = await this.posterService.insertPosterCredit(newCredit.srcPoster, creditId, formatedTitle, conn);
+                        const formatedPath: string = creditId.toString();
+                        const messagePoster: string = await this.posterService.insertPosterCredit(newCredit.srcPoster, creditId, formatedPath, conn);
                         await conn.commit();
                         return {
                             id: 0,
@@ -402,14 +402,10 @@ export class CreditService {
                             WHERE id = ?`,
                         [updateCredit.tmdbId, updateCredit.fullName, updateCredit.originalFullName, updateCredit.id]);
                         
-                        const oldFormatedTitle: string = `${oldCredit.id}-${this.formatPathService.formatPath(oldCredit.fullName)}`;
-                        const newFormatedTitle: string = `${updateCredit.id}-${this.formatPathService.formatPath(newFullName)}`;
+                        const formatedPath: string = oldCredit.id.toString();
 
-                        const messagePoster: string = await this.posterService.modifyOrDeletePosterFromCredit(updateCredit.id, updateCredit.srcPoster, oldCredit.srcPoster as string, oldFormatedTitle, conn);
+                        const messagePoster: string = await this.posterService.modifyOrDeletePosterFromCredit(updateCredit.id, updateCredit.srcPoster, oldCredit.srcPoster as string, formatedPath, conn);
                         
-                        if (oldFormatedTitle !== newFormatedTitle) {
-                            await this.uploadImageService.renameFileOrDirectorToCredit(oldFormatedTitle, newFormatedTitle);
-                        }
                         await conn.commit();
                         return {
                             id: 0,
@@ -456,11 +452,11 @@ export class CreditService {
             await conn.beginTransaction();
             const credits: Credit[] = await conn.query(`SELECT id, fullName, srcPoster FROM Credit WHERE id = ?`, [creditId]);
             if (credits.length > 0) {
-                const formatedTitle: string = this.formatPathService.getFormatedTitleForCredit(credits[0].id, credits[0].fullName);
+                const formatedPath: string = creditId.toString();
                 const mediaCredits = await conn.query(`DELETE FROM Media_Credit WHERE creditId = ?`, [creditId]);
                 const poster = await conn.query(`DELETE FROM Poster WHERE id = ?`, [credits[0].srcPoster]);
                 const credit = await conn.query(`DELETE FROM Credit WHERE id = ?`, [creditId]);
-                await this.uploadImageService.deleteFileOrDirectoryToCredit(formatedTitle);
+                await this.uploadImageService.deleteFileOrDirectoryToCredit(formatedPath);
                 await conn.commit();
                 return {
                     id: 0,
