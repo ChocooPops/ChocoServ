@@ -86,8 +86,10 @@ export class LibraryService {
     public async getAllMediaLibraryByLibraryId(libraryId: string): Promise<MediaLibrary[]> {
         const conn = await this.pool.getConnection();
         try {
-            const query: string = `SELECT * FROM Media_Library WHERE libraryId = ? ORDER BY updatedAt desc`;
-            const mediaLibraries: MediaLibrary[] = await conn.query(query, [libraryId]);
+            const query: string = `SELECT ml.* FROM Media_Library ml
+                INNER JOIN Library l ON l.id = ml.libraryId AND l.state = ?
+                WHERE libraryId = ? ORDER BY updatedAt desc`;
+            const mediaLibraries: MediaLibrary[] = await conn.query(query, [StateLibrary.NOT_WORKED, libraryId]);
             return mediaLibraries;
         } catch(error) {
             return [];
