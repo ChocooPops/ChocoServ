@@ -17,7 +17,6 @@ interface MediaRow {
   description: string | null;
   date: string;
   mediaType: MediaType;
-  quality: string | null;
   productionYear: number;
   categoryIds: string | null;
   actorIds: string | null;
@@ -120,7 +119,6 @@ export class SimilarTitleService {
                 m.description,
                 m.date,
                 m.mediaType,
-                m.quality,
                 YEAR(m.date) AS productionYear,
                 GROUP_CONCAT(DISTINCT mc.categoryId ORDER BY mc.categoryId SEPARATOR ',')                   AS categoryIds,
                 GROUP_CONCAT(DISTINCT CASE WHEN mcr.job = '${Job.ACTOR}'    THEN mcr.creditId END SEPARATOR ',')       AS actorIds,
@@ -177,7 +175,7 @@ export class SimilarTitleService {
             const rows = await this.getMediaFormated(conn);
             const medias: Media[] = await conn.query(`SELECT id FROM MEDIA;`);
             for (const media of medias) {
-                await this.saveSimilarTitlesForMediaByIdWithJellyfinDataBase(media.id, conn, rows.medias, rows.translations);
+                await this.saveSimilarTitlesForMediaById(media.id, conn, rows.medias, rows.translations);
             }
             const results: SimilarTitle[] = await conn.query(`Select id, sourceId, targetId, rate FROM Similar_Title`);
             results.forEach((result: SimilarTitle, index) => {
@@ -196,7 +194,7 @@ export class SimilarTitleService {
         }
     }
 
-    public async saveSimilarTitlesForMediaByIdWithJellyfinDataBase(mediaId: number, conn: mariadb.PoolConnection, medias?: MediaRow[], translations?: TranslationRow[]): Promise<any> {
+    public async saveSimilarTitlesForMediaById(mediaId: number, conn: mariadb.PoolConnection, medias?: MediaRow[], translations?: TranslationRow[]): Promise<any> {
         try {
             if (!medias || !translations) {
                 const rows = await this.getMediaFormated(conn);

@@ -22,11 +22,13 @@ export class AuthController {
     async createNewUserNotActivate(@Body() newUser: RegisterUser): Promise<ReturnMessage> {
         return await this.authService.sendVerificationCode(newUser);
     }
+
     @Public()
     @Post('register')
     async SendVerificationCode(@Body('verificationCode') code: number, @Body('email') email: string): Promise<ReturnMessage> {
         return await this.authService.saveNewUserNotActivate(code, email);
     }
+    
     @Public()
     @Post('resend-verification-code')
     async createNewCodeCodeByEmail(@Body('email') email: string): Promise<ReturnMessage> {

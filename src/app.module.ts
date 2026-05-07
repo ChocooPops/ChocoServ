@@ -1,6 +1,4 @@
 import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { APP_GUARD } from '@nestjs/core';
 import { HttpModule } from '@nestjs/axios';
 import { JwtAuthGuard } from './guard/jwt-auth.guard';
@@ -9,6 +7,14 @@ import { MailService } from './common-service/mail.service';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { jwtConstants } from './auth/constant';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { LoggerMiddleware } from './common-middleware/logger-middle-ware';
+import { LoggerService } from './common-service/logger.service';
+
+import { I18nModule, HeaderResolver, QueryResolver, AcceptLanguageResolver } from 'nestjs-i18n';
+import * as path from 'path';
+
+// modules (inchangés)
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { MediaModule } from './media/media.module';
@@ -21,31 +27,40 @@ import { NewsVideoRunningModule } from './news-video-running/news-video-running.
 import { CategoryModule } from './category/category.module';
 import { ProfilPhotoModule } from './profil-photo/profil-photo.module';
 import { PosterModule } from './poster/poster.module';
-import { JellyfinModule } from './jellyfin/jellyfin.module';
 import { TmdbModule } from './tmdb/tmdb.module';
 import { SupportModule } from './support/support.module';
 import { SimilarTitleModule } from './similar-title/similar-title.module';
 import { StreamModule } from './stream/stream.module';
 import { StatUserModule } from './stat-user/stat-user.module';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { DocumentationModule } from './documentation/documentation.module';
-import { LoggerMiddleware } from './common-middleware/logger-middle-ware';
-import { LoggerService } from './common-service/logger.service';
 import { CreditModule } from './credit/credit.module';
 import { VersionModule } from './version/version.module';
+import { LibraryModule } from './library/library.module';
 
 @Module({
   imports: [
+    // 🔥 I18N AJOUT
+    I18nModule.forRoot({
+      fallbackLanguage: 'en',
+      loaderOptions: {
+        path: path.join(__dirname, '/i18n/'),
+        watch: true,
+      },
+      resolvers: [AcceptLanguageResolver], // lit le header Accept-Language
+    }),
+
     ThrottlerModule.forRoot([
       {
         name: 'default',
-        ttl: 60_000, // fenêtre de 60 secondes
-        limit: 50,  // max 50 requêtes par IP
+        ttl: 60_000,
+        limit: 50,
       }
     ]),
+
     HttpModule,
     ConfigModule.forRoot({ isGlobal: true }),
     PassportModule,
+
     JwtModule.registerAsync({
       global: true,
       imports: [ConfigModule],
@@ -58,6 +73,8 @@ import { VersionModule } from './version/version.module';
       },
       inject: [ConfigService],
     }),
+
+    // modules existants
     UserModule,
     AuthModule,
     MediaModule,
@@ -70,7 +87,6 @@ import { VersionModule } from './version/version.module';
     CategoryModule,
     ProfilPhotoModule,
     PosterModule,
-    JellyfinModule,
     TmdbModule,
     SupportModule,
     SimilarTitleModule,
@@ -78,13 +94,14 @@ import { VersionModule } from './version/version.module';
     StatUserModule,
     DocumentationModule,
     CreditModule,
-    VersionModule
+    VersionModule,
+    LibraryModule
   ],
-  controllers: [AppController],
+
   providers: [
     MailService,
-    AppService,
     LoggerService,
+
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
@@ -96,11 +113,9 @@ import { VersionModule } from './version/version.module';
   ],
 })
 export class AppModule {
-
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(LoggerMiddleware)
       .forRoutes({ path: '*', method: RequestMethod.ALL });
   }
-
 }

@@ -1,7 +1,7 @@
 export interface EditEpisode {
     id: number,
     seasonId: number,
-    jellyfinId: string | undefined
+    mediaLibraryId: string | undefined
     name: string | undefined,
     episodeNumber: number,
     description: string | undefined,

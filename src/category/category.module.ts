@@ -7,7 +7,7 @@ import { MediaModule } from 'src/media/media.module';
 import { UserModule } from 'src/user/user.module';
 
 @Module({
-  imports: [forwardRef(() => UserModule), MediaModule, forwardRef(() => MovieModule), forwardRef(() => SeriesModule)],
+  imports: [forwardRef(() => UserModule), forwardRef(() => MediaModule), forwardRef(() => MovieModule), forwardRef(() => SeriesModule)],
   providers: [CategoryService],
   controllers: [CategoryController],
   exports: [CategoryService]

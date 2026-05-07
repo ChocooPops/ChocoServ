@@ -4,9 +4,9 @@ import { TranslationTitle } from "./translation-title.interface";
 import { MediaCredit } from "src/credit/dto/media-credit.interface";
 
 export interface EditMedia {
-    id: number;
+    id: number,
     title: string,
-    jellyfinId: string,
+    mediaLibraryId: string,
     otherTitles: TranslationTitle[],
     credits: MediaCredit[],
     categories: CategorySimple[],

@@ -58,8 +58,6 @@ export class MediaService {
                 'title', m.title,
                 'description', m.description,
                 'date', m.date,
-                'time', m.time,
-                'quality', m.quality,
                 'startShow', m.startShow,
                 'endShow', m.endShow,
 
@@ -67,6 +65,10 @@ export class MediaService {
 
                 'srcLogo', pl.name,
                 'srcBackgroundImage', pb.name,
+
+                'mediaLibraryId', mlib.id,
+                'duration', mlib.duration,
+                'resolution', mlib.resolution,
 
                 'srcPoster', JSON_OBJECT(
                     'normal', posters.normal,
@@ -120,6 +122,7 @@ export class MediaService {
                 GROUP BY mediaId
             ) kw ON kw.mediaId = m.id
 
+            LEFT JOIN Media_Library mlib ON m.mediaLibraryId = mlib.id
             LEFT JOIN poster pl ON pl.id = m.srcLogo
             LEFT JOIN poster pb ON pb.id = m.srcBackground
 
@@ -142,7 +145,6 @@ export class MediaService {
                         JSON_OBJECT(
                             'id', s.id,
                             'seriesId', s.seriesId,
-                            'jellyfinId', s.jellyfinId,
                             'name', s.name,
                             'seasonNumber', s.seasonNumber,
                             'srcPoster', sp.name

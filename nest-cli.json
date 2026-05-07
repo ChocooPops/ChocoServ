@@ -6,6 +6,10 @@
     "assets": [
       {
         "include": "templates/**/*"
+      },
+      {
+        "include": "i18n/**/*",
+        "outDir": "dist/i18n"
       }
     ],
     "watchAssets": true,

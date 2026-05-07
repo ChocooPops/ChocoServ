@@ -3,7 +3,6 @@ import { Series } from '../dto/series.interface';
 import { Episode } from '../dto/episode.interface';
 import { EditSeries } from '../dto/edit-series.interface';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
-import { JellyfinService } from 'src/jellyfin/service/jellyfin.service';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { SearchService } from 'src/common-service/search.service';
 import { VerifTimerShowService } from 'src/common-service/verif-timer-show.service';
@@ -35,8 +34,6 @@ export class SeriesService extends MediaService {
         verifTimerShowService: VerifTimerShowService,
         formatPathService: FormatPathService,
         posterService: PosterService,
-        @Inject(forwardRef(() => JellyfinService))
-        private readonly jellyfinService: JellyfinService,
         @Inject(forwardRef(() => SimilarTitleService))
         private readonly similarTitleService: SimilarTitleService,
         private readonly statUserService: StatUserService,        
@@ -122,11 +119,8 @@ export class SeriesService extends MediaService {
                 JSON_OBJECT(
                     'id', m.id,
                     'title', m.title,
-                    'jellyfinId', m.jellyfinId,
                     'description', m.description,
                     'date', m.date,
-                    'time', m.time,
-                    'quality', m.quality,
                     'startShow', m.startShow,
                     'endShow', m.endShow,
 
@@ -171,7 +165,6 @@ export class SeriesService extends MediaService {
                             JSON_OBJECT(
                                 'id', s.id,
                                 'seriesId', s.seriesId,
-                                'jellyfinId', s.jellyfinId,
                                 'name', s.name,
                                 'seasonNumber', s.seasonNumber,
                                 'srcPoster', sp.name
@@ -249,7 +242,7 @@ export class SeriesService extends MediaService {
                 LIMIT 1;`
             const result: Episode[] = await this.pool.query(query, [seriesId]);
             if (result.length > 0 && result[0]) {
-                result[0].time = Number(result[0].time);
+                result[0].duration = Number(result[0].duration);
             } else {
                 return null;
             }
@@ -385,13 +378,10 @@ export class SeriesService extends MediaService {
                     e.id, 
                     e.seriesId,
                     e.seasonId,
-                    e.jellyfinId, 
                     e.name, 
                     e.episodeNumber,
                     e.description,
                     e.date,
-                    e.time,
-                    e.quality,
                     p.name AS srcPoster,
                     su.watchProgress,
                     su.state as stateProgress
@@ -407,13 +397,13 @@ export class SeriesService extends MediaService {
                 episodes.push({
                     id: Number(result.id),
                     seasonId: Number(result.seasonId),
-                    jellyfinId: result.jellyfinId,
+                    mediaLibraryId: result.mediaLibraryId,
                     name: result.name,
                     episodeNumber: Number(result.episodeNumber),
                     description: result.description,
                     date: result.date,
-                    time: Number(result.time),
-                    quality: result.quality,
+                    duration: Number(result.time),
+                    resolution: result.quality,
                     srcPoster: this.formatPathService.getOneFormatedPosterUrl(result.title, MediaType.SERIES, result.srcPoster),
                     watchProgress : result.watchProgress ?? 0,
                     stateProgress: result.stateProgress ?? StatState.NOT_WATCHED
@@ -443,8 +433,7 @@ export class SeriesService extends MediaService {
     public async insertNewSeries(newSeries: EditSeries, insertSimilarTitle: boolean): Promise<ReturnMessage> {
         let messageReturned !: ReturnMessage;
         if (newSeries.title && newSeries.title.trim() !== '') {
-            const jellyfinItem: any = await this.jellyfinService.getItemJellyFinByIdForSeries(newSeries.jellyfinId);
-            if (jellyfinItem) {
+            if (true) {
                 const conn = await this.pool.getConnection();
                 try {
                     await conn.beginTransaction();
@@ -452,10 +441,10 @@ export class SeriesService extends MediaService {
                         const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(newSeries.startShow, newSeries.endShow);
                         const query: string = `
                                     INSERT INTO Media 
-                                    (title, jellyfinId, description, date, startShow, endShow, mediaType)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?);`;
+                                    (title, description, date, startShow, endShow, mediaType)
+                                    VALUES (?, ?, ?, ?, ?, ?);`;
                         const result: any = await conn.query(query,
-                            [newSeries.title, newSeries.jellyfinId, newSeries.description, this.getStringFromDate(newSeries.date), interval.start, interval.end, this.currentMediaType]
+                            [newSeries.title, newSeries.description, this.getStringFromDate(newSeries.date), interval.start, interval.end, this.currentMediaType]
                         );
                         const mediaId: number | null = result ? Number(result.insertId) || null : null;
                         if (mediaId) {
@@ -466,11 +455,11 @@ export class SeriesService extends MediaService {
                             const messageCredit: string = await this.creditService.insertManyCredits(mediaId, newSeries.credits, conn);
                             const messageKeyWord: string = await this.insertKeyword(mediaId, newSeries.keyWords, conn);
                             const messagePoster: string = await this.posterService.insertManyPosterByMedia(newSeries, this.currentMediaType, formatedTitle, mediaId, conn);
-                            const messageSeason: string = await this.insertManySeasons(newSeries.seasons, mediaId, formatedTitle, newSeries.jellyfinId, conn);
+                            const messageSeason: string = await this.insertManySeasons(newSeries.seasons, mediaId, formatedTitle, newSeries.mediaLibraryId, conn);
 
                             let messageSimilarTitle: string = `Titre similaire ajouté (0)`;
                             if (insertSimilarTitle) {
-                                messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaByIdWithJellyfinDataBase(mediaId, conn);
+                                messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(mediaId, conn);
                             }
 
                             message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeason} \n ${messageSimilarTitle}`;
@@ -522,23 +511,23 @@ export class SeriesService extends MediaService {
         return messageReturned;
     }
 
-    private async insertManySeasons(seasons: EditSeason[], seriesId: number, formatedTitle: string, jellyfinId: string, conn: mariadb.PoolConnection): Promise<string> {
+    private async insertManySeasons(seasons: EditSeason[], seriesId: number, formatedTitle: string, mediaLibraryId: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             if (seasons.length > 0) {
                 let message !: string;
                 const values: any[] = [];
                 seasons.forEach((season: EditSeason) => {
-                    values.push(seriesId, season.name?.trim() ?? null, season.jellyfinId, season.seasonNumber);
+                    values.push(seriesId, season.name?.trim() ?? null, season.mediaLibraryId, season.seasonNumber);
                 });
-                const query = `INSERT INTO Season (seriesId, name, jellyfinId, seasonNumber)
-                VALUES ${seasons.map(() => '(?, ?, ?, ?)').join(', ')}`;
+                const query = `INSERT INTO Season (seriesId, name, seasonNumber)
+                VALUES ${seasons.map(() => '(?, ?, ?)').join(', ')}`;
                 const result = await conn.query(query, values);
                 const startIdNumber = Number(result.insertId);
                 const count = Number(result.affectedRows);
                 const insertedIds: number[] = Array.from({ length: count }, (_, i) => startIdNumber + i);
                 message = await this.posterService.insertManySeasonPoster(insertedIds, seasons, formatedTitle, conn);
                 for (const [index, id] of insertedIds.entries()) {
-                    message += await this.insertManyEpisodes(seasons[index].episodes, seriesId, id, formatedTitle, jellyfinId, conn) + '\n ';
+                    message += await this.insertManyEpisodes(seasons[index].episodes, seriesId, id, formatedTitle, mediaLibraryId, conn) + '\n ';
                 }
                 return message;
             } else {
@@ -553,15 +542,14 @@ export class SeriesService extends MediaService {
         try {
             if (episodes.length > 0) {
                 const values: any[] = [];
-                const episodesJellyfin: any[] = await this.jellyfinService.getAllEpisodesByJellyfinIdSeries(jellyfinId);
                 for (const episode of episodes) {
-                    const streamInfo = await this.jellyfinService.getStreamVideoByItemId(episode.jellyfinId);
-                    let inputPath: string = streamInfo?.MediaSources[0]?.Path ?? null;
-                    values.push(seriesId, seasonId, episode.jellyfinId, episode.name?.trim() ?? null, episode.episodeNumber, episode.description, this.getStringFromDate(episode.date));
-                    const item: any = episodesJellyfin.find(item => item.Id === episode.jellyfinId);
-                    values.push(item ? item.RunTimeTicks || 0 : 0);
-                    values.push(item ? this.getQualityEpisode(item?.MediaStreams.find((item: any) => item.Type === "Video")?.Width) : 'any quality');
-                    values.push(inputPath)
+                    // const streamInfo = await this.jellyfinService.getStreamVideoByItemId(episode.jellyfinId);
+                    // let inputPath: string = streamInfo?.MediaSources[0]?.Path ?? null;
+                    // values.push(seriesId, seasonId, episode.jellyfinId, episode.name?.trim() ?? null, episode.episodeNumber, episode.description, this.getStringFromDate(episode.date));
+                    // const item: any = episodesJellyfin.find(item => item.Id === episode.jellyfinId);
+                    // values.push(item ? item.RunTimeTicks || 0 : 0);
+                    // values.push(item ? this.getQualityEpisode(item?.MediaStreams.find((item: any) => item.Type === "Video")?.Width) : 'any quality');
+                    // values.push(inputPath)
                 }
 
                 const query = `INSERT INTO Episode (seriesId, seasonId, jellyfinId, name, episodeNumber, description, date, time, quality, path)
@@ -609,16 +597,15 @@ export class SeriesService extends MediaService {
                 await conn.beginTransaction();
                 const oldSeries: Series = await this.getSeriesById(updateSeries.id);
                 if (oldSeries && oldSeries.id) {
-                    const jellyfinItem: any = await this.jellyfinService.getItemJellyFinByIdForSeries(updateSeries.jellyfinId);
-                    if (jellyfinItem) {
+                    if (true) {
                         if (!(await this.getIfMediaExistByTitleType(updateSeries.title, updateSeries.id, conn))) {
                             const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(updateSeries.startShow, updateSeries.endShow);
                             const query: string = `
                                         UPDATE Media
-                                        SET title = ?, jellyfinId = ?, description = ?, date = ?, startShow = ?, endShow = ?
+                                        SET title = ?, description = ?, date = ?, startShow = ?, endShow = ?
                                         WHERE id = ?`;
                             await conn.query(query,
-                                [updateSeries.title.trim(), updateSeries.jellyfinId, updateSeries.description, this.getStringFromDate(updateSeries.date), interval.start, interval.end, updateSeries.id]
+                                [updateSeries.title.trim(), updateSeries.description, this.getStringFromDate(updateSeries.date), interval.start, interval.end, updateSeries.id]
                             );
                             let message: string = 'La série a été modifié \n';
                             const oldFormatedTitle: string = this.formatPathService.formatPath(oldSeries.title);
@@ -628,7 +615,7 @@ export class SeriesService extends MediaService {
                             const messageCredit: string = await this.creditService.deleteAndUpdateMediaCredit(updateSeries.id, updateSeries.credits, conn);
                             const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateSeries.id, updateSeries.keyWords, conn);
                             const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateSeries, oldSeries, this.currentMediaType, oldFormatedTitle, conn);
-                            const messageSeasons: string = await this.insertUpdateOrDeleteSeasons(updateSeries.seasons, oldSeries.seasons, updateSeries.id, oldFormatedTitle, updateSeries.jellyfinId, conn);
+                            const messageSeasons: string = await this.insertUpdateOrDeleteSeasons(updateSeries.seasons, oldSeries.seasons, updateSeries.id, oldFormatedTitle, updateSeries.mediaLibraryId, conn);
 
                             if (oldFormatedTitle !== newFormatedTitle) {
                                 await this.uploadImageService.renameFileOrdirectoryToMediaType(oldFormatedTitle, newFormatedTitle, this.currentMediaType);
@@ -698,7 +685,7 @@ export class SeriesService extends MediaService {
         }
     }
 
-    private async updateManySeasons(updateSeasons: EditSeason[], oldSeasons: Season[], seriesId: number, formatedTitle: string, jellyfinId: string, conn: mariadb.PoolConnection): Promise<string> {
+    private async updateManySeasons(updateSeasons: EditSeason[], oldSeasons: Season[], seriesId: number, formatedTitle: string, mediaLibraryId: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             let message: string = '';
             if (updateSeasons.length > 0) {
@@ -706,17 +693,17 @@ export class SeriesService extends MediaService {
                     const oldSeason: Season = oldSeasons.find((item) => item.id === updateSeason.id);
                     if (oldSeason) {
                         const querySeasonUpdate: string = `UPDATE Season
-                            SET name = ?, jellyfinId = ?, seasonNumber = ?
+                            SET name = ?, mediaLibraryId = ?, seasonNumber = ?
                             WHERE id = ?`;
-                        await conn.query(querySeasonUpdate, [updateSeason?.name.trim() ?? '', updateSeason.jellyfinId, updateSeason.seasonNumber, updateSeason.id]);
+                        await conn.query(querySeasonUpdate, [updateSeason?.name.trim() ?? '', updateSeason.mediaLibraryId, updateSeason.seasonNumber, updateSeason.id]);
                         await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(updateSeason.id, updateSeason.srcPoster, oldSeason.srcPoster, formatedTitle, 'Season', conn);
                         const episodeToDelete: Episode[] = oldSeason.episodes.filter((oldEpisode) => !updateSeason.episodes.some((updateEpisode) => updateEpisode.id === oldEpisode.id));
                         const episodeToUpdate: EditEpisode[] = updateSeason.episodes.filter((updateEpisode) => oldSeason.episodes.some((oldEpisode) => updateEpisode.id === oldEpisode.id));
                         const episodeToInsert: EditEpisode[] = updateSeason.episodes.filter((updateEpisode) => !oldSeason.episodes.some((oldEpisode) => oldEpisode.id === updateEpisode.id));
 
                         const messageDeleteEpisodes: string = await this.deleteManyEpisodes(episodeToDelete, formatedTitle, conn);
-                        const messageInsertEpisodes: string = await this.insertManyEpisodes(episodeToInsert, seriesId, updateSeason.id, formatedTitle, jellyfinId, conn);
-                        const messageUpdateEpisodes: string = await this.updateManyEpisodes(episodeToUpdate, oldSeason.episodes, updateSeason.id, formatedTitle, jellyfinId, conn);
+                        const messageInsertEpisodes: string = await this.insertManyEpisodes(episodeToInsert, seriesId, updateSeason.id, formatedTitle, mediaLibraryId, conn);
+                        const messageUpdateEpisodes: string = await this.updateManyEpisodes(episodeToUpdate, oldSeason.episodes, updateSeason.id, formatedTitle, mediaLibraryId, conn);
                         message += `Saison ${updateSeason.id} modifiée \n ${messageDeleteEpisodes} \n ${messageInsertEpisodes} \n ${messageUpdateEpisodes}`;
                     }
                 }
@@ -732,25 +719,25 @@ export class SeriesService extends MediaService {
         try {
             let message: string = '';
             if (updateEpisodes.length > 0) {
-                const episodesJellyfin: any[] = await this.jellyfinService.getAllEpisodesByJellyfinIdSeries(jellyfinId);
+                // const episodesJellyfin: any[] = await this.jellyfinService.getAllEpisodesByJellyfinIdSeries(jellyfinId);
                 for (const episode of updateEpisodes) {
-                    const oldEpisode: Episode = oldEpisodes.find((item) => item.id === episode.id);
-                    await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(episode.id, episode.srcPoster, oldEpisode?.srcPoster, formatedTitle, 'Episode', conn);
-                    const item: any = episodesJellyfin.find(item => item.Id === episode.jellyfinId);
-                    const time: number = item ? item.RunTimeTicks || 0 : 0;
-                    const quality: string = item ? this.getQualityEpisode(item?.MediaStreams.find((item: any) => item.Type === "Video")?.Width) : 'any quality';
-                    const query: string = `UPDATE Episode
-                        SET jellyfinId = ?, name = ?, episodeNumber = ?,
-                        description = ?, date = ?, time = ?, quality = ?
-                        WHERE id = ?;`;
-                    await conn.query(query, [episode.jellyfinId, episode?.name.trim() ?? '', episode.episodeNumber, episode.description, this.getStringFromDate(episode.date), time, quality, episode.id]);
+                    // const oldEpisode: Episode = oldEpisodes.find((item) => item.id === episode.id);
+                    // await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(episode.id, episode.srcPoster, oldEpisode?.srcPoster, formatedTitle, 'Episode', conn);
+                    // const item: any = episodesJellyfin.find(item => item.Id === episode.jellyfinId);
+                    // const time: number = item ? item.RunTimeTicks || 0 : 0;
+                    // const quality: string = item ? this.getQualityEpisode(item?.MediaStreams.find((item: any) => item.Type === "Video")?.Width) : 'any quality';
+                    // const query: string = `UPDATE Episode
+                    //     SET jellyfinId = ?, name = ?, episodeNumber = ?,
+                    //     description = ?, date = ?, time = ?, quality = ?
+                    //     WHERE id = ?;`;
+                    // await conn.query(query, [episode.jellyfinId, episode?.name.trim() ?? '', episode.episodeNumber, episode.description, this.getStringFromDate(episode.date), time, quality, episode.id]);
 
-                    if (episode.jellyfinId !== oldEpisode.jellyfinId) {
-                        const streamInfo = await this.jellyfinService.getStreamVideoByItemId(episode.jellyfinId);
-                        let inputPath: string = streamInfo?.MediaSources[0]?.Path ?? null;
-                        const queryPath: string = `UPDATE Episode SET path = ? WHERE id = ?;`;
-                        await conn.query(queryPath, [inputPath, episode.id]);
-                    }
+                    // if (episode.jellyfinId !== oldEpisode.jellyfinId) {
+                    //     const streamInfo = await this.jellyfinService.getStreamVideoByItemId(episode.jellyfinId);
+                    //     let inputPath: string = streamInfo?.MediaSources[0]?.Path ?? null;
+                    //     const queryPath: string = `UPDATE Episode SET path = ? WHERE id = ?;`;
+                    //     await conn.query(queryPath, [inputPath, episode.id]);
+                    // }
                 }
             } else {
                 message = `Aucun episode n'a été modifié dans la saison ${seasonId}`;

@@ -1,6 +1,7 @@
 export enum ISO_3166_1 {
     VO = 'VO',
     US = 'US',
+    GB = 'GB',
     FR = 'FR',
     ES = 'ES',
     DE = 'DE',

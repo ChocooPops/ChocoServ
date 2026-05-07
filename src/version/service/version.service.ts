@@ -30,11 +30,6 @@ export class VersionService {
         } else {
             conn = await this.pool.getConnection();
             try {
-                const query: string = `
-                    SELECT * FROM VERSION
-                    WHERE OS = ?
-                    ORDER BY updatedAt desc
-                    LIMIT 1;`
                 const results: Version[] = await conn.query(query, [OS]);
                 if (results.length > 0) {
                     return results[0];
@@ -101,7 +96,7 @@ export class VersionService {
                 } else {
                     return {
                         id: -1,
-                        message: 'Format de la version incorrecte',
+                        message: 'Format de la version incorrect',
                         state: false
                     }
                 }

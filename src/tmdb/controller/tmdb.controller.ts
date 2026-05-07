@@ -6,15 +6,24 @@ import { Credit } from 'src/credit/dto/credit.interface';
 @Controller('tmdb')
 export class TmdbController {
 
-    constructor(private tmdbService: TmdbService) { }
+    constructor(private readonly tmdbService: TmdbService) { }
 
     @Get('search-movie-tmdb/:movie')
     async searchMovieByTitleOrTmdbId(@Param('movie') movie: string): Promise<EditMovie> {
         const isNumeric = /^\d+$/.test(movie);
         if (isNumeric) {
-            return await this.tmdbService.searchMovieByTmdbId(Number(movie));
+            return await this.tmdbService.searchMovieByTmdbId(Number(movie), null);
         } else {
             return await this.tmdbService.searchMoviebByTitle(movie);
+        }
+    }
+    @Get('search-movie-library/:mediaLibraryId')
+    async searchMovieByMediaLibraryId(@Param('mediaLibraryId') mediaLibraryId: string): Promise<EditMovie> {
+        const isNumeric = /^\d+$/.test(mediaLibraryId);
+        if (isNumeric) {
+            return await this.tmdbService.searchMovieByTmdbId(Number(mediaLibraryId), null);
+        } else {
+            return await this.tmdbService.searchMovieByMediaLibraryId(mediaLibraryId);
         }
     }
 
@@ -22,21 +31,21 @@ export class TmdbController {
     async searchSeriesByTitleOrTmdbId(@Param('series') series: string): Promise<EditMovie> {
         const isNumeric = /^\d+$/.test(series);
         if (isNumeric) {
-            return await this.tmdbService.searchSeriesByTmdbId(Number(series));
+            return await this.tmdbService.searchSeriesByTmdbId(Number(series), null);
+        } else {
+            return await this.tmdbService.searchSeriesByMediaLibraryId(series);
+        }
+    }
+    @Get('search-series-library/:mediaLibraryId')
+    async searchSeriesByMediaLibraryId(@Param('mediaLibraryId') series: string): Promise<EditMovie> {
+        const isNumeric = /^\d+$/.test(series);
+        if (isNumeric) {
+            return await this.tmdbService.searchSeriesByTmdbId(Number(series), null);
         } else {
             return await this.tmdbService.searchSeriesByTitle(series);
         }
     }
 
-    @Get('search-movie-jellyfin/:id')
-    async searchMovieByJellyfinId(@Param('id') id: string): Promise<EditMovie> {
-        return await this.tmdbService.searchMovieByJellyfinId(id);
-    }
-
-    @Get('search-series-jellyfin/:id')
-    async searchSeriesByJellyfinId(@Param('id') id: string): Promise<EditMovie> {
-        return await this.tmdbService.searchSeriesByJellyfinId(id);
-    }
 
     @Get('search-credit-by-id/:id')
     async searchCreditByTmdbId(@Param('id', ParseIntPipe) id: number): Promise<Credit> {

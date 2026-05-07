@@ -29,7 +29,7 @@ export class StreamService {
     public async streamMovie(userId: number, movieId: number, req: Request, res: Response): Promise<any> {
         const movie: Movie = await this.movieService.getSimpleMediaById(movieId) as Movie;
         if (movie) {
-            this.streamVideo(userId, movie.id, movie.path, Number(movie.time), req, res, MediaType.MOVIE);
+            this.streamVideo(userId, movie.id, movie.path, Number(movie.duration), req, res, MediaType.MOVIE);
         } else {
             throw new NotFoundException();
         }
@@ -38,7 +38,7 @@ export class StreamService {
     public async streamEpisode(userId: number, seasonId: number, episodeId: number, req: Request, res: Response): Promise<any> {
         const episode: Episode = await this.seriesService.getSimpleEpisodeById(episodeId);
         if (episode) {
-            this.streamVideo(userId, episode.id, episode.path, Number(episode.time), req, res, MediaType.EPISODE);
+            this.streamVideo(userId, episode.id, episode.path, Number(episode.duration), req, res, MediaType.EPISODE);
         } else {
             throw new NotFoundException();
         }        

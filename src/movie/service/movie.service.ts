@@ -2,8 +2,6 @@ import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { Movie } from '../dto/movie.interface';
 import { EditMovie } from '../dto/edit-movie.interface';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
-import { JellyfinService } from 'src/jellyfin/service/jellyfin.service';
-import { MovieJellyfinInfo } from '../dto/jellyfin-info.interface';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { SearchService } from 'src/common-service/search.service';
 import { DATABASE_POOL } from 'src/database/database.module';
@@ -32,8 +30,6 @@ export class MovieService extends MediaService {
         verifTimerShowService: VerifTimerShowService,
         formatPathService: FormatPathService,
         posterService: PosterService,
-        @Inject(forwardRef(() => JellyfinService))
-        private readonly jellyfinService: JellyfinService,
         @Inject(forwardRef(() => SimilarTitleService))
         private readonly similarTitleService: SimilarTitleService,
         private readonly statUserService: StatUserService,
@@ -118,16 +114,17 @@ export class MovieService extends MediaService {
                 JSON_OBJECT(
                     'id', m.id,
                     'title', m.title,
-                    'jellyfinId', m.jellyfinId,
                     'description', m.description,
                     'date', m.date,
-                    'time', m.time,
-                    'quality', m.quality,
                     'startShow', m.startShow,
                     'endShow', m.endShow,
 
                     ${SELECT}
- 
+
+                    'mediaLibraryId', mlib.id,
+                    'duration', mlib.duration,
+                    'resolution', mlib.resolution,
+
                     'srcLogo', pl.name,
                     'srcBackgroundImage', pb.name,
                             
@@ -143,6 +140,7 @@ export class MovieService extends MediaService {
 
                 ${JOIN}
 
+                LEFT JOIN Media_Library mlib ON m.mediaLibraryId = mlib.id
                 LEFT JOIN poster pl ON pl.id = m.srcLogo
                 LEFT JOIN poster pb ON pb.id = m.srcBackground
 
@@ -231,23 +229,20 @@ export class MovieService extends MediaService {
     async insertNewMovie(newMovie: EditMovie, insertSimilarTitle: boolean): Promise<ReturnMessage> {
         let messageReturned !: ReturnMessage;
         if (newMovie.title && newMovie.title.trim() !== '') {
-            const jellyfinInfo: MovieJellyfinInfo = await this.jellyfinService.getInfoJellyfin(newMovie.jellyfinId);
-            if (jellyfinInfo.id) {
+            if (true) {
                 const conn = await this.pool.getConnection();
                 try {
                     await conn.beginTransaction();
                     if (!(await this.getIfMediaExistByTitleType(newMovie.title, -1, conn))) {
                         const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(newMovie.startShow, newMovie.endShow);
-                        const streamInfo = await this.jellyfinService.getStreamVideoByItemId(newMovie.jellyfinId);
-                        let inputPath: string = streamInfo?.MediaSources[0]?.Path ?? null;
 
                         const query: string = `
                             INSERT INTO Media 
-                            (title, jellyfinId, description, date, time, quality, startShow, endShow, mediaType, path)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                            (title, mediaLibraryId, description, date, startShow, endShow, mediaType)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
                         const result: any = await conn.query(query,
-                            [newMovie.title.trim(), newMovie.jellyfinId, newMovie.description, this.getStringFromDate(newMovie.date), jellyfinInfo.runTimeTicks, jellyfinInfo.quality, interval.start, interval.end, this.currentMediaType, inputPath]
+                            [newMovie.title.trim(), newMovie.mediaLibraryId, newMovie.description, this.getStringFromDate(newMovie.date), interval.start, interval.end, this.currentMediaType]
                         );
                         const mediaId: number | null = result ? Number(result.insertId) || null : null;
                         if (mediaId) {
@@ -261,7 +256,7 @@ export class MovieService extends MediaService {
 
                             let messageSimilarTitle: string = `Titre similaire ajouté (0)`;
                             if (insertSimilarTitle) {
-                                messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaByIdWithJellyfinDataBase(mediaId, conn);
+                                messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(mediaId, conn);
                             }
 
                             message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSimilarTitle}`;
@@ -321,19 +316,16 @@ export class MovieService extends MediaService {
                 await conn.beginTransaction();
                 const oldMovie: Movie = await this.getMovieById(updateMovie.id);
                 if (oldMovie && oldMovie.id) {
-                    const jellyfinInfo: MovieJellyfinInfo = await this.jellyfinService.getInfoJellyfin(updateMovie.jellyfinId);
-                    if (jellyfinInfo.id) {
+                    if (true) {
                         if (!(await this.getIfMediaExistByTitleType(updateMovie.title, updateMovie.id, conn))) {
                             const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(updateMovie.startShow, updateMovie.endShow);
-                            const streamInfo = await this.jellyfinService.getStreamVideoByItemId(updateMovie.jellyfinId);
-                            let inputPath: string = streamInfo?.MediaSources[0]?.Path ?? null;
 
                             const query: string = `
                                 UPDATE Media
-                                SET title = ?, jellyfinId = ?, description = ?, date = ?, time = ?, quality = ?, startShow = ?, endShow = ?, path = ?
+                                SET title = ?, mediaLibraryId = ?, description = ?, date = ?, startShow = ?, endShow = ?
                                 WHERE id = ?`;
                             await conn.query(query,
-                                [updateMovie.title.trim(), updateMovie.jellyfinId, updateMovie.description, this.getStringFromDate(updateMovie.date), jellyfinInfo.runTimeTicks, jellyfinInfo.quality, interval.start, interval.end, inputPath, updateMovie.id]
+                                [updateMovie.title.trim(), updateMovie.mediaLibraryId, updateMovie.description, this.getStringFromDate(updateMovie.date), interval.start, interval.end, updateMovie.id]
                             );
                             let message: string = 'Le film a été modifié \n';
                             const oldFormatedTitle: string = this.formatPathService.formatPath(oldMovie.title);

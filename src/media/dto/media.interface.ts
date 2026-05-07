@@ -7,7 +7,7 @@ import { MediaCredit } from "src/credit/dto/media-credit.interface"
 export interface Media {
     id: number,
     title: string,
-    jellyfinId: string,
+    mediaLibraryId: string,
     otherTitles: TranslationTitle[],
     categories: CategorySimple[],
     keyWord: string[],

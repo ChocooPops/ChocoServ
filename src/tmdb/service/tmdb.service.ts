@@ -14,13 +14,13 @@ import { EditSeries } from "src/series/dto/edit-series.interface";
 import { MediaType } from "src/media/dto/media-type.enum";
 import { CategoryService } from "src/category/service/category.service";
 import { SearchService } from "src/common-service/search.service";
-import { JellyfinService } from "src/jellyfin/service/jellyfin.service";
 import { ConfigService } from "@nestjs/config";
 import { MediaCredit } from "src/credit/dto/media-credit.interface";
 import { Job } from "src/credit/dto/job.enum";
 import { Movie } from "src/movie/dto/movie.interface";
 import { Series } from "src/series/dto/series.interface";
 import { Credit } from "src/credit/dto/credit.interface";
+import { LibraryService } from "src/library/service/library.service";
 
 @Injectable()
 export class TmdbService {
@@ -28,15 +28,28 @@ export class TmdbService {
     constructor(private readonly httpService: HttpService,
         private readonly categoryService: CategoryService,
         private readonly searchService: SearchService,
-        @Inject(forwardRef(() => JellyfinService))
-        private readonly jellyfinService: JellyfinService,
-        private readonly configService: ConfigService
+        private readonly configService: ConfigService,
+        @Inject(forwardRef(() => LibraryService))
+        private readonly libraryService: LibraryService
     ) { }
 
     private readonly apiKeyTMDB: string = `api_key=${this.configService.get<string>('TMDB_API_KEY')}`;
     private readonly baseUrlTmdb: string = this.configService.get<string>('TMDB_BASE_URL');
 
-    private readonly paramLanguage: string = 'language=fr-FR';
+    private readonly TMDB_LANGUAGES: Record<ISO_3166_1, string> = {
+        [ISO_3166_1.VO]: 'en-US',
+        [ISO_3166_1.US]: 'en-US',
+        [ISO_3166_1.GB]: 'en-GB',
+        [ISO_3166_1.FR]: 'fr-FR',
+        [ISO_3166_1.ES]: 'es-ES',
+        [ISO_3166_1.DE]: 'de-DE',
+        [ISO_3166_1.IT]: 'it-IT',
+        [ISO_3166_1.JP]: 'ja-JP',
+        [ISO_3166_1.RU]: 'ru-RU',
+        [ISO_3166_1.KR]: 'ko-KR',
+        [ISO_3166_1.CN]: 'zh-CN',
+        [ISO_3166_1.PT]: 'pt-PT',
+    };
 
     private readonly apiTMDBSearchMovie: string = `${this.baseUrlTmdb}/search/movie`;
     private readonly apiTMDBMovie: string = `${this.baseUrlTmdb}/movie`;
@@ -47,28 +60,53 @@ export class TmdbService {
     private readonly apiTMDBPerson: string = `${this.baseUrlTmdb}/person`;
     private readonly apiTMDBSearchPerson: string = `${this.baseUrlTmdb}/search/person`;
 
-    public async searchMoviebByTitle(title: string): Promise<any> {
+    private getParamLanguage(lang: ISO_3166_1 | null): string {
+        if (lang) {
+            const language = this.TMDB_LANGUAGES[lang] || 'en-US';
+            return `language=${language}`;
+        } else {
+            return '';
+        }
+    }
+
+    public async getTmdbIdForMovieByTitleAndYear(title: string, year: number): Promise<number | null> {
+        try {
+            const param: string = `&query=${title}&primary_release_year=${year}`;
+            const url: string = `${this.apiTMDBSearchMovie}?${this.apiKeyTMDB}${param}`;
+            const response = await lastValueFrom(this.httpService.get(url));
+            const id: number = Number(response.data.results[0].id);
+            return id;
+        } catch(error) {
+            return null
+        }
+    }
+
+    public async searchMoviebByTitle(title: string): Promise<EditMovie> {
         const param: string = `&query=${title}`;
         const url: string = `${this.apiTMDBSearchMovie}?${this.apiKeyTMDB}${param}`;
         const response = await lastValueFrom(this.httpService.get(url));
         const id: number = Number(response.data.results[0].id);
-        return await this.searchMovieByTmdbId(id);
+        return await this.searchMovieByTmdbId(id, null);
     }
 
-    public async searchMovieByJellyfinId(jellyfinId: string): Promise<EditMovie> {
-        const tmdbId: number | null = await this.jellyfinService.getTmdbIdByJellyfinIdForMovie(jellyfinId);
+    public async searchMovieByMediaLibraryId(mediaLibraryId: string): Promise<EditMovie> {
+        const tmdbId: number | null = await this.libraryService.getTmdbIdByMediaLibrary(mediaLibraryId);
         if (tmdbId) {
-            return await this.searchMovieByTmdbId(tmdbId);
+            return await this.searchMovieByTmdbId(tmdbId, null);
         } else {
             return null;
         }
     }
 
-    public async searchMovieByTmdbId(id: number): Promise<EditMovie> {
-        const jellyfinId: string | null = await this.jellyfinService.getJellyfinIdByTmdbIdForMovie(id.toString());
-        const url: string = `${this.apiTMDBMovie}/${id}?${this.apiKeyTMDB}&${this.paramLanguage}&append_to_response=credits,translations,keywords`;
-        const response = await lastValueFrom(this.httpService.get(url));
+    public async searchMovieByTmdbId(id: number, lang: ISO_3166_1 | null): Promise<EditMovie> {
+        const mediaLibraryId: string | null = await this.libraryService.getMediaLibraryIdByTmdbId(id);
+        if (!lang) {
+            lang = await this.libraryService.getLanguageByMediaLibraryTmdbId(id);
+        }
+        const paramLanguage = this.getParamLanguage(lang);
 
+        const url: string = `${this.apiTMDBMovie}/${id}?${this.apiKeyTMDB}&append_to_response=credits,translations,keywords&${paramLanguage}`;
+        const response = await lastValueFrom(this.httpService.get(url));
         const categories: CategorySimple[] = await this.getCategories(response.data.genres);
         const credits: MediaCredit[] = this.getCreditsForMovie(response.data.credits);
         const keywords: string[] = this.getKeyWords(response.data.keywords.keywords);
@@ -78,7 +116,7 @@ export class TmdbService {
         try {
             const urlPoster: string = `${this.apiTMDBMovie}/${id}/images?${this.apiKeyTMDB}`;
             const responsePoster = await lastValueFrom(this.httpService.get(urlPoster));
-            images = await this.getImageByTmdbId(responsePoster, 1);
+            images = await this.getImageByTmdbId(responsePoster, 1, lang);
         } catch (error) {
             images = {
                 back: null,
@@ -91,7 +129,7 @@ export class TmdbService {
         const movie: EditMovie = {
             id: response.data.id,
             title: response.data.title || response.data.original_title,
-            jellyfinId: jellyfinId,
+            mediaLibraryId: mediaLibraryId,
             otherTitles: otherLanguage,
             description: response.data.overview,
             startShow: '00:00:00',
@@ -114,12 +152,26 @@ export class TmdbService {
         const url: string = `${this.apiTMDBSearchTv}?${this.apiKeyTMDB}${param}`;
         const response = await lastValueFrom(this.httpService.get(url));
         const id: number = Number(response.data.results[0].id);
-        return await this.searchSeriesByTmdbId(id);
+        return await this.searchSeriesByTmdbId(id, null);
     }
 
-    public async searchSeriesByTmdbId(id: number): Promise<any> {
-        const jellyfinId: string | null = await this.jellyfinService.getJellyfinIdByTmdbIdForSeries(id.toString());
-        const url: string = `${this.apiTMDBTv}/${id}?${this.apiKeyTMDB}&append_to_response=aggregate_credits,translations,keywords&${this.paramLanguage}`;
+    public async searchSeriesByMediaLibraryId(mediaLibraryId: string): Promise<EditMovie> {
+        const tmdbId: number | null = await this.libraryService.getTmdbIdByMediaLibrary(mediaLibraryId);
+        if (tmdbId) {
+            return await this.searchSeriesByTmdbId(tmdbId, null);
+        } else {
+            return null;
+        }
+    }
+
+    public async searchSeriesByTmdbId(id: number, lang: ISO_3166_1): Promise<any> {
+        const mediaLibraryId: string | null = await this.libraryService.getMediaLibraryIdByTmdbId(id);
+        if (!lang) {
+            lang = await this.libraryService.getLanguageByMediaLibraryTmdbId(id);
+        }
+        const paramLanguage = this.getParamLanguage(lang);
+
+        const url: string = `${this.apiTMDBTv}/${id}?${this.apiKeyTMDB}&append_to_response=aggregate_credits,translations,keywords&${paramLanguage}`;
         const response = await lastValueFrom(this.httpService.get(url));
 
         const categories: CategorySimple[] = await this.getCategories(response.data.genres);
@@ -131,7 +183,7 @@ export class TmdbService {
         try {
             const urlPoster: string = `${this.apiTMDBTv}/${id}/images?${this.apiKeyTMDB}`;
             const responsePoster = await lastValueFrom(this.httpService.get(urlPoster));
-            images = await this.getImageByTmdbId(responsePoster, 1);
+            images = await this.getImageByTmdbId(responsePoster, 1, lang);
         } catch (error) {
             images = {
                 back: null,
@@ -141,12 +193,12 @@ export class TmdbService {
             }
         }
 
-        const seasons: EditSeason[] = await this.getAllSeasonsBySeries(id, response.data.seasons);
+        const seasons: EditSeason[] = await this.getAllSeasonsBySeries(id, response.data.seasons, paramLanguage);
 
         let series: EditSeries = {
             id: id,
             title: response.data.name,
-            jellyfinId: jellyfinId,
+            mediaLibraryId: mediaLibraryId,
             otherTitles: otherLanguage,
             categories: categories,
             keyWords: keywords,
@@ -163,51 +215,17 @@ export class TmdbService {
             horizontalPosterSameAsBackground: false
         }
 
-        try {
-            if (jellyfinId) {
-                const seasonsJellyfin: any[] = await this.jellyfinService.getAllSeasonsByJellyfinIdSeries(jellyfinId);
-                const episodesJellyfin: any[] = await this.jellyfinService.getAllEpisodesByJellyfinIdSeries(jellyfinId);
-
-                series.seasons.forEach((season: EditSeason) => {
-                    const seasonJellyfinId: string | null = seasonsJellyfin.find((item: any) => item.IndexNumber === season.seasonNumber)?.Id;
-                    if (seasonJellyfinId) {
-                        season.jellyfinId = seasonJellyfinId;
-
-                        if (seasonsJellyfin.length > 1) {
-                            const episodeFiltered: any[] = episodesJellyfin.filter((item: any) => item.SeasonId === seasonJellyfinId)
-                            season.episodes.forEach((episode: EditEpisode, idx: number) => {
-
-                                if (episodeFiltered.length > idx && episodeFiltered[idx]?.Id) {
-                                    episode.jellyfinId = episodeFiltered[idx].Id;
-                                }
-                            });
-                        } else {
-                            if (season.seasonNumber === 1) {
-                                season.episodes.forEach((episode: EditEpisode, idx: number) => {
-                                    if (episodesJellyfin.length > idx && episodesJellyfin[idx]?.Id) {
-                                        episode.jellyfinId = episodesJellyfin[idx].Id;
-                                    }
-                                })
-                            }
-                        }
-                    }
-                });
-            }
-        } catch (error) {
-
-        }
-
         return series;
     }
 
-    private async getAllSeasonsBySeries(id: number, seasonsTmbd: any[]): Promise<any> {
+    private async getAllSeasonsBySeries(id: number, seasonsTmbd: any[], paramLanguage: string): Promise<any> {
         const seasons: EditSeason[] = [];
         for (const season of seasonsTmbd) {
-            const episodes: EditEpisode[] = await this.getAllEpisodesBySeason(id, season.id, season.season_number);
+            const episodes: EditEpisode[] = await this.getAllEpisodesBySeason(id, season.id, season.season_number, paramLanguage);
             seasons.push({
                 id: season.id,
                 seriesId: id,
-                jellyfinId: undefined,
+                mediaLibraryId: undefined,
                 name: season.name,
                 seasonNumber: season.season_number,
                 episodes: episodes,
@@ -217,16 +235,16 @@ export class TmdbService {
         return seasons;
     }
 
-    private async getAllEpisodesBySeason(id: number, idSeason: number, numSeason: number): Promise<EditEpisode[]> {
+    private async getAllEpisodesBySeason(id: number, idSeason: number, numSeason: number, paramLanguage: string): Promise<EditEpisode[]> {
         try {
-            const url: string = `${this.apiTMDBTv}/${id}/season/${numSeason}?${this.apiKeyTMDB}&${this.paramLanguage}`;
+            const url: string = `${this.apiTMDBTv}/${id}/season/${numSeason}?${this.apiKeyTMDB}&${paramLanguage}`;
             const response = await lastValueFrom(this.httpService.get(url));
             const episodes: EditEpisode[] = [];
             for (const episode of response.data.episodes) {
                 episodes.push({
                     id: episode.id,
                     seasonId: idSeason,
-                    jellyfinId: undefined,
+                    mediaLibraryId: undefined,
                     name: episode.name,
                     episodeNumber: episode.episode_number,
                     srcPoster: await this.getEntirelyUrlImagesFromTMDB(episode.still_path),
@@ -238,128 +256,6 @@ export class TmdbService {
         } catch (error) {
             return [];
         }
-    }
-
-    public async searchSeriesByJellyfinId(idJellyfin: string): Promise<EditSeries> {
-        const itemJellyfin: any = await this.jellyfinService.getItemJellyFinByIdForSeries(idJellyfin);
-        if (itemJellyfin && itemJellyfin.ProviderIds.Tmdb) {
-
-            const id: number = Number(itemJellyfin.ProviderIds.Tmdb);
-            const url: string = `${this.apiTMDBTv}/${id}?${this.apiKeyTMDB}&append_to_response=aggregate_credits,translations,keywords&${this.paramLanguage}`;
-            const response = await lastValueFrom(this.httpService.get(url));
-            const categories: CategorySimple[] = await this.getCategories(response.data.genres);
-            const credits: MediaCredit[] = this.getCreditsForSeries(response.data.aggregate_credits, response.data.created_by);
-            const keywords: string[] = this.getKeyWords(response.data.keywords.results);
-            const otherLanguage: TranslationTitle[] = this.getAllTitlesFromDifferentLanguage(response.data.translations.translations, MediaType.SERIES, response.data.original_name);
-
-            let images: { back: string, logo: string, posterVertical: EditPoster[], posterHorizontal: EditPoster[] };
-            try {
-                const urlPoster: string = `${this.apiTMDBTv}/${id}/images?${this.apiKeyTMDB}`;
-                const responsePoster = await lastValueFrom(this.httpService.get(urlPoster));
-                images = await this.getImageByTmdbId(responsePoster, 1);
-            } catch (error) {
-                images = {
-                    back: null,
-                    logo: null,
-                    posterVertical: [],
-                    posterHorizontal: []
-                }
-            }
-
-            const seasons: EditSeason[] = await this.getAllSeasonsBySeriesJellyfinId(idJellyfin, id);
-
-            let series: EditSeries = {
-                id: id,
-                title: response.data.name,
-                jellyfinId: idJellyfin,
-                otherTitles: otherLanguage,
-                categories: categories,
-                keyWords: keywords,
-                description: response.data.overview,
-                credits: credits,
-                date: response.data.first_air_date,
-                startShow: '00:00:00',
-                endShow: '00:00:00',
-                posters: images.posterVertical,
-                logo: images.logo,
-                backgroundImage: images.back,
-                seasons: seasons,
-                horizontalPoster: images.posterHorizontal,
-                horizontalPosterSameAsBackground: false
-            }
-
-            return series;
-        }
-        return null;
-    }
-
-    private async getAllSeasonsBySeriesJellyfinId(idJellyfin: string, idSeries: number): Promise<EditSeason[]> {
-        const itemsSeasons: any[] = await this.jellyfinService.getAllSeasonsByJellyfinIdSeries(idJellyfin);
-        const itemEpisodes: any[] = await this.jellyfinService.getAllEpisodesByJellyfinIdSeries(idJellyfin);
-
-        const seasons: EditSeason[] = [];
-
-        if (itemsSeasons && itemsSeasons.length > 0) {
-            if (itemsSeasons.length > 1) {
-                let seasonNumber: number = 1;
-                for (const season of itemsSeasons) {
-                    const episodes: EditEpisode[] = [];
-                    const itemEpisodesFiltered: any[] = itemEpisodes?.filter((item: any) => item.SeasonId === season.Id) || [];
-                    let episodeNumber: number = 1;
-                    for (const item of itemEpisodesFiltered) {
-                        episodes.push({
-                            id: episodeNumber,
-                            seasonId: season.Id,
-                            jellyfinId: item.Id,
-                            name: item.Name,
-                            episodeNumber: episodeNumber,
-                            description: item.Overview,
-                            date: item.PremiereDate ? new Date(item.PremiereDate) : new Date(),
-                            srcPoster: await this.getEntirelyUrlImagesFromJellyfin(item.Id, 'Primary')
-                        })
-                        episodeNumber++;
-                    }
-                    seasons.push({
-                        id: seasonNumber,
-                        seriesId: idSeries,
-                        jellyfinId: season.Id,
-                        name: season.Name,
-                        seasonNumber: seasonNumber,
-                        srcPoster: await this.getEntirelyUrlImagesFromJellyfin(season.Id, 'Primary'),
-                        episodes: episodes
-                    })
-                    seasonNumber++;
-                }
-            } else {
-                const season: any = itemsSeasons[0];
-                const episodes: EditEpisode[] = [];
-                let episodeNumber: number = 1;
-                for (const episode of itemEpisodes) {
-                    episodes.push({
-                        id: episodeNumber,
-                        seasonId: season.Id,
-                        jellyfinId: episode.Id,
-                        name: episode.Name,
-                        episodeNumber: episodeNumber,
-                        description: episode.Overview,
-                        date: episode.PremiereDate ? new Date(episode.PremiereDate) : new Date(),
-                        srcPoster: await this.getEntirelyUrlImagesFromJellyfin(episode.Id, 'Primary')
-                    })
-                    episodeNumber++;
-                }
-                seasons.push({
-                    id: 1,
-                    seriesId: idSeries,
-                    jellyfinId: season.Id,
-                    name: season.Name,
-                    seasonNumber: 1,
-                    srcPoster: await this.getEntirelyUrlImagesFromJellyfin(season.Id, 'Primary'),
-                    episodes: episodes
-                })
-            }
-        }
-
-        return seasons;
     }
 
     private async getCategories(categoriesTmbd: CategorySimple[]): Promise<CategorySimple[]> {
@@ -510,7 +406,6 @@ export class TmdbService {
             })
             return result;
         } catch (error) {
-            console.log(error)
             return [];
         }
     }
@@ -526,7 +421,7 @@ export class TmdbService {
 
     private getAllTitlesFromDifferentLanguage(translations: any, mediaType: MediaType, originalTitle: string | null): TranslationTitle[] {
         try {
-            const languages: ISO_3166_1[] = [ISO_3166_1.US, ISO_3166_1.FR, ISO_3166_1.IT, ISO_3166_1.ES, ISO_3166_1.DE, ISO_3166_1.RU, ISO_3166_1.JP, ISO_3166_1.CN, ISO_3166_1.KR, ISO_3166_1.PT];
+            const languages: ISO_3166_1[] = Object.values(ISO_3166_1);
             const otherTitle: TranslationTitle[] = [];
             if (originalTitle) {
                 otherTitle.push({
@@ -562,7 +457,7 @@ export class TmdbService {
         }
     }
 
-    private async getImageByTmdbId(response: any, nbPoster: number): Promise<{ back: string, logo: string, posterVertical: EditPoster[], posterHorizontal: EditPoster[] }> {
+    private async getImageByTmdbId(response: any, nbPoster: number, iso: ISO_3166_1): Promise<{ back: string, logo: string, posterVertical: EditPoster[], posterHorizontal: EditPoster[] }> {
         const posterVertical: EditPoster[] = [];
         const posterHorizontal: EditPoster[] = [];
         let back: any = null;
@@ -583,8 +478,8 @@ export class TmdbService {
         }
 
         const byLangThenScore = (a: any, b: any) => {
-            const order = (lang?: string) => (lang === 'fr' ? 0 : lang === 'en' ? 1 : 2);
-            const langDiff = order(a?.iso_639_1) - order(b?.iso_639_1);
+            const order = (lang?: string) => (iso && lang === iso ? 0 : lang === ISO_3166_1.US || lang === ISO_3166_1.GB ? 1 : 2);
+            const langDiff = order(a?.iso_3166_1) - order(b?.iso_3166_1);
             if (langDiff !== 0) return langDiff;
             return (b?.vote_average ?? 0) - (a?.vote_average ?? 0);
         };
@@ -660,15 +555,6 @@ export class TmdbService {
         }
     }
 
-    private async getEntirelyUrlImagesFromJellyfin(url: string, suffix: 'Primary' | 'Thumb' | 'Backdrop' | 'Logo'): Promise<string | null | ArrayBuffer> {
-        if (url) {
-            url = `http://localhost:8096/Items/${url}/Images/${suffix}`;
-            return await this.toBase64(url);
-        } else {
-            return null;
-        }
-    }
-
     private async toBase64(url: any): Promise<string | null | ArrayBuffer> {
         if (!url) return null;
 
@@ -686,7 +572,7 @@ export class TmdbService {
     }
 
     public async fetchCreditForMovie(movie: Movie): Promise<MediaCredit[]> {
-        const tmdbId: number | null = await this.jellyfinService.getTmdbIdByJellyfinIdForMovie(movie.jellyfinId);
+        const tmdbId: number | null = await this.libraryService.getTmdbIdByMediaLibrary(movie.mediaLibraryId);
         const url: string = `${this.apiTMDBMovie}/${tmdbId}?${this.apiKeyTMDB}&append_to_response=credits`;
         const response = await lastValueFrom(this.httpService.get(url));
         const credits: MediaCredit[] = this.getCreditsForMovie(response.data.credits);
@@ -694,7 +580,7 @@ export class TmdbService {
     }
 
     public async fetchCreditForSeries(series: Series): Promise<MediaCredit[]> {
-        const tmdbId: number | null = await this.jellyfinService.getTmdbIdByJellyfinIdForSeries(series.jellyfinId);
+        const tmdbId: number | null = await this.libraryService.getTmdbIdByMediaLibrary(series.mediaLibraryId);
         const url: string = `${this.apiTMDBTv}/${tmdbId}?${this.apiKeyTMDB}&append_to_response=aggregate_credits`;
         const response = await lastValueFrom(this.httpService.get(url));
         const credits: MediaCredit[] = this.getCreditsForSeries(response.data.aggregate_credits, response.data.created_by);

@@ -19,9 +19,9 @@ export class AuthService {
     private timeAfterRemoving: number = 5 * 60 * 1000;
 
     constructor(private readonly jwtService: JwtService,
-        private userService: UserService,
-        private mailService: MailService,
-        private configService: ConfigService
+        private readonly userService: UserService,
+        private readonly mailService: MailService,
+        private readonly configService: ConfigService
     ) { }
 
     async signIn(email: string, password: string): Promise<TokenModel> {
@@ -106,7 +106,7 @@ export class AuthService {
                         state: true,
                         message: "Votre demande d'inscription a été envoyé"
                     }
-                } catch (error) {
+                } catch (error: any) {
                     return {
                         id: 0,
                         state: false,

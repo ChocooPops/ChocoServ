@@ -49,13 +49,13 @@ export class NewsVideoRunningService {
             LIMIT 1;
         ` : '';
         return `
-        SELECT 
+        SELECT
             JSON_OBJECT(
                 'id', n.id,
                 'srcBackground', pnews.name,
                 'startShow', n.startShow,
                 'endShow', n.endShow,
-                'jellyfinId', n.jellyfinId,
+                'mediaLibraryId', n.mediaLibraryId,
                 ${getPath ? `'path', n.path,` : ''} 
                 'media', ${this.mediaService.getQuerySelectOneMedia()}
             ) AS news
@@ -117,6 +117,7 @@ export class NewsVideoRunningService {
             });
             return news ?? [];
         } catch (error) {
+            console.log(error)
             return [];
         } finally {
             await conn.release();
@@ -195,7 +196,7 @@ export class NewsVideoRunningService {
             return true;
         }
 
-        return existingNews.jellyfinId !== newJellyfinId ||
+        return existingNews.mediaLibraryId !== newJellyfinId ||
             existingNews.startShow !== newStartShow ||
             existingNews.endShow !== newEndShow;
     }
@@ -212,19 +213,19 @@ export class NewsVideoRunningService {
                     : [];
 
             const existingNewsMap = new Map(
-                existingNews.map(news => [news.jellyfinId, news])
+                existingNews.map(news => [news.mediaLibraryId, news])
             );
 
-            const newJellyfinIds = new Set(newsUpdate.map(n => n.jellyfinId));
+            const newJellyfinIds = new Set(newsUpdate.map(n => n.mediaLibraryId));
             const newsToDelete = existingNews.filter(
-                news => !newJellyfinIds.has(news.jellyfinId)
+                news => !newJellyfinIds.has(news.mediaLibraryId)
             );
 
             for (const news of newsToDelete) {
                 if (news.path) {
                     await this.deleteProcessedVideo(news.path);
                 }
-                await conn.query(`DELETE FROM News_Video_Running WHERE jellyfinId = ?`, [news.jellyfinId]);
+                await conn.query(`DELETE FROM News_Video_Running WHERE mediaLibraryId = ?`, [news.mediaLibraryId]);
             }
 
             let processedCount = 0;
@@ -238,30 +239,24 @@ export class NewsVideoRunningService {
                     news.endShow
                 );
 
-                const existingNewsItem = existingNewsMap.get(news.jellyfinId);
+                const existingNewsItem = existingNewsMap.get(news.mediaLibraryId);
                 let processedPath: string | null = null;
 
-                if (this.newsNeedsUpdate(existingNewsItem, news.jellyfinId, interval.start, interval.end)) {
+                if (this.newsNeedsUpdate(existingNewsItem, news.mediaLibraryId, interval.start, interval.end)) {
                     if (existingNewsItem?.path) {
                         await this.deleteProcessedVideo(existingNewsItem.path);
                     }
 
                     try {
-                        let mediaPath: string | null = null;
-                        if (mediaType === MediaType.MOVIE) {
-                            const result = await conn.query(`SELECT path FROM media WHERE jellyfinId = ?`, [news.jellyfinId]);
-                            mediaPath = result[0]?.path;
-                        } else if (mediaType === MediaType.SERIES) {
-                            const result = await conn.query(`SELECT path FROM Episode WHERE jellyfinId = ?`, [news.jellyfinId]);
-                            mediaPath = result[0]?.path;
-                        }
+                        const result = await conn.query(`SELECT path FROM Media_Library WHERE id = ?`, [news.mediaLibraryId]);
+                        const mediaPath = result[0]?.path;
 
                         if (mediaPath) {
                             processedPath = await this.processVideoWithFFmpeg(
                                 mediaPath,
                                 interval.start,
                                 interval.end,
-                                news.jellyfinId
+                                news.mediaLibraryId
                             );
                             processedCount++;
                         }
@@ -281,25 +276,25 @@ export class NewsVideoRunningService {
                             startShow = ?, 
                             endShow = ?, 
                             path = ?
-                        WHERE jellyfinId = ?
+                        WHERE mediaLibraryId = ?
                     `, [
                         news.mediaId,
                         this.formatPathService.getPotserIdByUrl(news.srcBackground),
                         interval.start,
                         interval.end,
                         processedPath,
-                        news.jellyfinId
+                        news.mediaLibraryId
                     ]);
                     updatedCount++;
                 } else {
                     await conn.query(`
                         INSERT INTO News_Video_Running 
-                        (mediaId, srcBackground, jellyfinId, startShow, endShow, path)
+                        (mediaId, srcBackground, mediaLibraryId, startShow, endShow, path)
                         VALUES (?, ?, ?, ?, ?, ?)
                     `, [
                         news.mediaId,
                         this.formatPathService.getPotserIdByUrl(news.srcBackground),
-                        news.jellyfinId,
+                        news.mediaLibraryId,
                         interval.start,
                         interval.end,
                         processedPath
@@ -317,7 +312,7 @@ export class NewsVideoRunningService {
                     `\n Vidéos traitées: ${processedCount} \n Réutilisées: ${skippedCount} \ Supprimées: ${newsToDelete.length}`
             };
 
-        } catch (error) {
+        } catch (error: any) {
             await conn.rollback();
             return {
                 id: -1,
