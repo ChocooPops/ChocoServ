@@ -535,7 +535,7 @@ CREATE TABLE
         year INT DEFAULT 0,
         path VARCHAR(1000) NOT NULL,
         type ENUM ('MOVIE', 'SERIES', 'SEASON', 'EPISODE'),
-        tmdbId INT DEFAULT NULL,
+        tmdbId INT DEFAULT 0,
         duration BIGINT UNSIGNED DEFAULT 0,
         frames BIGINT UNSIGNED DEFAULT 0,
         bytes BIGINT UNSIGNED DEFAULT 0,

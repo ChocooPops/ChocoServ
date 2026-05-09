@@ -393,8 +393,8 @@ export class LibraryService {
     }
 
     private async modifyMovieLibrary(editMediaLibrary: MediaLibrary, mediaLibrary: MediaLibrary, library: Library, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
-        if (mediaLibrary.tmdbId !== editMediaLibrary.tmdbId) {
-            const movies: Movie[] = await conn.query(`SELECT id FROM Media WHERE mediaLibraryId = ?`, [editMediaLibrary.id]);
+        const movies: Movie[] = await conn.query(`SELECT id FROM Media WHERE mediaLibraryId = ?`, [editMediaLibrary.id]);
+        if (mediaLibrary.tmdbId !== editMediaLibrary.tmdbId || movies.length <= 0) {
             const movieTmdb: EditMovie = await this.tmdbService.searchMovieByTmdbId(editMediaLibrary.tmdbId, library.lang);
             let messageMovie!: ReturnMessage;
             movieTmdb.mediaLibraryId = editMediaLibrary.id;
@@ -507,26 +507,40 @@ export class LibraryService {
 
     private async getAllVideoFiles(dir: string): Promise<string[]> {
         const videoExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm'];
-        const entries = await fs.readdir(dir, { withFileTypes: true });
+
+        const entries = await fs.readdir(dir, {
+            withFileTypes: true,
+        });
+
         const files = await Promise.all(
             entries.map(async (entry) => {
-            const fullPath = path.resolve(dir, entry.name);
+                const fullPath = path.resolve(dir, entry.name);
 
-            if (entry.isDirectory()) {
-                return this.getAllVideoFiles(fullPath);
-            } else {
+                if (entry.isSymbolicLink()) {
+                    return [];
+                }
+
+                if (path.extname(entry.name).toLowerCase() === '.lnk') {
+                    return [];
+                }
+
+                if (entry.isDirectory()) {
+                    return this.getAllVideoFiles(fullPath);
+                }
+
                 const ext = path.extname(entry.name).toLowerCase();
+
                 if (videoExtensions.includes(ext)) {
                     return fullPath;
                 }
-                return null;
-            }
-            })
+
+                return [];
+            }),
         );
 
-        return files.flat().filter(Boolean);
+        return files.flat();
     }
-    
+
     private getResolutionLabel(width: number, height: number): string {
         if (width >= 3840 || height >= 2160) return '4K';
         if (width >= 1920 || height >= 1080) return 'Full HD';
