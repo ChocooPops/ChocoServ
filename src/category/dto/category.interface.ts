@@ -1,6 +1,7 @@
 export interface Category {
     id: number,
-    name: string,
+    tmdbId: number,
+    translationKey: string,
     nameSelection: string,
     movies: number[],
     series: number[]

@@ -343,7 +343,7 @@ export class MediaSubstitutionSerivce {
                         JSON_ARRAYAGG(
                             JSON_OBJECT(
                                 'id', c.id,
-                                'name', c.name
+                                'translationKey', c.translationKey
                             )
                         ) AS categories
                     FROM media_category mc

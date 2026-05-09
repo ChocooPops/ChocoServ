@@ -4,7 +4,8 @@ import { Series } from "src/series/dto/series.interface"
 
 export interface CategoryEntirely {
     id: number,
-    name: string,
+    tmdbId: number,
+    translationKey: string,
     nameSelection: string,
     movies: Movie[],
     series: Series[],

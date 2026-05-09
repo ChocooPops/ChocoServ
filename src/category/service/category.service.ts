@@ -15,6 +15,8 @@ import { Link } from 'src/common-interface/link.interface';
 import { Graph } from 'src/common-interface/graph.intrface';
 import { Node } from 'src/common-interface/node.interface';
 import { MediaService } from 'src/media/service/media/media.service';
+import { TmdbService } from 'src/tmdb/service/tmdb.service';
+import { CategoryTmdb } from '../dto/category-tmbd.interface';
 
 @Injectable()
 export class CategoryService {
@@ -24,12 +26,20 @@ export class CategoryService {
         @Inject(forwardRef(() => MovieService))
         private readonly movieService: MovieService,
         @Inject(forwardRef(() => SeriesService))
-        private readonly seriesService: SeriesService) { }
+        private readonly seriesService: SeriesService,
+        @Inject(forwardRef(() => TmdbService))
+        private readonly tmdbService: TmdbService
+    ) { }
 
     public async getGraphCategory(): Promise<Graph> {
         const conn = await this.pool.getConnection();
         try {
-            const nodes: Node[] = await conn.query(`Select id, name FROM Category`);
+            const nodes: Node[] = await conn.query(`Select id, 
+                CONCAT(
+                    UPPER(LEFT(translationKey, 1)),
+                    LOWER(SUBSTRING(translationKey, 2))
+                ) AS name
+                FROM Category`);
             const links: Link[] = await conn.query(`Select categoryId as source, mediaId as target FROM Media_Category`);
             return {
                 nodes: nodes,
@@ -47,7 +57,8 @@ export class CategoryService {
             SELECT 
             JSON_OBJECT(
                 'id', c.id,
-                'name', c.name,
+                'tmdbId', c.tmdbId,
+                'translationKey', c.translationKey,
                 'nameSelection', c.nameSelection,
                 'medias', ${this.mediaService.getQuerySelectManyMedia(ORDER_MEDIA)}
             ) AS category
@@ -75,7 +86,8 @@ export class CategoryService {
         });
         return {
             id: formatedCategory.id,
-            name: formatedCategory.name,
+            tmdbId: formatedCategory.tmdbId,
+            translationKey: formatedCategory.translationKey,
             nameSelection: formatedCategory.nameSelection,
             movies: movies,
             series: series
@@ -94,7 +106,8 @@ export class CategoryService {
         });
         return {
             id: formatedCategory.id,
-            name: formatedCategory.name,
+            tmdbId: formatedCategory.tmdbId,
+            translationKey: formatedCategory.translationKey,
             nameSelection: formatedCategory.nameSelection,
             movies: [],
             series: [],
@@ -104,8 +117,14 @@ export class CategoryService {
 
     public async getAllCategories(): Promise<CategorySimple[]> {
         try {
-            const query = 'SELECT id, name from Category';
-            return await this.pool.query(query);
+            const query = 'SELECT id, tmdbId, translationKey from Category';
+            const category: CategorySimple[] = await this.pool.query(query);
+            if (category.length > 0) {
+                return category;
+            } else {
+                await this.downloadCategoryFromTmdbDatabase();
+                return await this.pool.query(query);
+            }
         } catch (error) {
             return [];
         }
@@ -148,14 +167,14 @@ export class CategoryService {
 
     async insertNewCategory(newCategory: Category): Promise<ReturnMessage> {
         let returnedMessage !: ReturnMessage;
-        if (newCategory.name && newCategory.name.trim() !== '' && newCategory.nameSelection && newCategory.nameSelection.trim() !== '') {
+        if (newCategory.translationKey && newCategory.translationKey.trim() !== '' && newCategory.nameSelection && newCategory.nameSelection.trim() !== '') {
             const conn = await this.pool.getConnection();
             try {
                 await conn.beginTransaction();
                 const queryInsertSelection: string = `
-                INSERT INTO Category (name, nameSelection)
-                VALUES (?, ?);`;
-                const resultInsertSelection = await conn.query(queryInsertSelection, [newCategory.name.trim(), newCategory.nameSelection.trim()]);
+                INSERT INTO Category (tmdbId, translationKey, nameSelection)
+                VALUES (?, ?, ?);`;
+                const resultInsertSelection = await conn.query(queryInsertSelection, [newCategory.tmdbId, newCategory.translationKey.trim(), newCategory.nameSelection.trim()]);
                 const categoryId: number = Number(resultInsertSelection.insertId);
                 const messageMediaSelection: string = await this.insertManyMediasIntoCategory([...newCategory.movies, ...newCategory.series], categoryId, conn);
                 await conn.commit();
@@ -165,7 +184,7 @@ export class CategoryService {
                     message: `Categorie insérée avec succès \n ${messageMediaSelection}`,
                     other: {
                         id: categoryId,
-                        name: newCategory.name
+                        translationKey: newCategory.translationKey
                     }
                 }
             } catch (error: any) {
@@ -194,13 +213,13 @@ export class CategoryService {
             await conn.beginTransaction();
             const category: CategoryEntirely = await this.getCategoryById(categoryUpdated.id);
             if (category && category.id) {
-                const name: string = categoryUpdated.name && categoryUpdated.name.trim() !== '' ? categoryUpdated.name : category.name;
+                const translationKey: string = categoryUpdated.translationKey && categoryUpdated.translationKey.trim() !== '' ? categoryUpdated.translationKey : category.translationKey;
                 const nameSelection: string = categoryUpdated.nameSelection && categoryUpdated.nameSelection.trim() !== '' ? categoryUpdated.nameSelection : category.nameSelection;
                 const queyUpdateCategory: string = `
                     UPDATE Category
-                    SET name = ?, nameSelection = ? 
+                    SET tmdbId = ?, translationKey = ?, nameSelection = ? 
                     WHERE id = ?`;
-                await conn.query(queyUpdateCategory, [name.trim(), nameSelection.trim(), categoryUpdated.id]);
+                await conn.query(queyUpdateCategory, [categoryUpdated.tmdbId, translationKey.trim().toUpperCase(), nameSelection.trim(), categoryUpdated.id]);
                 await conn.query('DELETE FROM Media_Category WHERE categoryId = ?', [categoryUpdated.id]);
                 const messageMediaSelection: string = await this.insertManyMediasIntoCategory([...categoryUpdated.movies, ...categoryUpdated.series], categoryUpdated.id, conn);
                 await conn.commit();
@@ -210,7 +229,7 @@ export class CategoryService {
                     message: `Categorie modifiée avec succès \n ${messageMediaSelection}`,
                     other: {
                         id: category.id,
-                        name: categoryUpdated.name
+                        translationKey: categoryUpdated.translationKey
                     }
                 }
             } else {
@@ -276,6 +295,41 @@ export class CategoryService {
             }
         } catch (error) {
             throw error;
+        }
+    }
+
+    private async downloadCategoryFromTmdbDatabase(): Promise<any> {
+        const conn = await this.pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            const values: any[] = [];
+
+            const categoryMovie: CategoryTmdb[] = await this.tmdbService.getAllCategoryFromMovies();
+            const categoryTv: CategoryTmdb[] = await this.tmdbService.getAllCategoryFromSeries();
+
+            const categories: CategoryTmdb[] = Array.from(
+                new Map(
+                    [...categoryMovie, ...categoryTv].map(item => [item.id, item])
+                ).values()
+            );
+
+            if (categories.length > 0) {
+                categories.forEach((item: CategoryTmdb) => {
+                    values.push(item.id, item.name.toUpperCase(), item.name);
+                });
+
+                const query: string = `
+                INSERT INTO Category (tmdbId, translationKey, nameSelection)
+                VALUES ${categories.map(() => '(?, ?, ?)').join(', ')};`;
+                
+                await conn.query(query, values);
+                await conn.commit();
+            }
+        } catch(error) {
+            await conn.rollback();
+            throw error;
+        } finally {
+            await conn.release();
         }
     }
     

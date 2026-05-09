@@ -13,7 +13,6 @@ import { EditSeason } from "src/series/dto/edit-season.interface";
 import { EditSeries } from "src/series/dto/edit-series.interface";
 import { MediaType } from "src/media/dto/media-type.enum";
 import { CategoryService } from "src/category/service/category.service";
-import { SearchService } from "src/common-service/search.service";
 import { ConfigService } from "@nestjs/config";
 import { MediaCredit } from "src/credit/dto/media-credit.interface";
 import { Job } from "src/credit/dto/job.enum";
@@ -21,13 +20,13 @@ import { Movie } from "src/movie/dto/movie.interface";
 import { Series } from "src/series/dto/series.interface";
 import { Credit } from "src/credit/dto/credit.interface";
 import { LibraryService } from "src/library/service/library.service";
+import { CategoryTmdb } from "src/category/dto/category-tmbd.interface";
 
 @Injectable()
 export class TmdbService {
 
     constructor(private readonly httpService: HttpService,
         private readonly categoryService: CategoryService,
-        private readonly searchService: SearchService,
         private readonly configService: ConfigService,
         @Inject(forwardRef(() => LibraryService))
         private readonly libraryService: LibraryService
@@ -60,6 +59,9 @@ export class TmdbService {
     private readonly apiTMDBPerson: string = `${this.baseUrlTmdb}/person`;
     private readonly apiTMDBSearchPerson: string = `${this.baseUrlTmdb}/search/person`;
 
+    private readonly apiTMDBGenreMovie: string = `${this.baseUrlTmdb}/genre/movie/list`;
+    private readonly apiTMDBGenreSeries: string = `${this.baseUrlTmdb}/genre/tv/list`;
+
     private getParamLanguage(lang: ISO_3166_1 | null): string {
         if (lang) {
             const language = this.TMDB_LANGUAGES[lang] || 'en-US';
@@ -69,6 +71,9 @@ export class TmdbService {
         }
     }
 
+    // ==============================================
+    // FONCTION USED INTO MOVIE MODULE
+    // ==============================================
     public async getTmdbIdForMovieByTitleAndYear(title: string, year: number): Promise<number | null> {
         try {
             const param: string = `&query=${title}&primary_release_year=${year}`;
@@ -80,7 +85,6 @@ export class TmdbService {
             return null
         }
     }
-
     public async searchMoviebByTitle(title: string): Promise<EditMovie> {
         const param: string = `&query=${title}`;
         const url: string = `${this.apiTMDBSearchMovie}?${this.apiKeyTMDB}${param}`;
@@ -97,7 +101,6 @@ export class TmdbService {
             return null;
         }
     }
-
     public async searchMovieByTmdbId(id: number, lang: ISO_3166_1 | null): Promise<EditMovie> {
         const mediaLibraryId: string | null = await this.libraryService.getMediaLibraryIdByTmdbId(id);
         if (!lang) {
@@ -147,6 +150,9 @@ export class TmdbService {
         return movie;
     }
 
+    // ==============================================
+    // FONCTION USED INTO SERIES MODULE
+    // ==============================================
     public async searchSeriesByTitle(title: string): Promise<any> {
         const param: string = `&query=${title}`;
         const url: string = `${this.apiTMDBSearchTv}?${this.apiKeyTMDB}${param}`;
@@ -258,31 +264,16 @@ export class TmdbService {
         }
     }
 
-    private async getCategories(categoriesTmbd: CategorySimple[]): Promise<CategorySimple[]> {
+    private async getCategories(categoriesTmbd: CategoryTmdb[]): Promise<CategorySimple[]> {
         const categoriesReturned: CategorySimple[] = [];
         try {
-
-            categoriesTmbd = categoriesTmbd.flatMap(item =>
-                item.name.split("&").map(namePart => ({
-                    id: item.id,
-                    name: namePart.trim(),
-                }))
-            );
-
             const categoriesChocoPlus: CategorySimple[] = await this.categoryService.getAllCategories();
-            categoriesTmbd.forEach((categoryTmdb: CategorySimple) => {
-                const categoriesSelected: CategorySimple[] = categoriesChocoPlus
-                    .filter((item: CategorySimple) =>
-                        this.searchService.levenshteinDistance(item.name, categoryTmdb.name) <= 2
-                    )
-                    .sort((a, b) =>
-                        this.searchService.levenshteinDistance(a.name, categoryTmdb.name)
-                        - this.searchService.levenshteinDistance(b.name, categoryTmdb.name)
-                    );
-                if (categoriesSelected.length > 0) {
-                    categoriesReturned.push(categoriesSelected[0]);
+            categoriesTmbd.forEach((categoryTmdb: CategoryTmdb) => {
+                const categoryChocoPlus: CategorySimple | null = categoriesChocoPlus.find((item) => item.tmdbId === categoryTmdb.id);
+                if (categoryChocoPlus) {
+                    categoriesReturned.push(categoryChocoPlus);
                 }
-            })
+            });
             return categoriesReturned;
         } catch (error) {
             return [];
@@ -571,22 +562,6 @@ export class TmdbService {
         }
     }
 
-    public async fetchCreditForMovie(movie: Movie): Promise<MediaCredit[]> {
-        const tmdbId: number | null = await this.libraryService.getTmdbIdByMediaLibrary(movie.mediaLibraryId);
-        const url: string = `${this.apiTMDBMovie}/${tmdbId}?${this.apiKeyTMDB}&append_to_response=credits`;
-        const response = await lastValueFrom(this.httpService.get(url));
-        const credits: MediaCredit[] = this.getCreditsForMovie(response.data.credits);
-        return credits;
-    }
-
-    public async fetchCreditForSeries(series: Series): Promise<MediaCredit[]> {
-        const tmdbId: number | null = await this.libraryService.getTmdbIdByMediaLibrary(series.mediaLibraryId);
-        const url: string = `${this.apiTMDBTv}/${tmdbId}?${this.apiKeyTMDB}&append_to_response=aggregate_credits`;
-        const response = await lastValueFrom(this.httpService.get(url));
-        const credits: MediaCredit[] = this.getCreditsForSeries(response.data.aggregate_credits, response.data.created_by);
-        return credits;
-    }
-
     public async searchCreditByTmdbId(id: number): Promise<Credit> {
         const url: string = `${this.apiTMDBPerson}/${id}?${this.apiKeyTMDB}`;
         const response = await lastValueFrom(this.httpService.get(url));
@@ -603,7 +578,6 @@ export class TmdbService {
         }
         return credit;
     }
-
     public async searchCreditByFullName(fullName: string): Promise<Credit> {
         const url: string = `${this.apiTMDBSearchPerson}?${this.apiKeyTMDB}&query=${fullName}`;
         const response = await lastValueFrom(this.httpService.get(url));
@@ -616,6 +590,39 @@ export class TmdbService {
             srcPoster: await this.getEntirelyUrlImagesFromTMDB(data.profile_path)
         }
         return credit;
+    }
+
+    // ==============================================
+    // FONCTION USED INTO CREDIT MODULE
+    // ==============================================
+    public async fetchCreditForMovie(movie: Movie): Promise<MediaCredit[]> {
+        const tmdbId: number | null = await this.libraryService.getTmdbIdByMediaLibrary(movie.mediaLibraryId);
+        const url: string = `${this.apiTMDBMovie}/${tmdbId}?${this.apiKeyTMDB}&append_to_response=credits`;
+        const response = await lastValueFrom(this.httpService.get(url));
+        const credits: MediaCredit[] = this.getCreditsForMovie(response.data.credits);
+        return credits;
+    }
+
+    public async fetchCreditForSeries(series: Series): Promise<MediaCredit[]> {
+        const tmdbId: number | null = await this.libraryService.getTmdbIdByMediaLibrary(series.mediaLibraryId);
+        const url: string = `${this.apiTMDBTv}/${tmdbId}?${this.apiKeyTMDB}&append_to_response=aggregate_credits`;
+        const response = await lastValueFrom(this.httpService.get(url));
+        const credits: MediaCredit[] = this.getCreditsForSeries(response.data.aggregate_credits, response.data.created_by);
+        return credits;
+    }
+
+    // ==============================================
+    // FONCTION USED INTO CATEGORY MODULE
+    // ==============================================
+    public async getAllCategoryFromMovies(): Promise<CategoryTmdb[]> {
+        const url: string = `${this.apiTMDBGenreMovie}?${this.apiKeyTMDB}`;
+        const response = await lastValueFrom(this.httpService.get(url));
+        return response.data.genres;
+    }
+    public async getAllCategoryFromSeries(): Promise<CategoryTmdb[]> {
+        const url: string = `${this.apiTMDBGenreSeries}?${this.apiKeyTMDB}`;
+        const response = await lastValueFrom(this.httpService.get(url));
+        return response.data.genres;
     }
 
 }

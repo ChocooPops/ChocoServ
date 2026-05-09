@@ -175,11 +175,13 @@ CREATE TABLE
 CREATE TABLE
     `Category` (
         id INT NOT NULL AUTO_INCREMENT,
-        name VARCHAR(255) NOT NULL,
+        tmdbId INT NOT NULL,
+        translationKey VARCHAR(255) NOT NULL,
         nameSelection VARCHAR(255) NOT NULL,
         createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
         updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-        CONSTRAINT CATEGORY_PK PRIMARY KEY (id)
+        CONSTRAINT CATEGORY_PK PRIMARY KEY (id),
+        CONSTRAINT CATEGORY_TMDB_UQ UNIQUE (tmdbId)
     ) AUTO_INCREMENT = 600;
 
 -- POSTER
@@ -661,25 +663,3 @@ VALUES
         'ADMIN',
         NULL
     );
-
--- Insertion des catégories
-INSERT INTO
-    `Category` (name, nameSelection)
-VALUES
-    ('Comédie', 'Comédie'),
-    ('Animation', 'Animation'),
-    ('Drame', 'Contenue Dramatique'),
-    ('Fantastique', 'Fantastique'),
-    ('Science Fiction', 'Science Fiction'),
-    ('Action', 'Action'),
-    ('Horreur', 'Horreur'),
-    ('Guerre', 'Guerre'),
-    ('Crime', 'Crime'),
-    ('Aventure', 'Aventure'),
-    ('Romance', 'Romance'),
-    ('Histoire', 'Histoire'),
-    ('Mystère', 'Mystère'),
-    ('Musique', 'Musique'),
-    ('Western', 'Western'),
-    ('Thriller', 'Thriller'),
-    ('Familiale', 'Familiale');
