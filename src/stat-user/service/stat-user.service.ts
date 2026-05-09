@@ -315,12 +315,12 @@ export class StatUserService {
             -- Compter les occurrences de chaque catégorie
             SELECT 
             c.id as categoryId,
-            c.name as categoryName,
+            c.translationKey as categoryName,
             COUNT(DISTINCT uc.mediaId) as count
             FROM user_content uc
             INNER JOIN Media_Category mc ON mc.mediaId = uc.mediaId
             INNER JOIN Category c ON c.id = mc.categoryId
-            GROUP BY c.id, c.name
+            GROUP BY c.id, c.translationKey
         ),
         total_count AS (
             -- Calculer le total de contenus regardés
@@ -407,13 +407,13 @@ export class StatUserService {
                 -- Compter avec pondération
                 SELECT 
                 c.id as categoryId,
-                c.name as categoryName,
+                c.translationKey as categoryName,
                 SUM(ucw.weight / 100.0) as weighted_count,
                 COUNT(DISTINCT ucw.mediaId) as count
                 FROM user_content_weighted ucw
                 INNER JOIN Media_Category mc ON mc.mediaId = ucw.mediaId
                 INNER JOIN Category c ON c.id = mc.categoryId
-                GROUP BY c.id, c.name
+                GROUP BY c.id, c.translationKey
             ),
             total_weighted AS (
                 SELECT SUM(weight / 100.0) as total
@@ -507,13 +507,13 @@ export class StatUserService {
                 category_time_counts AS (
                     SELECT 
                     c.id as categoryId,
-                    c.name as categoryName,
+                    c.translationKey as categoryName,
                     COUNT(DISTINCT uct.mediaId) as count,
                     SUM(uct.time_watched) as total_time
                     FROM user_content_time uct
                     INNER JOIN Media_Category mc ON mc.mediaId = uct.mediaId
                     INNER JOIN Category c ON c.id = mc.categoryId
-                    GROUP BY c.id, c.name
+                    GROUP BY c.id, c.translationKey
                 ),
                 total_time AS (
                     SELECT SUM(time_watched) as total
@@ -547,10 +547,10 @@ export class StatUserService {
       const query = `
       WITH movie_time AS (
         -- Calculer le temps passé sur les films
-        -- time est en bigint, diviser par 10_000_000 pour obtenir les secondes
+        -- time est en bigint, diviser par 10_00 pour obtenir les secondes
         SELECT 
           m.id as movie_id,
-          (m.time / 10000000) as time_seconds,
+          (m.time / 1000) as time_seconds,
           MAX(su.watchProgress) as max_progress
         FROM Stat_User su
         INNER JOIN Media m ON m.id = su.movieId
@@ -567,11 +567,11 @@ export class StatUserService {
       ),
       episode_time AS (
         -- Calculer le temps passé sur chaque épisode
-        -- time est en bigint, diviser par 10_000_000 pour obtenir les secondes
+        -- time est en bigint, diviser par 10_00 pour obtenir les secondes
         SELECT 
           e.id as episode_id,
           e.seriesId,
-          (e.time / 10000000) as time_seconds,
+          (e.time / 10000) as time_seconds,
           MAX(su.watchProgress) as max_progress
         FROM Stat_User su
         INNER JOIN Episode e ON e.id = su.episodeId

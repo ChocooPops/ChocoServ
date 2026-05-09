@@ -61,7 +61,7 @@ export class StreamService {
             const stat = fs.statSync(path);
             const fileSize = stat.size;
             const range = req.headers.range;
-            videoDuration = videoDuration / 10_000_00;
+            videoDuration = videoDuration / 10_00;
 
             if (range) {
                 const parts = range.replace(/bytes=/, '').split('-');

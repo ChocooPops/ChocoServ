@@ -146,14 +146,14 @@ export class MediaSubstitutionSerivce {
                 andConditions.push(
                   isNumber
                     ? `EXISTS (SELECT 1 FROM media_category mc WHERE mc.mediaId = m.id AND mc.categoryId = ?)`
-                    : `EXISTS (SELECT 1 FROM media_category mc JOIN category c ON c.id = mc.categoryId WHERE mc.mediaId = m.id AND c.name LIKE ?)`,
+                    : `EXISTS (SELECT 1 FROM media_category mc JOIN category c ON c.id = mc.categoryId WHERE mc.mediaId = m.id AND c.translationKey LIKE ?)`,
                 );
                 whereParams.push(isNumber ? val.value : `%${val.value}%`);
               } else if (filter.operation === Operation.NOT_CONTAIN) {
                 andConditions.push(
                   isNumber
                     ? `NOT EXISTS (SELECT 1 FROM media_category mc WHERE mc.mediaId = m.id AND mc.categoryId = ?)`
-                    : `NOT EXISTS (SELECT 1 FROM media_category mc JOIN category c ON c.id = mc.categoryId WHERE mc.mediaId = m.id AND c.name LIKE ?)`,
+                    : `NOT EXISTS (SELECT 1 FROM media_category mc JOIN category c ON c.id = mc.categoryId WHERE mc.mediaId = m.id AND c.translationKey LIKE ?)`,
                 );
                 whereParams.push(isNumber ? val.value : `%${val.value}%`);
               }

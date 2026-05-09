@@ -98,7 +98,7 @@ export class SeriesService extends MediaService {
                         JSON_ARRAYAGG(
                             JSON_OBJECT(
                                 'id', c.id,
-                                'name', c.name
+                                'translationKey', c.translationKey
                             )
                         ) AS categories
                     FROM media_category mc
@@ -442,11 +442,11 @@ export class SeriesService extends MediaService {
                         (title, description, date, startShow, endShow, mediaType)
                         VALUES (?, ?, ?, ?, ?, ?);`;
                 const result: any = await conn.query(query,
-                    [newSeries.title, newSeries.description, this.getStringFromDate(newSeries.date), interval.start, interval.end, this.currentMediaType]
+                    [newSeries.title.trim(), newSeries?.description.trim() ?? '', this.getStringFromDate(newSeries.date), interval.start, interval.end, this.currentMediaType]
                 );
                 const mediaId: number | null = result ? Number(result.insertId) || null : null;
                 if (mediaId) {
-                    let message: string = 'La série a été enregistrée \n';
+                    let message: string = `La série (${newSeries.title.trim()}) a été enregistrée \n `;
                     const formatedPath: string = mediaId.toString();
                     const messageCategory: string = await this.insertManyMediaCategory(mediaId, newSeries.categories, conn);
                     const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newSeries.otherTitles, conn);
@@ -589,7 +589,7 @@ export class SeriesService extends MediaService {
                     await conn.query(query,
                         [updateSeries.title.trim(), updateSeries.description, this.getStringFromDate(updateSeries.date), interval.start, interval.end, updateSeries.id]
                     );
-                    let message: string = 'La série a été modifié \n';
+                    let message: string = `La série (${updateSeries.title.trim()}) a été modifié \n `;
                     const formatedPath: string = oldSeries.id.toString();
                     const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateSeries.id, updateSeries.categories, conn);
                     const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateSeries.id, updateSeries.otherTitles, conn);
@@ -754,10 +754,19 @@ export class SeriesService extends MediaService {
     public async deleteSeriesById(id: number): Promise<ReturnMessage> {
         const conn = await this.pool.getConnection();
         try {
-            await conn.beginTransaction();
-            const message: ReturnMessage = await this.deleteMediasById(id, conn);
-            await conn.commit();
-            return message;
+            const medias: Series[] = await conn.query(`SELECT id, title FROM Media WHERE id = ? AND mediaType = ?`, [id, this.currentMediaType]);
+            if (medias.length > 0) {
+                await conn.beginTransaction();
+                const message: ReturnMessage = await this.deleteMediasById(medias[0].id, medias[0].title, conn);
+                await conn.commit();
+                return message;
+            } else {
+                return {
+                    id: -1,
+                    state: false,
+                    message: `Film introuvable => id incorrect`
+                }
+            }
         } catch (error: any) {
             await conn.rollback();
             return {

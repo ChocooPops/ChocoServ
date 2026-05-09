@@ -93,7 +93,7 @@ export class MovieService extends MediaService {
                         JSON_ARRAYAGG(
                             JSON_OBJECT(
                                 'id', c.id,
-                                'name', c.name
+                                'translationKey', c.translationKey
                             )
                         ) AS categories
                     FROM media_category mc
@@ -167,6 +167,7 @@ export class MovieService extends MediaService {
             const result: any[] = await conn.query(query, [id]);
             return this.getFormatedMovie(result[0]);
         } catch (error) {
+            console.log(error)
             return null;
         } finally {
             await conn.release();
@@ -245,7 +246,7 @@ export class MovieService extends MediaService {
                 );
                 const mediaId: number | null = result ? Number(result.insertId) || null : null;
                 if (mediaId) {
-                    let message: string = 'Le film a été enregistré \n';
+                    let message: string = `Le film (${newMovie.title.trim()}) a été enregistré \n`;
                     const formatedPath: string = mediaId.toString();
                     const messageCategory: string = await this.insertManyMediaCategory(mediaId, newMovie.categories, conn);
                     const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newMovie.otherTitles, conn);
@@ -311,7 +312,7 @@ export class MovieService extends MediaService {
                     await conn.query(query,
                         [updateMovie.title.trim(), updateMovie.mediaLibraryId, updateMovie.description, this.getStringFromDate(updateMovie.date), interval.start, interval.end, updateMovie.id]
                     );
-                    let message: string = 'Le film a été modifié \n';
+                    let message: string = `Le film (${updateMovie.title.trim()}) a été modifié \n`;
                     const formatedPath: string = oldMovie.id.toString();
                     const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateMovie.id, updateMovie.categories, conn);
                     const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateMovie.id, updateMovie.otherTitles, conn);
@@ -357,10 +358,19 @@ export class MovieService extends MediaService {
     public async deleteMovieById(id: number): Promise<ReturnMessage> {
         const conn = await this.pool.getConnection();
         try {
-            await conn.beginTransaction();
-            const message: ReturnMessage = await this.deleteMediasById(id, conn);
-            await conn.commit();
-            return message;
+            const medias: Movie[] = await conn.query(`SELECT id, title FROM Media WHERE id = ? AND mediaType = ?`, [id, this.currentMediaType]);
+            if (medias.length > 0) {
+                await conn.beginTransaction();
+                const message: ReturnMessage = await this.deleteMediasById(medias[0].id, medias[0].title, conn);
+                await conn.commit();
+                return message;
+            } else {
+                return {
+                    id: -1,
+                    state: false,
+                    message: `Film introuvable => id incorrect`
+                }
+            }
         } catch (error: any) {
             await conn.rollback();
             return {

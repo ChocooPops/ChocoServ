@@ -361,7 +361,7 @@ export class MediaService {
         }
     }
 
-    protected async deleteMediasById(mediaId: number, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
+    protected async deleteMediasById(mediaId: number, title: string, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
         try {
             const [mediaType, posterId] = await this.getAllPosterIdLinkedToMedia(mediaId, conn);
             const resulMediaStatUser = await conn.query(`DELETE su FROM Stat_User su WHERE su.movieId = ?
@@ -390,7 +390,7 @@ export class MediaService {
 
             const resultPoster = await this.posterService.deteleAllPostersLinkedToMedia(mediaId, posterId, mediaId.toString(), mediaType, conn);
             await conn.query(`DELETE FROM Media WHERE id = ?`, [mediaId]);
-            const message: string = `${this.currentMediaType} supprimé \n Traduction de titre (${resultTranslationTitle.affectedRows}) \n Acteurs/Réalisateur (${resultMediaSatff.affectedRows}) \n Categories (${resultMediaCategory.affectedRows}) \n Mots clés (${resultKeyword.affectedRows})
+            const message: string = `${this.currentMediaType} (${title}, ${mediaId}) supprimé \n Traduction de titre (${resultTranslationTitle.affectedRows}) \n Acteurs/Réalisateur (${resultMediaSatff.affectedRows}) \n Categories (${resultMediaCategory.affectedRows}) \n Mots clés (${resultKeyword.affectedRows})
             \n Selection Media (${resultSelectionMedia.affectedRows}) \n License Media (${resultLicenseMedia.affectedRows}) \n News (${resultNews.affectedRows}) \n News Video Running (${resultNewsVideoRunning.affectedRows})
             \n Episode (${resultEpisode.affectedRows}) \n Saison (${resultSeason.affectedRows}) \n ${resultPoster} \n Titre Similaire (${resultSimilarMedia.affectedRows})
             \n MyList (${resulMediaUserList.affectedRows}) \n StatUser (${resulMediaStatUser.affectedRows})`;
@@ -430,26 +430,6 @@ export class MediaService {
             if (series.posterEpisode) posterIds.push(...series.posterEpisode.split(';').map((item) => Number(item)));
             return [series.mediaType, posterIds];
         } catch (error) {
-            throw error;
-        }
-    }
-
-    public async deleteAllMediaByType(): Promise<ReturnMessage> {
-        const conn = await this.pool.getConnection();
-        try {
-            await conn.beginTransaction();
-            const medias: Media[] = await this.getAllMediaIdByType();
-            for (const media of medias) {
-                await this.deleteMediasById(media.id, conn);
-            }
-            await conn.commit();
-            return {
-                id: 1,
-                state: true,
-                message: `Tous les médias ${this.currentMediaType} ont été supprimé`
-            }
-        } catch (error) {
-            await conn.rollback();
             throw error;
         }
     }

@@ -507,6 +507,7 @@ CREATE TABLE
         id CHAR(36) NOT NULL,
         path VARCHAR(1000) NOT NULL,
         mediaType ENUM ('MOVIE', 'SERIES') NOT NULL,
+        ADD COLUMN log JSON NULL DEFAULT NULL COMMENT 'JSON logs for library operations (refresh, errors, etc.)',
         lang ENUM (
             'US',
             'FR',
@@ -523,7 +524,8 @@ CREATE TABLE
         createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
         updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
         CONSTRAINT LIBRARY_PK PRIMARY KEY (id),
-        CONSTRAINT LIBRARY_PATH_UQ UNIQUE (path, lang)
+        CONSTRAINT LIBRARY_PATH_UQ UNIQUE (path, lang),
+        CONSTRAINT CHK_LOG_VALID_JSON_CHECK CHECK (log IS NULL OR JSON_VALID(log))
     );
 
 CREATE TABLE

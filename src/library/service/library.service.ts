@@ -22,6 +22,7 @@ import { StateLibrary } from '../dto/state-library.enum';
 import { Media } from 'src/media/dto/media.interface';
 import { EditMovie } from 'src/movie/dto/edit-movie.interface';
 import { ISO_3166_1 } from 'src/media/dto/iso-3166-1.enum';
+import { Movie } from 'src/movie/dto/movie.interface';
 const execPromise = promisify(exec);
 
 @Injectable()
@@ -129,6 +130,7 @@ export class LibraryService {
                 }
             }
         } catch(error: any) {
+            await conn.rollback();
             return {
                 id: -1,
                 state: false,
@@ -139,149 +141,217 @@ export class LibraryService {
         }
     }
 
-    public async refreshLibrary(libraryId: string): Promise<any> {
+    public async refreshLibrary(libraryId: string, mediaType: MediaType): Promise<any> {
+        if (mediaType === MediaType.MOVIE) {
+            return await this.refreshLibraryMovies(libraryId);
+        } else if (mediaType === MediaType.SERIES) {
+
+        } else {
+            return {
+                id: -1,
+                state: false,
+                message: `Aucune librarie n'est associé à ce type`
+            }
+        }
+    }
+
+    public async refreshLibraryMovies(libraryId: string): Promise<any> {
         const conn = await this.pool.getConnection();
         try {
 
             const libraries: Library[] = await conn.query(`SELECT * FROM Library WHERE id = ?`, [libraryId]);
+            let message: any;
 
             if (libraries.length > 0) {
 
                 if (libraries[0].state === StateLibrary.IN_PROGRESS) {
-                    const message: ReturnMessage = {
+                    message = {
                         id: -1,
                         state: false,
                         message: `La librairie est déjà entrain de charger`
                     }
-                    return message;
-                }
+                } else {
+                    await conn.query('UPDATE Library SET state = ? WHERE id = ?', [StateLibrary.IN_PROGRESS, libraryId]);
 
-                await conn.query('UPDATE Library SET state = ? WHERE id = ?', [StateLibrary.IN_PROGRESS, libraryId]);
+                    await conn.beginTransaction();
 
-                await conn.beginTransaction();
+                    const path: string = libraries[0].path;
+                    const mediaType: MediaType = libraries[0].mediaType;
+                    const lang: ISO_3166_1 = libraries[0].lang;
 
-                const path: string = libraries[0].path;
-                const mediaType: MediaType = libraries[0].mediaType;
-                const lang: ISO_3166_1 = libraries[0].lang;
+                    const mediaLibraries: MediaLibrary[] = await conn.query(`SELECT id, path FROM Media_Library WHERE libraryId = ?`, [libraryId]);
+                    const mediasPath: string[] = await this.getAllVideoFiles(path);
 
-                const mediaLibraries: MediaLibrary[] = await conn.query(`SELECT id, path FROM Media_Library WHERE libraryId = ?`, [libraryId]);
-                const mediasPath: string[] = await this.getAllVideoFiles(path);
+                    // ==============================
+                    // NORMALISATION
+                    // ==============================
+                    const mediaLibraryPaths = new Set(
+                        mediaLibraries.map((item) =>
+                            this.normalizePath(item.path),
+                        ),
+                    );
+                    const mediasPathSet = new Set(
+                        mediasPath.map((p) =>
+                            this.normalizePath(p),
+                        ),
+                    );
 
-                // ==============================
-                // NORMALISATION
-                // ==============================
-                const mediaLibraryPaths = new Set(
-                    mediaLibraries.map((item) =>
-                        this.normalizePath(item.path),
-                    ),
-                );
-                const mediasPathSet = new Set(
-                    mediasPath.map((p) =>
-                        this.normalizePath(p),
-                    ),
-                );
+                    // ==============================
+                    // À GARDER
+                    // ==============================
+                    const mediasKeepingInserted: any[] = [];
+                    const mediaLibrariesKeep: MediaLibrary[] = mediaLibraries.filter(
+                    (item) =>
+                        mediasPathSet.has(
+                            this.normalizePath(item.path),
+                        ),
+                    );
+                    const messageKeeping: any[] = [];
 
-                // ==============================
-                // À SUPPRIMER
-                // ==============================
-                const messagesDeleted: any[] = [];
-
-                const mediaLibrariesDelete = mediaLibraries.filter(
-                (item) =>
-                    !mediasPathSet.has(
-                    this.normalizePath(item.path),
-                    ),
-                );
-                if (mediaLibrariesDelete.length > 0) {
-                    const medias: Media[] = await conn.query(`SELECT id, mediaType FROM Media WHERE mediaLibraryId IN 
-                        (${mediaLibrariesDelete.map(() => '?').join(', ')})`,
-                        mediaLibrariesDelete.map((item) => item.id));
-                
-                    for(let media of medias) {
-                        if (media.mediaType === MediaType.MOVIE) {
-                            const message = await this.movieService.deleteMovieById(media.id);
-                            messagesDeleted.push(message);
-                        } else if (media.mediaType === MediaType.SERIES) {
-                            const message = await this.seriesService.deleteSeriesById(media.id);
-                            messagesDeleted.push(message);
+                    if (mediaLibrariesKeep.length > 0) {
+                        const query: string = `SELECT ml.id, ml.tmdbId
+                            FROM Media_Library ml
+                            WHERE ml.id IN (${mediaLibrariesKeep.map(() => '?').join(', ')})
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM Media m
+                                WHERE m.mediaLibraryId = ml.id
+                            );`;
+                        const mediaLibraryNotDownload: MediaLibrary[] = await conn.query(query, mediaLibrariesKeep.map((item) => item.id));
+                        for (let mediaLibrary of mediaLibraryNotDownload) {
+                            try {
+                                const editMovie: EditMovie = await this.tmdbService.searchMovieByTmdbId(mediaLibrary.tmdbId, lang);
+                                const message: ReturnMessage = await this.movieService.insertNewMovie(editMovie, false);
+                                mediasKeepingInserted.push(message);
+                            } catch(error: any) {
+                                mediasKeepingInserted.push(`${error}`);
+                            }
                         }
+                        messageKeeping.push({
+                            media_library_keeping: mediaLibrariesKeep,
+                            medias_keeping_inserted: mediasKeepingInserted
+                        })
                     }
-                    
-                    const messageDelete = await conn.query(`DELETE FROM Media_Library WHERE id IN 
-                        (${mediaLibrariesDelete.map(() => '?').join(', ')})`,
-                        mediaLibrariesDelete.map((item) => item.id));
-                    messagesDeleted.push(`Media Library supprimé (${messageDelete.affectedRows})`);
-                }
 
-                // ==============================
-                // À AJOUTER
-                // ==============================
-                const messagesInserted: any[] = [];
-                const tmdbToInsert: number[] = [];
-                const mediaLibrariesAdd = mediasPath.filter(
-                (mediaPath) =>
-                    !mediaLibraryPaths.has(
-                    this.normalizePath(mediaPath),
-                    ),
-                );
-                const parsedNameTab: ParsedName[] = [];
-                mediaLibrariesAdd.forEach((path: string) => {
-                    const result: ParsedName = this.parseFilePathService.getCleanMediaTitle(basename(path))
-                    parsedNameTab.push({
-                        name: result.name,
-                        year: result.year,
-                        path: path
-                    });
-                });
-                if (mediaType === MediaType.MOVIE) {
-                    for(let parsedName of parsedNameTab) {
-                        try {
-                            const tmdbId: number = await this.tmdbService.getTmdbIdForMovieByTitleAndYear(parsedName.name, parsedName.year);
-                            if (tmdbId && tmdbId > 0) tmdbToInsert.push(tmdbId);
-                            const metadata: MediaMetadata = await this.extractMediaMetadata(parsedName.path);
-                            const id: string = this.generateIdUuid();
-                            const query: string = `
-                                INSERT INTO Media_Library
-                                (id, titleFormated, year, path, type, tmdbId, libraryId,
-                                duration, frames, bytes, width, height, resolution)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-                            await conn.query(query, [id, parsedName.name, parsedName.year ?? 0, 
-                                parsedName.path, MediaType.MOVIE, tmdbId, libraryId,
-                                metadata.duration ?? 0, metadata.frames ?? 0, metadata.bytes ?? 0, metadata.width ?? 0, metadata.height ?? 0, metadata.resolution ?? 0]);
-                            messagesInserted.push(`Succès ${parsedName.name} (${parsedName.year}) [${parsedName.path}] => TMDB_ID (${tmdbId}), duration (${metadata.duration}), frames (${metadata.frames}), bytes (${metadata.bytes})`)
-                        } catch(error) {
-                            messagesInserted.push(`Error ${parsedName.name} (${parsedName.year}) [${parsedName.path}] => ${error}`);
+                    // ==============================
+                    // À SUPPRIMER
+                    // ==============================
+                    const mediasDeleted: any[] = [];
+                    const messagesDeleted: any[] = [];
+
+                    const mediaLibrariesDelete = mediaLibraries.filter(
+                    (item) =>
+                        !mediasPathSet.has(
+                        this.normalizePath(item.path),
+                        ),
+                    );
+                    if (mediaLibrariesDelete.length > 0) {
+                        const medias: Media[] = await conn.query(`SELECT id, mediaType FROM Media WHERE mediaLibraryId IN 
+                            (${mediaLibrariesDelete.map(() => '?').join(', ')})`,
+                            mediaLibrariesDelete.map((item) => item.id));
+                    
+                        for(let media of medias) {
+                            if (media.mediaType === MediaType.MOVIE) {
+                                const message = await this.movieService.deleteMovieById(media.id);
+                                mediasDeleted.push(message);
+                            } else if (media.mediaType === MediaType.SERIES) {
+                                const message = await this.seriesService.deleteSeriesById(media.id);
+                                mediasDeleted.push(message);
+                            }
                         }
+                        
+                        await conn.query(`DELETE FROM Media_Library WHERE id IN 
+                            (${mediaLibrariesDelete.map(() => '?').join(', ')})`,
+                            mediaLibrariesDelete.map((item) => item.id));
+                        messagesDeleted.push({
+                            media_library_deleting: mediaLibrariesDelete,
+                            medias_deleted: mediasDeleted
+                        });
+                    }
+
+                    // ==============================
+                    // À AJOUTER
+                    // ==============================
+                    const messageInserted: any[] = [];
+                    const mediasLibraryInserted: any[] = [];
+                    const messagesMediaInserted: any[] = [];
+
+                    const tmdbToInsert: number[] = [];
+                    const mediaLibrariesAdd = mediasPath.filter(
+                    (mediaPath) =>
+                        !mediaLibraryPaths.has(
+                        this.normalizePath(mediaPath),
+                        ),
+                    );
+                    const parsedNameTab: ParsedName[] = [];
+                    mediaLibrariesAdd.forEach((path: string) => {
+                        const result: ParsedName = this.parseFilePathService.getCleanMediaTitle(basename(path))
+                        parsedNameTab.push({
+                            name: result.name,
+                            year: result.year,
+                            path: path
+                        });
+                    });
+                    if (mediaType === MediaType.MOVIE) {
+                        for(let parsedName of parsedNameTab) {
+                            try {
+                                const tmdbId: number = await this.tmdbService.getTmdbIdForMovieByTitleAndYear(parsedName.name, parsedName.year);
+                                if (tmdbId && tmdbId > 0) tmdbToInsert.push(tmdbId);
+                                const metadata: MediaMetadata = await this.extractMediaMetadata(parsedName.path);
+                                const id: string = this.generateIdUuid();
+                                const query: string = `
+                                    INSERT INTO Media_Library
+                                    (id, titleFormated, year, path, type, tmdbId, libraryId,
+                                    duration, frames, bytes, width, height, resolution)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                                await conn.query(query, [id, parsedName.name, parsedName.year ?? 0, 
+                                    parsedName.path, MediaType.MOVIE, tmdbId, libraryId,
+                                    metadata.duration ?? 0, metadata.frames ?? 0, metadata.bytes ?? 0, metadata.width ?? 0, metadata.height ?? 0, metadata.resolution ?? 0]);
+                                mediasLibraryInserted.push(`Succès ${parsedName.name} (${parsedName.year}) [${parsedName.path}] => TMDB_ID (${tmdbId}), duration (${metadata.duration}), frames (${metadata.frames}), bytes (${metadata.bytes})`)
+                            } catch(error) {
+                                mediasLibraryInserted.push(`Error ${parsedName.name} (${parsedName.year}) [${parsedName.path}] => ${error}`);
+                            }
+                        }
+                        await conn.commit();
+                        await conn.release();
+                        for (let tmdbId of tmdbToInsert) {
+                            try {
+                                const editMovie: EditMovie = await this.tmdbService.searchMovieByTmdbId(tmdbId, lang);
+                                const message: ReturnMessage = await this.movieService.insertNewMovie(editMovie, false);
+                                messagesMediaInserted.push(message);
+                            } catch(error: any) {
+                                messagesMediaInserted.push(`${error}`);
+                            }
+                        }
+                        messageInserted.push({
+                            media_library: mediasLibraryInserted,
+                            medias: messagesMediaInserted
+                        });
                     }
                     await conn.commit();
-                    for (let tmdbId of tmdbToInsert) {
-                        try {
-                            const editMovie: EditMovie = await this.tmdbService.searchMovieByTmdbId(tmdbId, lang);
-                            const message: ReturnMessage = await this.movieService.insertNewMovie(editMovie, false);
-                            messagesInserted.push(message);
-                        } catch(error) {
-                            messagesInserted.push(error);
-                        }
-                    }
+                    message = {
+                        keeping: messageKeeping,
+                        inserted: messageInserted,
+                        deleting: messagesDeleted,
+                    };
                 }
-                return {
-                    deleting: messagesDeleted,
-                    inserted: messagesInserted
-                };
             } else {
-                const message: ReturnMessage = {
+                message = {
                     id: -1,
                     state: false,
                     message: `Librairie introuvable, id incorrect`
                 }
-                return message;
             }
+            await this.pool.query(`UPDATE Library SET log = ? WHERE id = ?`, [JSON.stringify(message), libraryId]);
+            return message;
         } catch(error: any) {
             const message: ReturnMessage = {
                 id: -1,
                 state: false,
                 message: error
             }
+            await conn.rollback();
+            await this.pool.query(`UPDATE Library SET log = ? WHERE id = ?`, [JSON.stringify(message), libraryId]);
             return message;
         } finally {
             await conn.release();
@@ -289,10 +359,76 @@ export class LibraryService {
         }
     }
 
+    public async modifyMediaLibrary(editMediaLibrary: MediaLibrary): Promise<ReturnMessage> {
+        const conn = await this.pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            const mediaLibraries: MediaLibrary[] = await conn.query(`SELECT * FROM Media_Library WHERE id = ?`, [editMediaLibrary.id]);
+            if (mediaLibraries.length > 0) {
+                const mediaLibrary: MediaLibrary = mediaLibraries[0];
+                const libraries: Library[] = await conn.query(`SELECT * FROM Library WHERE id = ?`, [mediaLibrary.libraryId]);
+                const library: Library = libraries[0];
+                if (library.mediaType === MediaType.MOVIE) {
+                     return await this.modifyMovieLibrary(editMediaLibrary, mediaLibrary, library, conn);
+                } else if (library.mediaType === MediaType.SERIES) {
+
+                }
+            } else {
+                return {
+                    id: -1,
+                    state: false,
+                    message: `Médiathèque introuvable, id incorrect`
+                }
+            }
+        } catch(error: any) {
+            await conn.rollback();
+            return {
+                id: -1,
+                state: false,
+                message: `Error : ${error.sqlMessage}`
+            }
+        } finally {
+            await conn.release();
+        }
+    }
+
+    private async modifyMovieLibrary(editMediaLibrary: MediaLibrary, mediaLibrary: MediaLibrary, library: Library, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
+        if (mediaLibrary.tmdbId !== editMediaLibrary.tmdbId) {
+            const movies: Movie[] = await conn.query(`SELECT id FROM Media WHERE mediaLibraryId = ?`, [editMediaLibrary.id]);
+            const movieTmdb: EditMovie = await this.tmdbService.searchMovieByTmdbId(editMediaLibrary.tmdbId, library.lang);
+            let messageMovie!: ReturnMessage;
+            movieTmdb.mediaLibraryId = editMediaLibrary.id;
+            if (movies.length > 0) {
+                movieTmdb.id = movies[0].id;
+                messageMovie = await this.movieService.updateMovie(movieTmdb);
+            } else {
+                messageMovie = await this.movieService.insertNewMovie(movieTmdb, true);
+            }
+            if (messageMovie.state) {
+                await conn.query(`UPDATE Media_Library SET tmdbId = ? WHERE id = ?`, [editMediaLibrary.tmdbId, editMediaLibrary.id]);
+                await conn.commit();
+                return {
+                    id: -1,
+                    state: true,
+                    message: `Meta-données du film modifées`
+                }
+            } else {
+                return messageMovie;
+            }
+        } else {
+            return {
+                id: -1,
+                state: false,
+                message: `Aucune modification`
+            }
+        }
+    }
+
     public async deleteLibraryById(id: string): Promise<ReturnMessage> {
         const conn = await this.pool.getConnection();
         try {
             await conn.beginTransaction();
+            let messages: ReturnMessage;
             const libraries: Library[] = await conn.query(`SELECT * FROM Library WHERE id = ?`, [id]);
 
             if (libraries.length > 0) {
@@ -317,32 +453,40 @@ export class LibraryService {
                     const message: string = `Media Librairie supprimé (${resultMediaLibrary.affectedRows}) \n librairie supprimé (${resultLibrary.affectedRows})`;
                     await conn.commit();
 
-                    return {
+                    messages = {
                         id: 0,
                         state: true,
                         message: message,
                         other: messagesDeleted
                     }
                 } else {
-                    return {
+                    messages = {
                         id: -1,
                         state: false,
                         message: `Suppression impossible, la librairie est entrain de se charger` 
                     }
                 }
             } else {
-                return {
+                messages = {
                     id: -1,
                     state: false,
                     message: `Librairie introuvable, id incorrect` 
                 }
             }
+
+            if (messages.state) {
+                await this.pool.query(`UPDATE Library SET log = ? WHERE id = ?`, [JSON.stringify(messages), id]);
+            }
+            return messages;
         } catch(error: any) {
-            return {
+            const messages = {
                 id: -1,
                 state: false,
-                message: `Error : ${error.sqlMessage}` 
+                message: `Error : ${error.sqlMessage}`
             }
+            await conn.rollback();
+            await this.pool.query(`UPDATE Library SET log = ? WHERE id = ?`, [JSON.stringify(messages), id]);
+            return messages;
         } finally {
             await conn.release();
         }

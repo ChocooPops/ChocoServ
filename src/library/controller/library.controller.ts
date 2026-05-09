@@ -4,6 +4,7 @@ import { Library } from '../dto/library.interface';
 import { AdminUserGuard } from 'src/guard/admin-user.guard';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { MediaLibrary } from '../dto/media-library.interface';
+import { MediaType } from 'src/media/dto/media-type.enum';
 
 @Controller('library')
 export class LibraryController {
@@ -29,9 +30,15 @@ export class LibraryController {
     } 
 
     @UseGuards(AdminUserGuard)
-    @Put('refresh/:id')
-    async refreshLibrary(@Param('id') id: string): Promise<any> {
-        return await this.libraryService.refreshLibrary(id);
+    @Put('refresh/:id/:mediaType')
+    async refreshLibrary(@Param('id') id: string, @Param('mediaType') mediaType: MediaType): Promise<any> {
+        return await this.libraryService.refreshLibrary(id, mediaType);
+    }
+
+    @UseGuards(AdminUserGuard)
+    @Put('modify-media-library')
+    async modifyMediaLibrary(@Body() editMediaLibrary: MediaLibrary): Promise<any> {
+        return await this.libraryService.modifyMediaLibrary(editMediaLibrary);
     }
 
     @UseGuards(AdminUserGuard)
