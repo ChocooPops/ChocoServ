@@ -144,6 +144,7 @@ export class MediaService {
                     JSON_ARRAYAGG(
                         JSON_OBJECT(
                             'id', s.id,
+                            'mediaLibraryId', mlib.id,
                             'seriesId', s.seriesId,
                             'name', s.name,
                             'seasonNumber', s.seasonNumber,
@@ -152,6 +153,7 @@ export class MediaService {
                         ORDER BY s.seasonNumber
                     ) AS seasons
                 FROM season s
+                LEFT JOIN Media_Library mlib ON mlib.id = s.mediaLibraryId
                 LEFT JOIN poster sp ON sp.id = s.srcPoster
                 GROUP BY s.seriesId
             ) seas ON seas.mediaId = m.id

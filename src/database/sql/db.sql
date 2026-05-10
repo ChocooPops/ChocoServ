@@ -507,7 +507,7 @@ CREATE TABLE
         id CHAR(36) NOT NULL,
         path VARCHAR(1000) NOT NULL,
         mediaType ENUM ('MOVIE', 'SERIES') NOT NULL,
-        ADD COLUMN log JSON NULL DEFAULT NULL COMMENT 'JSON logs for library operations (refresh, errors, etc.)',
+        log JSON NULL DEFAULT NULL,
         lang ENUM (
             'US',
             'FR',
@@ -542,14 +542,20 @@ CREATE TABLE
         width INT DEFAULT 0,
         height INT DEFAULT 0,
         resolution VARCHAR(255) DEFAULT 'SD',
+
         libraryId CHAR(36) NOT NULL,
+        parentId CHAR(36) NULL DEFAULT NULL,
+        seasonNumber INT NULL DEFAULT NULL,
+        episodeNumber INT NULL DEFAULT NULL,
+
         createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
         updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
         
         CONSTRAINT MEDIA_LIBRARY_PK PRIMARY KEY (id),
         CONSTRAINT MEDIA_LIBRARY_PATH_UQ UNIQUE (path, libraryId),
 
-        INDEX IDX_MEDIA_LIBRARY (libraryId)
+        INDEX IDX_MEDIA_LIBRARY (libraryId),
+        INDEX IDX_ML_PARENT (parentId)
     );
 
 -- ====================================================================
@@ -637,7 +643,8 @@ ADD CONSTRAINT FK_SU_EPISODE FOREIGN KEY (episodeId) REFERENCES `Episode` (id) O
 ADD CONSTRAINT FK_SU_USER FOREIGN KEY (userId) REFERENCES `User` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- MEDIA LIBRARY
-ALTER TABLE `Media_Library` ADD CONSTRAINT FK_MEDIA_LIBRARY FOREIGN KEY (libraryId) REFERENCES `Library` (id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Media_Library` ADD CONSTRAINT FK_MEDIA_LIBRARY FOREIGN KEY (libraryId) REFERENCES `Library` (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT FK_ML_PARENT FOREIGN KEY (parentId) REFERENCES Media_Library (id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- ====================================================================
 -- INSERTIONS DE DONNÉES INITIALES

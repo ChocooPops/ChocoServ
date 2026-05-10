@@ -24,12 +24,15 @@ import { EditMovie } from 'src/movie/dto/edit-movie.interface';
 import { ISO_3166_1 } from 'src/media/dto/iso-3166-1.enum';
 import { Movie } from 'src/movie/dto/movie.interface';
 const execPromise = promisify(exec);
+import { SeriesScannerService, ScannedSeries } from 'src/common-service/series-scanner.service';
+import { EditSeries } from 'src/series/dto/edit-series.interface';
 
 @Injectable()
 export class LibraryService {
 
     constructor(@Inject(DATABASE_POOL) private readonly pool: mariadb.Pool,
         private readonly parseFilePathService: ParseFilePathService,
+        private readonly seriesScannerService: SeriesScannerService,
         @Inject(forwardRef(() => TmdbService))
         private readonly tmdbService: TmdbService,
         @Inject(forwardRef(() => MovieService))
@@ -87,12 +90,74 @@ export class LibraryService {
     public async getAllMediaLibraryByLibraryId(libraryId: string): Promise<MediaLibrary[]> {
         const conn = await this.pool.getConnection();
         try {
-            const query: string = `SELECT ml.* FROM Media_Library ml
+            const query: string = `
+                SELECT ml.*
+                FROM Media_Library ml
                 INNER JOIN Library l ON l.id = ml.libraryId AND l.state = ?
-                WHERE libraryId = ? ORDER BY updatedAt desc`;
+                WHERE ml.libraryId = ?`;
+
             const mediaLibraries: MediaLibrary[] = await conn.query(query, [StateLibrary.NOT_WORKED, libraryId]);
-            return mediaLibraries;
-        } catch(error) {
+
+            const isSeriesLibrary = mediaLibraries.some((ml) => ml.type === 'SERIES');
+            if (!isSeriesLibrary) {
+                return mediaLibraries.sort((a, b) =>
+                    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+                );
+            }
+
+            const byId = new Map<string, MediaLibrary>(
+                mediaLibraries.map((ml) => [ml.id, ml])
+            );
+
+            const series  = mediaLibraries.filter((ml) => ml.type === 'SERIES');
+            const seasons = mediaLibraries.filter((ml) => ml.type === 'SEASON');
+            const episodes = mediaLibraries.filter((ml) => ml.type === 'EPISODE');
+
+            const seasonsBySeries = new Map<string, MediaLibrary[]>();
+            for (const season of seasons) {
+                const key = season.parentId ?? '__orphan__';
+                if (!seasonsBySeries.has(key)) seasonsBySeries.set(key, []);
+                seasonsBySeries.get(key)!.push(season);
+            }
+
+            const episodesBySeason = new Map<string, MediaLibrary[]>();
+            for (const episode of episodes) {
+                const key = episode.parentId ?? '__orphan__';
+                if (!episodesBySeason.has(key)) episodesBySeason.set(key, []);
+                episodesBySeason.get(key)!.push(episode);
+            }
+
+            series.sort((a, b) =>
+                (a.titleFormated ?? '').localeCompare(b.titleFormated ?? '', undefined, { sensitivity: 'base' })
+            );
+
+            const result: MediaLibrary[] = [];
+
+            for (const serie of series) {
+                result.push(serie);
+
+                const serieSeasons = seasonsBySeries.get(serie.id) ?? [];
+
+                serieSeasons.sort((a, b) => (a.seasonNumber ?? 0) - (b.seasonNumber ?? 0));
+
+                for (const season of serieSeasons) {
+                    result.push(season);
+
+                    const seasonEpisodes = episodesBySeason.get(season.id) ?? [];
+
+                    seasonEpisodes.sort((a, b) => (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0));
+
+                    result.push(...seasonEpisodes);
+                }
+            }
+
+            const resultIds = new Set(result.map((ml) => ml.id));
+            const orphans = mediaLibraries.filter((ml) => !resultIds.has(ml.id));
+            result.push(...orphans);
+
+            return result;
+
+        } catch (error) {
             return [];
         } finally {
             await conn.release();
@@ -145,7 +210,7 @@ export class LibraryService {
         if (mediaType === MediaType.MOVIE) {
             return await this.refreshLibraryMovies(libraryId);
         } else if (mediaType === MediaType.SERIES) {
-
+            return await this.refreshLibrarySeries(libraryId);
         } else {
             return {
                 id: -1,
@@ -371,7 +436,7 @@ export class LibraryService {
                 if (library.mediaType === MediaType.MOVIE) {
                      return await this.modifyMovieLibrary(editMediaLibrary, mediaLibrary, library, conn);
                 } else if (library.mediaType === MediaType.SERIES) {
-
+                    return await this.modifySeriesLibrary(editMediaLibrary, mediaLibrary, library, conn);
                 }
             } else {
                 return {
@@ -421,6 +486,83 @@ export class LibraryService {
                 state: false,
                 message: `Aucune modification`
             }
+        }
+    }
+
+    private async modifySeriesLibrary(editMediaLibrary: MediaLibrary, mediaLibrary: MediaLibrary, library: Library, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
+    
+        if (mediaLibrary.type !== 'SERIES') {
+            return {
+                id:      -1,
+                state:   false,
+                message: `Seules les lignes de type SERIES peuvent être modifiées`,
+            };
+        }
+    
+        const existingSeries: Media[] = await conn.query(
+            `SELECT id FROM Media WHERE mediaLibraryId = ?`,
+            [editMediaLibrary.id]
+        );
+    
+        if (mediaLibrary.tmdbId !== editMediaLibrary.tmdbId || existingSeries.length <= 0) {
+    
+            const seriesTmdb: EditSeries = await this.tmdbService.searchSeriesByTmdbId(editMediaLibrary.tmdbId, library.lang);
+            let messageSeries: ReturnMessage;
+            seriesTmdb.mediaLibraryId = editMediaLibrary.id;
+    
+            if (existingSeries.length > 0) {
+                seriesTmdb.id = existingSeries[0].id;
+                messageSeries = await this.seriesService.updateSeries(seriesTmdb);
+            } else {
+                messageSeries = await this.seriesService.insertNewSeries(seriesTmdb, true);
+            }
+
+            if (messageSeries.state) {
+    
+                const childRows: { id: string }[] = await conn.query(
+                    `SELECT id FROM Media_Library
+                    WHERE parentId = ?
+                        OR parentId IN (
+                            SELECT id FROM Media_Library
+                            WHERE parentId = ? AND type = 'SEASON'
+                        )`,
+                    [editMediaLibrary.id, editMediaLibrary.id]
+                );
+                const childIds: string[] = childRows.map((r) => r.id);
+                
+                await conn.query(
+                    `UPDATE Media_Library SET tmdbId = ? WHERE id = ?`,
+                    [editMediaLibrary.tmdbId, editMediaLibrary.id]
+                );
+                
+                if (childIds.length > 0) {
+                    await conn.query(
+                        `UPDATE Media_Library SET tmdbId = ?
+                        WHERE id IN (${childIds.map(() => '?').join(',')})`,
+                        [editMediaLibrary.tmdbId, ...childIds]
+                    );
+                }
+                
+                const updatedIds: string[] = [editMediaLibrary.id, ...childIds];
+    
+                await conn.commit();
+                return {
+                    id:      -1,
+                    state:   true,
+                    message: `Meta-données de la série modifiées`,
+                    other: updatedIds
+                };
+    
+            } else {
+                return messageSeries;
+            }
+    
+        } else {
+            return {
+                id:      -1,
+                state:   false,
+                message: `Aucune modification`,
+            };
         }
     }
 
@@ -591,6 +733,319 @@ export class LibraryService {
             .replace(/\/+/g, '/')
             .replace(/\/$/, '')
             .toLowerCase();
+    }
+
+    public async refreshLibrarySeries(libraryId: string): Promise<any> {
+        const conn = await this.pool.getConnection();
+        try {
+            // ── Chargement et garde ───────────────────────────────────────────
+            const libraries: Library[] = await conn.query(
+                `SELECT * FROM Library WHERE id = ?`, [libraryId]
+            );
+            if (libraries.length === 0) {
+                return { id: -1, state: false, message: `Librairie introuvable` };
+            }
+            const library = libraries[0];
+            if (library.state === StateLibrary.IN_PROGRESS) {
+                return { id: -1, state: false, message: `La librairie est déjà entrain de charger` };
+            }
+    
+            await conn.query('UPDATE Library SET state = ? WHERE id = ?', [StateLibrary.IN_PROGRESS, libraryId]);
+            await conn.beginTransaction();
+    
+            const rootPath: string = library.path;
+            const lang: ISO_3166_1 = library.lang;
+    
+            // ── 1. Scan du disque ─────────────────────────────────────────────
+            const scannedSeries: ScannedSeries[] =
+                await this.seriesScannerService.scanSeriesDirectory(rootPath);
+    
+            // ── 2. État actuel en base ────────────────────────────────────────
+            const existingML: MediaLibrary[] = await conn.query(
+                `SELECT id, path, type, tmdbId, parentId, seasonNumber, episodeNumber
+                FROM Media_Library WHERE libraryId = ?`,
+                [libraryId]
+            );
+            const existingMLByPath = new Map<string, MediaLibrary>(
+                existingML.map((ml) => [this.normalizePath(ml.path), ml])
+            );
+    
+            // Chemins vus sur le disque (détection des suppressions)
+            const seenPaths = new Set<string>();
+    
+            const logInserted: any[] = [];
+            const logKept:     any[] = [];
+            const logTmdb:     any[] = [];
+    
+            // ── 3. Parcours des séries scannées ───────────────────────────────
+            for (const series of scannedSeries) {
+    
+                seenPaths.add(this.normalizePath(series.folderPath));
+    
+                // ── 3a. SÉRIE ─────────────────────────────────────────────────
+                const existingSeries = existingMLByPath.get(this.normalizePath(series.folderPath));
+                let seriesMLId: string;
+    
+                if (existingSeries) {
+                    seriesMLId = existingSeries.id;
+                    logKept.push(`[SERIES] ${series.seriesTitle} (${series.year}) — conservé`);
+                } else {
+                    seriesMLId = this.generateIdUuid();
+                    await conn.query(
+                        `INSERT INTO Media_Library
+                        (id, titleFormated, year, path, type, tmdbId, libraryId,
+                        parentId, seasonNumber, episodeNumber,
+                        duration, frames, bytes, width, height, resolution)
+                        VALUES (?, ?, ?, ?, 'SERIES', ?, ?,
+                                NULL, NULL, NULL,
+                                0, 0, 0, 0, 0, 'SD')`,
+                        [
+                            seriesMLId,
+                            series.seriesTitle,
+                            series.year ?? 0,
+                            series.folderPath,
+                            0,          // tmdbId → mis à jour après recherche TMDB
+                            libraryId,
+                        ]
+                    );
+                    logInserted.push(`[SERIES] ${series.seriesTitle} (${series.year}) → ${seriesMLId}`);
+                }
+    
+                // ── 3b. Recherche TMDB (uniquement si inconnu) ────────────────
+                let seriesTmdbId = existingSeries?.tmdbId ?? 0;
+                if (seriesTmdbId === 0) {
+                    try {
+                        seriesTmdbId = await this.tmdbService.getTmdbIdForSeriesByTitleAndYear(
+                            series.seriesTitle, series.year
+                        );
+                        if (seriesTmdbId > 0) {
+                            await conn.query(
+                                `UPDATE Media_Library SET tmdbId = ? WHERE id = ?`,
+                                [seriesTmdbId, seriesMLId]
+                            );
+                        }
+                    } catch (e) {
+                        logTmdb.push(`[SERIES TMDB] ${series.seriesTitle} — erreur: ${e}`);
+                    }
+                }
+    
+                // ── 3c. SAISONS ───────────────────────────────────────────────
+                for (const season of series.seasons) {
+    
+                    seenPaths.add(this.normalizePath(season.folderPath));
+    
+                    const existingSeason = existingMLByPath.get(this.normalizePath(season.folderPath));
+                    let seasonMLId: string;
+    
+                    if (existingSeason) {
+                        seasonMLId = existingSeason.id;
+                        logKept.push(`  [SEASON ${season.seasonNumber}] conservé`);
+                    } else {
+                        seasonMLId = this.generateIdUuid();
+                        await conn.query(
+                            `INSERT INTO Media_Library
+                            (id, titleFormated, year, path, type, tmdbId, libraryId,
+                            parentId, seasonNumber, episodeNumber,
+                            duration, frames, bytes, width, height, resolution)
+                            VALUES (?, ?, ?, ?, 'SEASON', ?, ?,
+                                    ?, ?, NULL,
+                                    0, 0, 0, 0, 0, 'SD')`,
+                            [
+                                seasonMLId,
+                                `${series.seriesTitle} — Saison ${season.seasonNumber}`,
+                                series.year ?? 0,
+                                season.folderPath,
+                                seriesTmdbId,
+                                libraryId,
+                                seriesMLId,          // parentId → pointe vers la SÉRIE
+                                season.seasonNumber, // seasonNumber
+                            ]
+                        );
+                        logInserted.push(
+                            `  [SEASON ${season.seasonNumber}] ${season.folderPath} → ${seasonMLId} (parent: ${seriesMLId})`
+                        );
+                    }
+    
+                    // ── 3d. ÉPISODES ──────────────────────────────────────────
+                    // parentId = seasonMLId  |  seasonNumber = N  |  episodeNumber = N
+                    for (const episode of season.episodes) {
+    
+                        seenPaths.add(this.normalizePath(episode.filePath));
+    
+                        const existingEpisode = existingMLByPath.get(this.normalizePath(episode.filePath));
+                        if (existingEpisode) {
+                            logKept.push(
+                                `    [EP ${episode.episodeNumber}] ${episode.filePath} — conservé`
+                            );
+                            continue;
+                        }
+    
+                        try {
+                            const metadata: MediaMetadata = await this.extractMediaMetadata(episode.filePath);
+                            const episodeMLId = this.generateIdUuid();
+    
+                            await conn.query(
+                                `INSERT INTO Media_Library
+                                (id, titleFormated, year, path, type, tmdbId, libraryId,
+                                parentId, seasonNumber, episodeNumber,
+                                duration, frames, bytes, width, height, resolution)
+                                VALUES (?, ?, ?, ?, 'EPISODE', ?, ?,
+                                        ?, ?, ?,
+                                        ?, ?, ?, ?, ?, ?)`,
+                                [
+                                    episodeMLId,
+                                    `${series.seriesTitle} S${String(season.seasonNumber).padStart(2, '0')}E${String(episode.episodeNumber).padStart(2, '0')}`,
+                                    series.year ?? 0,
+                                    episode.filePath,
+                                    seriesTmdbId,
+                                    libraryId,
+                                    seasonMLId,             // parentId → pointe vers la SAISON
+                                    season.seasonNumber,    // seasonNumber  (redondant mais pratique pour les requêtes à plat)
+                                    episode.episodeNumber,  // episodeNumber
+                                    metadata.duration  ?? 0n,
+                                    metadata.frames    ?? 0n,
+                                    metadata.bytes     ?? 0n,
+                                    metadata.width     ?? 0,
+                                    metadata.height    ?? 0,
+                                    metadata.resolution ?? 'SD',
+                                ]
+                            );
+                            logInserted.push(
+                                `    [EP ${episode.episodeNumber}] ${episode.filePath} → ${episodeMLId} (parent: ${seasonMLId}, ${metadata.duration}ms, ${metadata.resolution})`
+                            );
+                        } catch (e) {
+                            logInserted.push(
+                                `    [EP ${episode.episodeNumber}] ${episode.filePath} — ERREUR metadata: ${e}`
+                            );
+                        }
+                    }
+                }
+            }
+    
+            // ── 4. Suppressions ───────────────────────────────────────────────
+            const logDeleted: any[] = [];
+            const toDelete = existingML.filter(
+                (ml) => !seenPaths.has(this.normalizePath(ml.path))
+            );
+    
+            if (toDelete.length > 0) {
+                // Supprimer d'abord les entités Media liées aux SERIES supprimées.
+                const seriesMLIdsToDelete = toDelete
+                    .filter((ml) => ml.type === 'SERIES')
+                    .map((ml) => ml.id);
+    
+                if (seriesMLIdsToDelete.length > 0) {
+                    const mediasToDelete: Media[] = await conn.query(
+                        `SELECT id, mediaType FROM Media
+                        WHERE mediaLibraryId IN (${seriesMLIdsToDelete.map(() => '?').join(',')})`,
+                        seriesMLIdsToDelete
+                    );
+                    for (const media of mediasToDelete) {
+                        if (media.mediaType === MediaType.SERIES) {
+                            const msg = await this.seriesService.deleteSeriesById(media.id);
+                            logDeleted.push(msg);
+                        }
+                    }
+                }
+    
+                // Suppression des lignes Media_Library.
+                const toDeleteIds = toDelete.map((ml) => ml.id);
+                await conn.query(
+                    `DELETE FROM Media_Library
+                    WHERE id IN (${toDeleteIds.map(() => '?').join(',')})`,
+                    toDeleteIds
+                );
+                logDeleted.push(...toDelete.map((ml) => `[DEL] ${ml.type} ${ml.path}`));
+            }
+    
+            await conn.commit();
+    
+            // ── 5. Phase TMDB hors transaction (peut être longue) ────────────
+            await conn.release();
+    
+            const seriesWithoutMedia: MediaLibrary[] = await this.pool.query(
+                `SELECT ml.id, ml.tmdbId FROM Media_Library ml
+                WHERE ml.libraryId = ? AND ml.type = 'SERIES'
+                AND ml.tmdbId > 0
+                AND NOT EXISTS (
+                    SELECT 1 FROM Media m WHERE m.mediaLibraryId = ml.id
+                )`,
+                [libraryId]
+            );
+    
+            for (const ml of seriesWithoutMedia) {
+                try {
+                    const editSeries = await this.tmdbService.searchSeriesByTmdbId(ml.tmdbId, lang);
+                    editSeries.mediaLibraryId = ml.id;
+                    const msg = await this.seriesService.insertNewSeries(editSeries, true);
+                    logTmdb.push(msg);
+                } catch (e) {
+                    logTmdb.push(`[TMDB] tmdbId=${ml.tmdbId} — erreur: ${e}`);
+                }
+            }
+    
+            const result = {
+                state: true,
+                inserted: logInserted,
+                kept:     logKept,
+                deleted:  logDeleted,
+                tmdb:     logTmdb,
+            };
+            await this.pool.query(
+                `UPDATE Library SET log = ? WHERE id = ?`,
+                [JSON.stringify(result), libraryId]
+            );
+            return result;
+    
+        } catch (error: any) {
+            const result: ReturnMessage = { id: -1, state: false, message: `Error: ${error?.message ?? error}` };
+            await conn.rollback();
+            await this.pool.query(`UPDATE Library SET log = ? WHERE id = ?`, [JSON.stringify(result), libraryId]);
+            return result;
+        } finally {
+            try { await conn.release(); } catch {}
+            await this.pool.query('UPDATE Library SET state = ? WHERE id = ?', [StateLibrary.NOT_WORKED, libraryId]);
+        }
+    }
+
+    public async getSeriesMediaLibraryMaps(seriesTmdbId: number): Promise<{
+        seriesML:               MediaLibrary | null;
+        seasonByNumber:         Map<number, MediaLibrary>;
+        episodeBySeasonAndNum:  Map<string,  MediaLibrary>;
+    }> {
+        const conn = await this.pool.getConnection();
+        try {
+            const rows: MediaLibrary[] = await conn.query(
+                `SELECT id, type, parentId, seasonNumber, episodeNumber, path
+                FROM Media_Library
+                WHERE tmdbId = ? AND type IN ('SERIES', 'SEASON', 'EPISODE')`,
+                [seriesTmdbId]
+            );
+    
+            let seriesML: MediaLibrary | null = null;
+            const seasonByNumber        = new Map<number, MediaLibrary>();
+            const episodeBySeasonAndNum = new Map<string,  MediaLibrary>();
+    
+            for (const row of rows) {
+                if (row.type === 'SERIES') {
+                    seriesML = row;
+                } else if (row.type === 'SEASON' && row.seasonNumber != null) {
+                    seasonByNumber.set(row.seasonNumber, row);
+                } else if (row.type === 'EPISODE' && row.seasonNumber != null && row.episodeNumber != null) {
+                    episodeBySeasonAndNum.set(`${row.seasonNumber}_${row.episodeNumber}`, row);
+                }
+            }
+    
+            return { seriesML, seasonByNumber, episodeBySeasonAndNum };
+        } catch {
+            return {
+                seriesML: null,
+                seasonByNumber:        new Map(),
+                episodeBySeasonAndNum: new Map(),
+            };
+        } finally {
+            await conn.release();
+        }
     }
 
 }

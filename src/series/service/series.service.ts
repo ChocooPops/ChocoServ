@@ -118,6 +118,7 @@ export class SeriesService extends MediaService {
             SELECT
                 JSON_OBJECT(
                     'id', m.id,
+                    'mediaLibraryId', mlib.id,
                     'title', m.title,
                     'description', m.description,
                     'date', m.date,
@@ -143,6 +144,7 @@ export class SeriesService extends MediaService {
 
                 ${JOIN}
 
+                LEFT JOIN Media_Library mlib ON mlib.id = m.mediaLibraryId
                 LEFT JOIN poster pl ON pl.id = m.srcLogo
                 LEFT JOIN poster pb ON pb.id = m.srcBackground
 
@@ -164,6 +166,7 @@ export class SeriesService extends MediaService {
                         JSON_ARRAYAGG(
                             JSON_OBJECT(
                                 'id', s.id,
+                                'mediaLibraryId', mlib.id,
                                 'seriesId', s.seriesId,
                                 'name', s.name,
                                 'seasonNumber', s.seasonNumber,
@@ -172,6 +175,7 @@ export class SeriesService extends MediaService {
                             ORDER BY s.seasonNumber
                         ) AS seasons
                     FROM season s
+                    LEFT JOIN Media_Library mlib ON mlib.id = s.mediaLibraryId
                     LEFT JOIN poster sp ON sp.id = s.srcPoster
                     GROUP BY s.seriesId
                 ) seas ON seas.mediaId = m.id
@@ -334,6 +338,7 @@ export class SeriesService extends MediaService {
             const query: string = this.getQuerySelectSeries(true, `WHERE m.id = ?`, ``, ``);
             const result: any[] = await conn.query(query, id);
             const series: Series = this.getFormatedSeries(result[0]);
+            await conn.release();
             for (const [index, season] of series.seasons.entries()) {
                 const episodes: Episode[] = await this.getEpisodesBySeriesAndSeasonId(-1, series.id, season.id);
                 series.seasons[index].episodes = episodes;
@@ -374,18 +379,22 @@ export class SeriesService extends MediaService {
         try {
             const query: string = `
                 SELECT 
-                    m.title,
-                    e.id, 
+                    m.id as mediaId,
+                    e.id,
+                    e.mediaLibraryId,
                     e.seriesId,
                     e.seasonId,
                     e.name, 
                     e.episodeNumber,
                     e.description,
+                    mlib.duration,
+                    mlib.resolution,
                     e.date,
                     p.name AS srcPoster,
                     su.watchProgress,
                     su.state as stateProgress
                     FROM episode e
+                    LEFT JOIN Media_Library mlib ON mlib.id = e.mediaLibraryId
                     LEFT JOIN poster p ON p.id = e.srcPoster
                     LEFT JOIN media m ON m.id = e.seriesId
                     ${this.statUserService.getQueryJoinStatUserForEpisode()}
@@ -402,9 +411,9 @@ export class SeriesService extends MediaService {
                     episodeNumber: Number(result.episodeNumber),
                     description: result.description,
                     date: result.date,
-                    duration: Number(result.time),
-                    resolution: result.quality,
-                    srcPoster: this.formatPathService.getOneFormatedPosterUrl(result.title, MediaType.SERIES, result.srcPoster),
+                    duration: Number(result.duration),
+                    resolution: result.resolution,
+                    srcPoster: this.formatPathService.getOneFormatedPosterUrl(result.mediaId, MediaType.SERIES, result.srcPoster),
                     watchProgress : result.watchProgress ?? 0,
                     stateProgress: result.stateProgress ?? StatState.NOT_WATCHED
                 });
@@ -439,10 +448,10 @@ export class SeriesService extends MediaService {
                 const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(newSeries.startShow, newSeries.endShow);
                 const query: string = `
                         INSERT INTO Media 
-                        (title, description, date, startShow, endShow, mediaType)
-                        VALUES (?, ?, ?, ?, ?, ?);`;
+                        (title, mediaLibraryId, description, date, startShow, endShow, mediaType)
+                        VALUES (?, ?, ?, ?, ?, ?, ?);`;
                 const result: any = await conn.query(query,
-                    [newSeries.title.trim(), newSeries?.description.trim() ?? '', this.getStringFromDate(newSeries.date), interval.start, interval.end, this.currentMediaType]
+                    [newSeries.title.trim(), newSeries.mediaLibraryId, newSeries?.description.trim() ?? '', this.getStringFromDate(newSeries.date), interval.start, interval.end, this.currentMediaType]
                 );
                 const mediaId: number | null = result ? Number(result.insertId) || null : null;
                 if (mediaId) {
@@ -453,7 +462,7 @@ export class SeriesService extends MediaService {
                     const messageCredit: string = await this.creditService.insertManyCredits(mediaId, newSeries.credits, conn);
                     const messageKeyWord: string = await this.insertKeyword(mediaId, newSeries.keyWords, conn);
                     const messagePoster: string = await this.posterService.insertManyPosterByMedia(newSeries, this.currentMediaType, formatedPath, mediaId, conn);
-                    const messageSeason: string = await this.insertManySeasons(newSeries.seasons, mediaId, formatedPath, newSeries.mediaLibraryId, conn);
+                    const messageSeason: string = await this.insertManySeasons(newSeries.seasons, mediaId, formatedPath, conn);
 
                     let messageSimilarTitle: string = `Titre similaire ajouté (0)`;
                     if (insertSimilarTitle) {
@@ -495,7 +504,7 @@ export class SeriesService extends MediaService {
         return messageReturned;
     }
 
-    private async insertManySeasons(seasons: EditSeason[], seriesId: number, formatedTitle: string, mediaLibraryId: string, conn: mariadb.PoolConnection): Promise<string> {
+    private async insertManySeasons(seasons: EditSeason[], seriesId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             if (seasons.length > 0) {
                 let message !: string;
@@ -503,15 +512,15 @@ export class SeriesService extends MediaService {
                 seasons.forEach((season: EditSeason) => {
                     values.push(seriesId, season.name?.trim() ?? null, season.mediaLibraryId, season.seasonNumber);
                 });
-                const query = `INSERT INTO Season (seriesId, name, seasonNumber)
-                VALUES ${seasons.map(() => '(?, ?, ?)').join(', ')}`;
+                const query = `INSERT INTO Season (seriesId, name, mediaLibraryId, seasonNumber)
+                VALUES ${seasons.map(() => '(?, ?, ?, ?)').join(', ')}`;
                 const result = await conn.query(query, values);
                 const startIdNumber = Number(result.insertId);
                 const count = Number(result.affectedRows);
                 const insertedIds: number[] = Array.from({ length: count }, (_, i) => startIdNumber + i);
                 message = await this.posterService.insertManySeasonPoster(insertedIds, seasons, formatedTitle, conn);
                 for (const [index, id] of insertedIds.entries()) {
-                    message += await this.insertManyEpisodes(seasons[index].episodes, seriesId, id, formatedTitle, mediaLibraryId, conn) + '\n ';
+                    message += await this.insertManyEpisodes(seasons[index].episodes, seriesId, id, formatedTitle, conn) + '\n ';
                 }
                 return message;
             } else {
@@ -522,22 +531,16 @@ export class SeriesService extends MediaService {
         }
     }
 
-    private async insertManyEpisodes(episodes: EditEpisode[], seriesId: number, seasonId: number, formatedTitle: string, jellyfinId: string, conn: mariadb.PoolConnection): Promise<string> {
+    private async insertManyEpisodes(episodes: EditEpisode[], seriesId: number, seasonId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             if (episodes.length > 0) {
                 const values: any[] = [];
                 for (const episode of episodes) {
-                    // const streamInfo = await this.jellyfinService.getStreamVideoByItemId(episode.jellyfinId);
-                    // let inputPath: string = streamInfo?.MediaSources[0]?.Path ?? null;
-                    // values.push(seriesId, seasonId, episode.jellyfinId, episode.name?.trim() ?? null, episode.episodeNumber, episode.description, this.getStringFromDate(episode.date));
-                    // const item: any = episodesJellyfin.find(item => item.Id === episode.jellyfinId);
-                    // values.push(item ? item.RunTimeTicks || 0 : 0);
-                    // values.push(item ? this.getQualityEpisode(item?.MediaStreams.find((item: any) => item.Type === "Video")?.Width) : 'any quality');
-                    // values.push(inputPath)
+                    values.push(seriesId, seasonId, episode.mediaLibraryId, episode.name?.trim() ?? null, episode.episodeNumber, episode.description, this.getStringFromDate(episode.date));
                 }
 
-                const query = `INSERT INTO Episode (seriesId, seasonId, jellyfinId, name, episodeNumber, description, date, time, quality, path)
-                VALUES ${episodes.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`;
+                const query = `INSERT INTO Episode (seriesId, seasonId, mediaLibraryId, name, episodeNumber, description, date)
+                VALUES ${episodes.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ')}`;
                 const result = await conn.query(query, values);
                 const startIdNumber = Number(result.insertId);
                 const count = Number(result.affectedRows);
@@ -548,28 +551,6 @@ export class SeriesService extends MediaService {
             }
         } catch (error) {
             throw error;
-        }
-    }
-
-    private getQualityEpisode(width: number | null): string {
-        if (width) {
-            let quality: string;
-            if (width > 0) {
-                if (width >= 3000) {
-                    quality = '4K';
-                } else if (width >= 2000) {
-                    quality = '2K';
-                } else if (width >= 1000) {
-                    quality = '1080p';
-                } else {
-                    quality = '720p';
-                }
-            } else {
-                quality = 'any quality';
-            }
-            return quality;
-        } else {
-            return 'any quality';
         }
     }
 
@@ -584,10 +565,10 @@ export class SeriesService extends MediaService {
                     const interval: IntervalShowed = this.verifTimerShowService.getGoodIntervalWhenMovieShowed(updateSeries.startShow, updateSeries.endShow);
                     const query: string = `
                             UPDATE Media
-                            SET title = ?, description = ?, date = ?, startShow = ?, endShow = ?
+                            SET title = ?, mediaLibraryId = ?, description = ?, date = ?, startShow = ?, endShow = ?
                             WHERE id = ?`;
                     await conn.query(query,
-                        [updateSeries.title.trim(), updateSeries.description, this.getStringFromDate(updateSeries.date), interval.start, interval.end, updateSeries.id]
+                        [updateSeries.title.trim(), updateSeries.mediaLibraryId, updateSeries.description, this.getStringFromDate(updateSeries.date), interval.start, interval.end, updateSeries.id]
                     );
                     let message: string = `La série (${updateSeries.title.trim()}) a été modifié \n `;
                     const formatedPath: string = oldSeries.id.toString();
@@ -596,7 +577,7 @@ export class SeriesService extends MediaService {
                     const messageCredit: string = await this.creditService.deleteAndUpdateMediaCredit(updateSeries.id, updateSeries.credits, conn);
                     const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateSeries.id, updateSeries.keyWords, conn);
                     const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateSeries, oldSeries, this.currentMediaType, formatedPath, conn);
-                    const messageSeasons: string = await this.insertUpdateOrDeleteSeasons(updateSeries.seasons, oldSeries.seasons, updateSeries.id, formatedPath, updateSeries.mediaLibraryId, conn);
+                    const messageSeasons: string = await this.insertUpdateOrDeleteSeasons(updateSeries.seasons, oldSeries.seasons, updateSeries.id, formatedPath, conn);
 
                     message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeasons}`;
                     messageReturned = {
@@ -633,15 +614,15 @@ export class SeriesService extends MediaService {
         return messageReturned;
     }
 
-    private async insertUpdateOrDeleteSeasons(updateSeasons: EditSeason[], oldSeasons: Season[], seriesId: number, formatedTitle: string, jellyfinId: string, conn: mariadb.PoolConnection): Promise<string> {
+    private async insertUpdateOrDeleteSeasons(updateSeasons: EditSeason[], oldSeasons: Season[], seriesId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             const seasonToDelete: Season[] = oldSeasons.filter((oldSeason) => !updateSeasons.some((updatSeason) => updatSeason.id === oldSeason.id));
             const seasonToUpdate: EditSeason[] = updateSeasons.filter((updatSeason) => oldSeasons.some((oldSeason) => oldSeason.id === updatSeason.id));
             const seasonToInsert: EditSeason[] = updateSeasons.filter((updatSeason) => !oldSeasons.some((oldSeason) => oldSeason.id === updatSeason.id));
 
             const messageSeasonDelete: string = await this.deleteManySeasons(seasonToDelete, formatedTitle, conn);
-            const messageSeasonToUpdate: string = await this.updateManySeasons(seasonToUpdate, oldSeasons, seriesId, formatedTitle, jellyfinId, conn);
-            const messageSeasonInsert: string = await this.insertManySeasons(seasonToInsert, seriesId, formatedTitle, jellyfinId, conn);
+            const messageSeasonToUpdate: string = await this.updateManySeasons(seasonToUpdate, oldSeasons, seriesId, formatedTitle, conn);
+            const messageSeasonInsert: string = await this.insertManySeasons(seasonToInsert, seriesId, formatedTitle, conn);
 
             return `${messageSeasonDelete} \n ${messageSeasonToUpdate} \n ${messageSeasonInsert}`;
         } catch (error) {
@@ -649,7 +630,7 @@ export class SeriesService extends MediaService {
         }
     }
 
-    private async updateManySeasons(updateSeasons: EditSeason[], oldSeasons: Season[], seriesId: number, formatedTitle: string, mediaLibraryId: string, conn: mariadb.PoolConnection): Promise<string> {
+    private async updateManySeasons(updateSeasons: EditSeason[], oldSeasons: Season[], seriesId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             let message: string = '';
             if (updateSeasons.length > 0) {
@@ -666,8 +647,8 @@ export class SeriesService extends MediaService {
                         const episodeToInsert: EditEpisode[] = updateSeason.episodes.filter((updateEpisode) => !oldSeason.episodes.some((oldEpisode) => oldEpisode.id === updateEpisode.id));
 
                         const messageDeleteEpisodes: string = await this.deleteManyEpisodes(episodeToDelete, formatedTitle, conn);
-                        const messageInsertEpisodes: string = await this.insertManyEpisodes(episodeToInsert, seriesId, updateSeason.id, formatedTitle, mediaLibraryId, conn);
-                        const messageUpdateEpisodes: string = await this.updateManyEpisodes(episodeToUpdate, oldSeason.episodes, updateSeason.id, formatedTitle, mediaLibraryId, conn);
+                        const messageInsertEpisodes: string = await this.insertManyEpisodes(episodeToInsert, seriesId, updateSeason.id, formatedTitle, conn);
+                        const messageUpdateEpisodes: string = await this.updateManyEpisodes(episodeToUpdate, oldSeason.episodes, updateSeason.id, formatedTitle, conn);
                         message += `Saison ${updateSeason.id} modifiée \n ${messageDeleteEpisodes} \n ${messageInsertEpisodes} \n ${messageUpdateEpisodes}`;
                     }
                 }
@@ -679,29 +660,18 @@ export class SeriesService extends MediaService {
             throw error;
         }
     }
-    private async updateManyEpisodes(updateEpisodes: EditEpisode[], oldEpisodes: Episode[], seasonId: number, formatedTitle: string, jellyfinId: string, conn: mariadb.PoolConnection): Promise<string> {
+    private async updateManyEpisodes(updateEpisodes: EditEpisode[], oldEpisodes: Episode[], seasonId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             let message: string = '';
             if (updateEpisodes.length > 0) {
-                // const episodesJellyfin: any[] = await this.jellyfinService.getAllEpisodesByJellyfinIdSeries(jellyfinId);
                 for (const episode of updateEpisodes) {
-                    // const oldEpisode: Episode = oldEpisodes.find((item) => item.id === episode.id);
-                    // await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(episode.id, episode.srcPoster, oldEpisode?.srcPoster, formatedTitle, 'Episode', conn);
-                    // const item: any = episodesJellyfin.find(item => item.Id === episode.jellyfinId);
-                    // const time: number = item ? item.RunTimeTicks || 0 : 0;
-                    // const quality: string = item ? this.getQualityEpisode(item?.MediaStreams.find((item: any) => item.Type === "Video")?.Width) : 'any quality';
-                    // const query: string = `UPDATE Episode
-                    //     SET jellyfinId = ?, name = ?, episodeNumber = ?,
-                    //     description = ?, date = ?, time = ?, quality = ?
-                    //     WHERE id = ?;`;
-                    // await conn.query(query, [episode.jellyfinId, episode?.name.trim() ?? '', episode.episodeNumber, episode.description, this.getStringFromDate(episode.date), time, quality, episode.id]);
-
-                    // if (episode.jellyfinId !== oldEpisode.jellyfinId) {
-                    //     const streamInfo = await this.jellyfinService.getStreamVideoByItemId(episode.jellyfinId);
-                    //     let inputPath: string = streamInfo?.MediaSources[0]?.Path ?? null;
-                    //     const queryPath: string = `UPDATE Episode SET path = ? WHERE id = ?;`;
-                    //     await conn.query(queryPath, [inputPath, episode.id]);
-                    // }
+                    const oldEpisode: Episode = oldEpisodes.find((item) => item.id === episode.id);
+                    await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(episode.id, episode.srcPoster, oldEpisode?.srcPoster, formatedTitle, 'Episode', conn);
+                    const query: string = `UPDATE Episode
+                        SET mediaLibraryId = ?, name = ?, episodeNumber = ?,
+                        description = ?, date = ?
+                        WHERE id = ?;`;
+                    await conn.query(query, [episode.mediaLibraryId, episode?.name.trim() ?? '', episode.episodeNumber, episode.description, this.getStringFromDate(episode.date), episode.id]);
                 }
             } else {
                 message = `Aucun episode n'a été modifié dans la saison ${seasonId}`;

@@ -21,7 +21,7 @@ import { Series } from "src/series/dto/series.interface";
 import { Credit } from "src/credit/dto/credit.interface";
 import { LibraryService } from "src/library/service/library.service";
 import { CategoryTmdb } from "src/category/dto/category-tmbd.interface";
-import { isNumber } from "util";
+import { MediaLibrary } from "src/library/dto/media-library.interface";
 
 @Injectable()
 export class TmdbService {
@@ -104,6 +104,7 @@ export class TmdbService {
         }
     }
     public async searchMovieByTmdbId(id: number, lang: ISO_3166_1 | null): Promise<EditMovie> {
+        return null;
         const mediaLibraryId: string | null = await this.libraryService.getMediaLibraryIdByTmdbId(id);
         if (!lang) {
             lang = await this.libraryService.getLanguageByMediaLibraryTmdbId(id);
@@ -155,6 +156,18 @@ export class TmdbService {
     // ==============================================
     // FONCTION USED INTO SERIES MODULE
     // ==============================================
+    public async getTmdbIdForSeriesByTitleAndYear(title: string, year: number): Promise<number | null> {
+        try {
+            const paramYear = year && /^\d+$/.test(year?.toString()) && year > 1900 ? `&primary_release_year=${year}`: '';
+            const param: string = `&query=${title}${paramYear}`;
+            const url: string = `${this.apiTMDBSearchTv}?${this.apiKeyTMDB}${param}`;
+            const response = await lastValueFrom(this.httpService.get(url));
+            const id: number = Number(response.data.results[0].id);
+            return id;
+        } catch(error) {
+            return null
+        }
+    }
     public async searchSeriesByTitle(title: string): Promise<any> {
         const param: string = `&query=${title}`;
         const url: string = `${this.apiTMDBSearchTv}?${this.apiKeyTMDB}${param}`;
@@ -172,96 +185,144 @@ export class TmdbService {
         }
     }
 
-    public async searchSeriesByTmdbId(id: number, lang: ISO_3166_1): Promise<any> {
-        const mediaLibraryId: string | null = await this.libraryService.getMediaLibraryIdByTmdbId(id);
+    public async searchSeriesByTmdbId(id: number, lang: ISO_3166_1): Promise<EditSeries> {
         if (!lang) {
             lang = await this.libraryService.getLanguageByMediaLibraryTmdbId(id);
         }
         const paramLanguage = this.getParamLanguage(lang);
-
+    
         const url: string = `${this.apiTMDBTv}/${id}?${this.apiKeyTMDB}&append_to_response=aggregate_credits,translations,keywords&${paramLanguage}`;
         const response = await lastValueFrom(this.httpService.get(url));
-
-        const categories: CategorySimple[] = await this.getCategories(response.data.genres);
-        const credits: MediaCredit[] = this.getCreditsForSeries(response.data.aggregate_credits, response.data.created_by);
-        const keywords: string[] = this.getKeyWords(response.data.keywords.results);
-        const otherLanguage: TranslationTitle[] = this.getAllTitlesFromDifferentLanguage(response.data.translations.translations, MediaType.SERIES, response.data.original_name);
-
-        let images: { back: string, logo: string, posterVertical: EditPoster[], posterHorizontal: EditPoster[] };
+    
+        const categories: CategorySimple[]   = await this.getCategories(response.data.genres);
+        const credits:    MediaCredit[]      = this.getCreditsForSeries(response.data.aggregate_credits, response.data.created_by);
+        const keywords:   string[]           = this.getKeyWords(response.data.keywords.results);
+        const otherLanguage: TranslationTitle[] = this.getAllTitlesFromDifferentLanguage(
+            response.data.translations.translations, MediaType.SERIES, response.data.original_name
+        );
+    
+        let images: { back: string; logo: string; posterVertical: EditPoster[]; posterHorizontal: EditPoster[] };
         try {
-            const urlPoster: string = `${this.apiTMDBTv}/${id}/images?${this.apiKeyTMDB}`;
+            const urlPoster = `${this.apiTMDBTv}/${id}/images?${this.apiKeyTMDB}`;
             const responsePoster = await lastValueFrom(this.httpService.get(urlPoster));
             images = await this.getImageByTmdbId(responsePoster, 1, lang);
-        } catch (error) {
-            images = {
-                back: null,
-                logo: null,
-                posterVertical: [],
-                posterHorizontal: []
-            }
+        } catch {
+            images = { back: null, logo: null, posterVertical: [], posterHorizontal: [] };
         }
-
-        const seasons: EditSeason[] = await this.getAllSeasonsBySeries(id, response.data.seasons, paramLanguage);
-
-        let series: EditSeries = {
-            id: id,
-            title: response.data.name,
-            mediaLibraryId: mediaLibraryId,
-            otherTitles: otherLanguage,
-            categories: categories,
-            keyWords: keywords,
-            description: response.data.overview,
-            credits: credits,
-            date: response.data.first_air_date,
-            startShow: '00:00:00',
-            endShow: '00:00:00',
-            posters: images.posterVertical,
-            logo: images.logo,
-            backgroundImage: images.back,
-            seasons: seasons,
-            horizontalPoster: images.posterHorizontal,
-            horizontalPosterSameAsBackground: false
-        }
-
+    
+        const { seriesML, seasonByNumber, episodeBySeasonAndNum } =
+            await this.libraryService.getSeriesMediaLibraryMaps(id);
+    
+        const seasons: EditSeason[] = await this.getAllSeasonsBySeries(
+            id,
+            response.data.seasons,
+            paramLanguage,
+            seasonByNumber,
+            episodeBySeasonAndNum,
+        );
+    
+        const series: EditSeries = {
+            id:                              id,
+            title:                           response.data.name,
+            mediaLibraryId:                  seriesML?.id ?? null,
+            otherTitles:                     otherLanguage,
+            categories:                      categories,
+            keyWords:                        keywords,
+            description:                     response.data.overview,
+            credits:                         credits,
+            date:                            response.data.first_air_date,
+            startShow:                       '00:00:00',
+            endShow:                         '00:00:00',
+            posters:                         images.posterVertical,
+            logo:                            images.logo,
+            backgroundImage:                 images.back,
+            seasons:                         seasons,
+            horizontalPoster:                images.posterHorizontal,
+            horizontalPosterSameAsBackground: false,
+        };
+    
         return series;
     }
 
-    private async getAllSeasonsBySeries(id: number, seasonsTmbd: any[], paramLanguage: string): Promise<any> {
+    private async getAllSeasonsBySeries(
+        seriesTmdbId:         number,
+        seasonsTmdb:          any[],
+        paramLanguage:        string,
+        seasonByNumber:       Map<number, MediaLibrary>,
+        episodeBySeasonAndNum: Map<string, MediaLibrary>,
+    ): Promise<EditSeason[]> {
+    
         const seasons: EditSeason[] = [];
-        for (const season of seasonsTmbd) {
-            const episodes: EditEpisode[] = await this.getAllEpisodesBySeason(id, season.id, season.season_number, paramLanguage);
+    
+        for (const seasonTmdb of seasonsTmdb) {
+            const seasonNumber: number = seasonTmdb.season_number;
+    
+            const seasonML = seasonByNumber.get(seasonNumber);
+            if (!seasonML) {
+                continue;
+            }
+    
+            const episodes: EditEpisode[] = await this.getAllEpisodesBySeason(
+                seriesTmdbId,
+                seasonTmdb.id,
+                seasonNumber,
+                paramLanguage,
+                episodeBySeasonAndNum,
+            );
+    
+            if (episodes.length === 0) continue;
+    
             seasons.push({
-                id: season.id,
-                seriesId: id,
-                mediaLibraryId: undefined,
-                name: season.name,
-                seasonNumber: season.season_number,
-                episodes: episodes,
-                srcPoster: await this.getEntirelyUrlImagesFromTMDB(season.poster_path)
+                id:             seasonTmdb.id,
+                seriesId:       seriesTmdbId,
+                mediaLibraryId: seasonML.id,
+                name:           seasonTmdb.name,
+                seasonNumber:   seasonNumber,
+                srcPoster:      await this.getEntirelyUrlImagesFromTMDB(seasonTmdb.poster_path),
+                episodes:       episodes,
             });
         }
+    
         return seasons;
     }
 
-    private async getAllEpisodesBySeason(id: number, idSeason: number, numSeason: number, paramLanguage: string): Promise<EditEpisode[]> {
+    private async getAllEpisodesBySeason(
+        seriesTmdbId:         number,
+        seasonTmdbId:         number,
+        seasonNumber:         number,
+        paramLanguage:        string,
+        episodeBySeasonAndNum: Map<string, MediaLibrary>,
+    ): Promise<EditEpisode[]> {
         try {
-            const url: string = `${this.apiTMDBTv}/${id}/season/${numSeason}?${this.apiKeyTMDB}&${paramLanguage}`;
+            const url = `${this.apiTMDBTv}/${seriesTmdbId}/season/${seasonNumber}?${this.apiKeyTMDB}&${paramLanguage}`;
             const response = await lastValueFrom(this.httpService.get(url));
+    
             const episodes: EditEpisode[] = [];
-            for (const episode of response.data.episodes) {
+    
+            for (const episodeTmdb of response.data.episodes) {
+                const episodeNumber: number = episodeTmdb.episode_number;
+                const key = `${seasonNumber}_${episodeNumber}`;
+    
+                const episodeML = episodeBySeasonAndNum.get(key);
+                if (!episodeML) {
+                    continue;
+                }
+    
                 episodes.push({
-                    id: episode.id,
-                    seasonId: idSeason,
-                    mediaLibraryId: undefined,
-                    name: episode.name,
-                    episodeNumber: episode.episode_number,
-                    srcPoster: await this.getEntirelyUrlImagesFromTMDB(episode.still_path),
-                    description: episode.overview,
-                    date: episode.air_date,
+                    id:             episodeTmdb.id,
+                    seasonId:       seasonTmdbId,
+                    mediaLibraryId: episodeML.id,
+                    name:           episodeTmdb.name,
+                    episodeNumber:  episodeNumber,
+                    srcPoster:      await this.getEntirelyUrlImagesFromTMDB(episodeTmdb.still_path),
+                    description:    episodeTmdb.overview,
+                    date:           episodeTmdb.air_date,
+                    path:           episodeML.path,
                 });
             }
+    
             return episodes;
-        } catch (error) {
+        } catch {
             return [];
         }
     }

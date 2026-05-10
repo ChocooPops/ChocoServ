@@ -33,7 +33,7 @@ export class TmdbController {
         if (isNumeric) {
             return await this.tmdbService.searchSeriesByTmdbId(Number(series), null);
         } else {
-            return await this.tmdbService.searchSeriesByMediaLibraryId(series);
+            return await this.tmdbService.searchSeriesByTitle(series);
         }
     }
     @Get('search-series-library/:mediaLibraryId')
@@ -42,7 +42,7 @@ export class TmdbController {
         if (isNumeric) {
             return await this.tmdbService.searchSeriesByTmdbId(Number(series), null);
         } else {
-            return await this.tmdbService.searchSeriesByTitle(series);
+            return await this.tmdbService.searchSeriesByMediaLibraryId(series);
         }
     }
 

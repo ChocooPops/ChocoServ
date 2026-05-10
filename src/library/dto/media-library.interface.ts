@@ -3,6 +3,9 @@ import { MediaType } from "src/media/dto/media-type.enum";
 export interface MediaLibrary {
     id: string,
     libraryId: string,
+    parentId: string,
+    seasonNumber: number,
+    episodeNumber: number,
     titleFormated: string,
     year: string,
     path: string,
@@ -13,5 +16,7 @@ export interface MediaLibrary {
     bytes: number,
     width: number,
     height: number,
-    resolution: number
+    resolution: number,
+    createdDate: Date,
+    updatedAt: Date
 }
