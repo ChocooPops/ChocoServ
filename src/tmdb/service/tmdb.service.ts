@@ -104,7 +104,6 @@ export class TmdbService {
         }
     }
     public async searchMovieByTmdbId(id: number, lang: ISO_3166_1 | null): Promise<EditMovie> {
-        return null;
         const mediaLibraryId: string | null = await this.libraryService.getMediaLibraryIdByTmdbId(id);
         if (!lang) {
             lang = await this.libraryService.getLanguageByMediaLibraryTmdbId(id);

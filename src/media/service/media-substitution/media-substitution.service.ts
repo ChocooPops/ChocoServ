@@ -294,7 +294,7 @@ export class MediaSubstitutionSerivce {
       case SortCatalog.ADDED_DATE:
         return 'm.createdAt';
       case SortCatalog.DURATION:
-        return 'm.time';
+        return 'mlib.duration';
       case SortCatalog.SHUFFLE:
         return 'RAND()';
       default:
