@@ -144,11 +144,11 @@ export class NewsVideoRunningService {
         inputPath: string,
         startShow: string,
         endShow: string,
-        jellyfinId: string
+        mediaLibraryId: string
     ): Promise<string> {
         await fs.mkdir(this.newsPath, { recursive: true });
 
-        const outputFilename = `news_${jellyfinId}.mp4`;
+        const outputFilename = `news_${mediaLibraryId}.mp4`;
         const outputPath = path.join(this.newsPath, outputFilename);
 
         const ffmpegCommand = [
@@ -188,7 +188,7 @@ export class NewsVideoRunningService {
 
     private newsNeedsUpdate(
         existingNews: NewsVideoRunning | undefined,
-        newJellyfinId: string,
+        newMediaLibraryId: string,
         newStartShow: string,
         newEndShow: string
     ): boolean {
@@ -196,7 +196,7 @@ export class NewsVideoRunningService {
             return true;
         }
 
-        return existingNews.mediaLibraryId !== newJellyfinId ||
+        return existingNews.mediaLibraryId !== newMediaLibraryId ||
             existingNews.startShow !== newStartShow ||
             existingNews.endShow !== newEndShow;
     }
@@ -216,9 +216,9 @@ export class NewsVideoRunningService {
                 existingNews.map(news => [news.mediaLibraryId, news])
             );
 
-            const newJellyfinIds = new Set(newsUpdate.map(n => n.mediaLibraryId));
+            const newnewMediaLibraryIds = new Set(newsUpdate.map(n => n.mediaLibraryId));
             const newsToDelete = existingNews.filter(
-                news => !newJellyfinIds.has(news.mediaLibraryId)
+                news => !newnewMediaLibraryIds.has(news.mediaLibraryId)
             );
 
             for (const news of newsToDelete) {

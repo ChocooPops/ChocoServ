@@ -1,7 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ParsedName } from "src/library/dto/parsed-name";
 /**
- * Reproduces Jellyfin's two-step movie name cleaning pipeline:
  * 1. parseName()  — mimics ILibraryManager.ParseName()
  * 2. cleanName()  — reproduces TmdbUtils.CleanName()
  */

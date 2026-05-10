@@ -336,7 +336,7 @@ export class SimilarTitleService {
 
         let score = 0;
 
-        // Métadonnées — algorithme Jellyfin
+        // Métadonnées
         score += commonCategoryIds.length * 3; // catégories  — poids fort
         score += commonActorIds.length    * 3; // acteurs     — poids fort
         score += commonDirectorIds.length * 2; // réalisateur — poids moyen

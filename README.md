@@ -28,7 +28,7 @@ L'API ChocoPlus est une API REST robuste qui sert de backend pour l'application 
 - **Gestion complète des médias** (films, séries, saisons, épisodes)
 - **Système de licences et sélections** pour organiser le contenu
 - **Streaming vidéo sécurisé** avec authentification par token
-- **Intégration Jellyfin** pour la gestion de bibliothèque multimédia
+- **Intégration et une lecture automatique des fichiers vidéos** pour la gestion de bibliothèque multimédia
 - **Intégration TMDB** pour les métadonnées
 - **Système de support** avec envoi d'emails
 - **Gestion des utilisateurs** avec rôles et permissions
@@ -57,7 +57,7 @@ L'API suit l'architecture modulaire de NestJS avec une structure en couches :
                     ↓
 ┌──────────────────────────────────────────────┐
 │          External Services                   │
-│   - Jellyfin API                             │
+│   - Node File System (médiathèqye)           │
 │   - TMDB API                                 │
 │   - Mail Service (SMTP)                      │
 └──────────────────────────────────────────────┘
@@ -223,7 +223,7 @@ Table centrale qui représente un **film** (`MOVIE`) ou une **série** (`SERIES`
 |---------|------|-------------|
 | `id` | INT (début 2 000 000) | Identifiant unique |
 | `title` | VARCHAR(255) UNIQUE | Titre principal (unique) |
-| `jellyfinId` | VARCHAR(255) UNIQUE | ID Jellyfin pour la synchronisation |
+| `mediaLibraryId` | VARCHAR(255) UNIQUE | ID de la médiathèque pour la synchronisation des meta-données du fichiers vidéos|
 | `description` | VARCHAR(1024) | Synopsis (nullable) |
 | `date` | DATE | Date de sortie |
 | `time` | BIGINT UNSIGNED | Durée en millisecondes (nullable) |
@@ -318,7 +318,7 @@ Saisons d'une série. L'AUTO_INCREMENT commence à **5 000 000**.
 |---------|------|-------------|
 | `id` | INT (début 5 000 000) | Identifiant unique |
 | `seriesId` | INT (FK) | Référence vers `Media` (la série parente) |
-| `jellyfinId` | VARCHAR(255) UNIQUE | ID Jellyfin |
+| `mediaLibraryId` | CHAR(36) UNIQUE | ID mediaLibraryId |
 | `name` | VARCHAR(255) | Nom de la saison |
 | `seasonNumber` | INT | Numéro de saison |
 | `srcPoster` | INT (FK) | Poster de la saison (nullable) |
@@ -331,7 +331,7 @@ Saisons d'une série. L'AUTO_INCREMENT commence à **5 000 000**.
 | `id` | INT (début 8 000 000) | Identifiant unique |
 | `seriesId` | INT (FK) | Référence vers `Media` (la série parente) |
 | `seasonId` | INT (FK) | Référence vers `Season` |
-| `jellyfinId` | VARCHAR(255) UNIQUE | ID Jellyfin |
+| `mediaLibraryId` | CHAR(36) UNIQUE | ID mediaLibraryId |
 | `name` | VARCHAR(255) | Titre de l'épisode |
 | `episodeNumber` | INT | Numéro dans la saison |
 | `description` | VARCHAR(1024) | Synopsis |
@@ -418,7 +418,7 @@ Vidéos promotionnelles défilantes sur les pages Films et Séries. L'AUTO_INCRE
 |---------|------|-------------|
 | `srcBackground` | INT (FK) | Image de fond (nullable) |
 | `startShow` / `endShow` | VARCHAR(10) | Période d'affichage |
-| `jellyfinId` | VARCHAR(255) | ID Jellyfin de la vidéo |
+| `mediaLibraryId` | CHAR(36) | ID mediaLibraryId de la vidéo |
 | `path` | VARCHAR(555) | Chemin vers le fichier vidéo |
 | `mediaId` | INT (FK) | Média lié |
 
@@ -701,27 +701,6 @@ Recherche de métadonnées depuis l'API The Movie Database.
 |---------|-------|-------------|------|
 | GET | `/tmdb/search-movie-tmdb/:movie` | Chercher un film (par titre ou ID TMDB) | ✅ |
 | GET | `/tmdb/search-series-tmdb/:series` | Chercher une série (par titre ou ID TMDB) | ✅ |
-| GET | `/tmdb/search-movie-jellyfin/:id` | Chercher un film par ID Jellyfin | ✅ |
-| GET | `/tmdb/search-series-jellyfin/:id` | Chercher une série par ID Jellyfin | ✅ |
-
----
-
-### 📺 Jellyfin Integration (`/jellyfin`)
-
-Synchronisation avec le serveur Jellyfin pour la gestion de bibliothèque.
-
-| Méthode | Route | Description | Auth | Admin |
-|---------|-------|-------------|------|-------|
-| GET | `/jellyfin/reset-jellyfin-items-movie` | Réinitialiser les items films Jellyfin | ✅ | ✅ |
-| GET | `/jellyfin/reset-jellyfin-items-series` | Réinitialiser les items séries Jellyfin | ✅ | ✅ |
-| PUT | `/jellyfin/reset-all-movies` | Reset complet des films | ✅ | ✅ |
-| PUT | `/jellyfin/reset-all-series` | Reset complet des séries | ✅ | ✅ |
-| POST | `/jellyfin/save-movie-dont-saved` | Sauvegarder les films non synchronisés | ✅ | ✅ |
-| POST | `/jellyfin/save-series-dont-saved` | Sauvegarder les séries non synchronisées | ✅ | ✅ |
-| GET | `/jellyfin/miss-metadata-tmdb` | Items sans métadonnées TMDB | ✅ | ✅ |
-| GET | `/jellyfin/media-not-saved` | Médias présents dans Jellyfin mais pas dans ChocoPlus | ✅ | ✅ |
-| GET | `/jellyfin/jellyfinId-dont-exist` | Médias avec ID Jellyfin invalide | ✅ | ✅ |
-| GET | `/jellyfin/audio-more` | Films avec plus de 2 pistes audio | ✅ | ✅ |
 
 ---
 
@@ -769,11 +748,11 @@ MAIL_PASS=xxxxx
 MAIL_FROM="ChocoPlus <noreply@chocoplus.com>"
 ```
 
-### 🎬 Jellyfin API
+### 🎬 Node File System utilisé dans les librairies
 
-Intégration avec le serveur multimédia **Jellyfin** pour :
-- Synchronisation automatique de la bibliothèque
-- Récupération des chemins de fichiers vidéo
+Intégration selon les fichiers vidéos disponibles dans les librairies créées :
+- Synchronisation automatique des bibliothèque
+- Récupération des chemins de fichiers vidéo + des métadonnées avec ffmpeg
 - Gestion des métadonnées (posters, descriptions)
 - Détection des nouveaux contenus
 
@@ -817,10 +796,6 @@ MAIL_FROM="ChocoPlus <noreply@chocoplus.com>"
 TMDB_API_KEY="votre-cle-api-tmdb"
 TMDB_BASE_URL="https://api.themoviedb.org/3"
 
-# Jellyfin
-JELLYFIN_URL="http://localhost:8096"
-JELLYFIN_API_KEY="votre-cle-api-jellyfin"
-
 # Application
 PORT=3000
 NODE_ENV=development
@@ -861,8 +836,8 @@ const pool = mariadb.createPool({
 - **Node.js** : 18.x ou supérieur
 - **npm** : 9.x ou supérieur
 - **MariaDB/MySQL** : 10.x ou supérieur
-- **Serveur Jellyfin** (optionnel) : pour la synchronisation
-- **Compte TMDB** : pour les métadonnées
+- **Ffmpeg** : pour la récupération des métadonnées des fichiers courants (durée, résolution en pixel ...)
+- **Compte TMDB** : pour les métadonnées des films/séries
 
 ### Étapes d'installation
 
@@ -990,7 +965,7 @@ chocoplus-api/
 │   │   ├── service/
 │   │   └── dto/
 │   │
-│   ├── jellyfin/                   # Module Jellyfin
+│   ├── Library/                   # Module Library
 │   │   ├── controller/
 │   │   ├── service/
 │   │   └── dto/
@@ -1074,7 +1049,6 @@ chocoplus-api/
 | Service | Usage |
 |---------|-------|
 | TMDB API | Métadonnées films/séries |
-| Jellyfin API | Gestion de bibliothèque multimédia |
 
 ### Outils de développement
 
@@ -1142,11 +1116,11 @@ Le streaming utilise **Range Requests** pour permettre :
 - La gestion de la bande passante
 - Le support des sous-titres
 
-### Synchronisation Jellyfin
+### Synchronisation des médiathèques
 
 L'API peut :
-- Détecter automatiquement les nouveaux médias dans Jellyfin
-- Importer les métadonnées depuis Jellyfin
+- Détecter automatiquement les nouveaux médias dans médiathèques qui ont été créées
+- Importer les métadonnées avec ffmpeg
 - Synchroniser les chemins de fichiers
 - Détecter les incohérences (médias supprimés, IDs invalides)
 

@@ -305,7 +305,7 @@ export class LibraryService {
                                     duration, frames, bytes, width, height, resolution)
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
                                 await conn.query(query, [id, parsedName.name, parsedName.year ?? 0, 
-                                    parsedName.path, MediaType.MOVIE, tmdbId, libraryId,
+                                    parsedName.path, MediaType.MOVIE, tmdbId ?? 0, libraryId,
                                     metadata.duration ?? 0, metadata.frames ?? 0, metadata.bytes ?? 0, metadata.width ?? 0, metadata.height ?? 0, metadata.resolution ?? 0]);
                                 mediasLibraryInserted.push(`Succès ${parsedName.name} (${parsedName.year}) [${parsedName.path}] => TMDB_ID (${tmdbId}), duration (${metadata.duration}), frames (${metadata.frames}), bytes (${metadata.bytes})`)
                             } catch(error) {

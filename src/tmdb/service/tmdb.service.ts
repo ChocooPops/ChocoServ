@@ -21,6 +21,7 @@ import { Series } from "src/series/dto/series.interface";
 import { Credit } from "src/credit/dto/credit.interface";
 import { LibraryService } from "src/library/service/library.service";
 import { CategoryTmdb } from "src/category/dto/category-tmbd.interface";
+import { isNumber } from "util";
 
 @Injectable()
 export class TmdbService {
@@ -76,7 +77,8 @@ export class TmdbService {
     // ==============================================
     public async getTmdbIdForMovieByTitleAndYear(title: string, year: number): Promise<number | null> {
         try {
-            const param: string = `&query=${title}&primary_release_year=${year}`;
+            const paramYear = year && /^\d+$/.test(year?.toString()) && year > 1900 ? `&primary_release_year=${year}`: '';
+            const param: string = `&query=${title}${paramYear}`;
             const url: string = `${this.apiTMDBSearchMovie}?${this.apiKeyTMDB}${param}`;
             const response = await lastValueFrom(this.httpService.get(url));
             const id: number = Number(response.data.results[0].id);
@@ -102,6 +104,7 @@ export class TmdbService {
         }
     }
     public async searchMovieByTmdbId(id: number, lang: ISO_3166_1 | null): Promise<EditMovie> {
+        return null;
         const mediaLibraryId: string | null = await this.libraryService.getMediaLibraryIdByTmdbId(id);
         if (!lang) {
             lang = await this.libraryService.getLanguageByMediaLibraryTmdbId(id);

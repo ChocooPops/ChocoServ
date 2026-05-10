@@ -486,7 +486,7 @@ export class CreditService {
         const conn = await this.pool.getConnection();
         const results: any[] = [];
 
-        const movies: Movie[] = await conn.query(`SELECT id, title, jellyfinId FROM Media WHERE mediaType = ?`, [MediaType.MOVIE]);
+        const movies: Movie[] = await conn.query(`SELECT id, title, mediaLibraryId FROM Media WHERE mediaType = ?`, [MediaType.MOVIE]);
         for (const movie of movies) {
             try {
                 const credits: MediaCredit[] = await this.tmdbService.fetchCreditForMovie(movie);
@@ -502,7 +502,7 @@ export class CreditService {
             }
         }
 
-        const series: Series[] = await conn.query(`SELECT id, title, jellyfinId FROM Media WHERE mediaType = ?`, [MediaType.SERIES]);
+        const series: Series[] = await conn.query(`SELECT id, title, mediaLibraryId FROM Media WHERE mediaType = ?`, [MediaType.SERIES]);
         for (const serie of series) {
             try {
                 const credits: MediaCredit[] = await this.tmdbService.fetchCreditForSeries(serie);

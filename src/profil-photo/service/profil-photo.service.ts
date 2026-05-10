@@ -61,26 +61,34 @@ export class ProfilPhotoService {
 
     public async fillAllProfilPictureData(): Promise<any> {
         const conn = await this.pool.getConnection();
+
         try {
             await conn.beginTransaction();
+
             const pictureInserted: string[] = [];
             const pictureDeleted: string[] = [];
+
             const pictureSaved: ProfilPhoto[] = await conn.query(
                 `SELECT id, name FROM profil_photo`
             );
+
             const folderPath = join(
                 __dirname,
                 '../../../',
                 this.folderUploads,
                 this.folderProfilPhoto
             );
+
             const files = readdirSync(folderPath);
+
             const imageFilesFiltered = files.filter(file => {
                 const ext = file.toLowerCase().substring(file.lastIndexOf('.'));
                 return this.imageExtensions.includes(ext);
             });
+
             const dbNamesSet = new Set(pictureSaved.map(p => p.name));
             const folderNamesSet = new Set(imageFilesFiltered);
+
             const postersToDelete = pictureSaved.filter(
                 photo => !folderNamesSet.has(photo.name)
             );
@@ -88,33 +96,48 @@ export class ProfilPhotoService {
             const postersToInsert = imageFilesFiltered.filter(
                 fileName => !dbNamesSet.has(fileName)
             );
+
+            const picturesKept = pictureSaved.filter(
+                photo => folderNamesSet.has(photo.name)
+            );
+
             if (postersToInsert.length > 0) {
                 const sql = `
                     INSERT INTO profil_photo (name)
                     VALUES ${postersToInsert.map(() => '(?)').join(', ')}`;
+
                 await conn.query(sql, postersToInsert);
+
                 pictureInserted.push(...postersToInsert);
             }
+
             if (postersToDelete.length > 0) {
                 const sql = `
                     DELETE FROM profil_photo
                     WHERE id IN (${postersToDelete.map(() => '?').join(', ')})`;
+
                 await conn.query(
                     sql,
                     postersToDelete.map(item => item.id)
                 );
+
                 pictureDeleted.push(
                     ...postersToDelete.map(item => `${item.id} : ${item.name}`)
                 );
             }
+
             await conn.commit();
+
             return {
-                pictureDeleted: pictureDeleted,
-                pictureInserted: pictureInserted
-            }
+                pictureDeleted,
+                pictureInserted,
+                picturesKept
+            };
+
         } catch (error) {
             await conn.rollback();
             return error;
+
         } finally {
             await conn.release();
         }

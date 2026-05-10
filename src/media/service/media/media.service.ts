@@ -189,19 +189,7 @@ export class MediaService {
         ${ORDER}
         ${LIMIT}`
     }
-
-    public async getAllMediaIdByType(): Promise<Media[]> {
-        const conn = await this.pool.getConnection();
-        try {
-            const medias: Media[] = await conn.query(`SELECT id, jellyfinId, title FROM Media WHERE mediaType = ?`, [this.currentMediaType]);
-            return medias;
-        } catch (error) {
-            return [];
-        } finally {
-            await conn.release();
-        }
-    }
-
+    
     public async getMediaWithNullPoster(): Promise<{ movies: Node[], series: Node[] }> {
         const conn = await this.pool.getConnection();
         const nodeMovies: Node[] = [];
