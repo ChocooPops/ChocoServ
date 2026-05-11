@@ -7,83 +7,58 @@ import { ParseFilePathService } from 'src/common-service/parse-file-path.service
 // DTOs internes au scanner
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Résultat de l'extraction S/E depuis un nom de fichier.
- */
 export interface ParsedEpisode {
-  /** Titre de la série nettoyé (ex: "Breaking Bad") */
   seriesTitle: string;
-  /** Année extraite du nom de fichier (peut être undefined) */
   year: number | undefined;
-  /** Numéro de saison (1-based). undefined si non détecté. */
   seasonNumber: number | undefined;
-  /** Numéro d'épisode (1-based). undefined si non détecté. */
   episodeNumber: number | undefined;
-  /** Chemin absolu du fichier */
   filePath: string;
 }
 
-/**
- * Un épisode prêt à être inséré en base.
- */
 export interface ScannedEpisode {
   filePath: string;
   episodeNumber: number;
 }
 
-/**
- * Une saison regroupant ses épisodes, triés par episodeNumber.
- */
 export interface ScannedSeason {
   seasonNumber: number;
-  /** Chemin du dossier de la saison (ou dossier parent si flat). Utilisé comme path dans Media_Library. */
   folderPath: string;
   episodes: ScannedEpisode[];
 }
 
-/**
- * Une série complète avec toutes ses saisons/épisodes, prête pour l'insertion.
- */
 export interface ScannedSeries {
-  /** Titre propre pour la recherche TMDB */
   seriesTitle: string;
   year: number | undefined;
-  /** Chemin du dossier racine de la série */
   folderPath: string;
   seasons: ScannedSeason[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Patterns de détection S##E##
+// Patterns
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Ordre de priorité décroissante:
- *
- * 1. SxxExx  →  S01E03  (insensible à la casse)
- * 2. xXxx    →  1x03    (format alternatif "1x03")
- * 3. Dossier Season XX / Saison XX  (fallback sur le dossier parent)
- * 4. Numéro d'épisode seul en dernier recours (ex: EP03, E03)
- *
- * Chaque pattern expose deux groupes nommés : `season` et `episode`.
+ * Détecte le numéro d'épisode (et optionnellement de saison) dans un nom de fichier.
+ * Ordre de priorité décroissante (style Jellyfin).
  */
 const SE_PATTERNS: RegExp[] = [
-  // S01E03 / S01E03E04 (multi-épisode → on prend le premier)
+  // S01E03 / S01E03E04
   /[Ss](?<season>\d{1,4})[Ee](?<episode>\d{1,4})/,
   // 1x03
   /(?<![.\d])(?<season>\d{1,2})x(?<episode>\d{2,4})(?![.\d])/i,
   // Season 1 Episode 3 / Saison 1 Episode 3
   /(?:season|saison|s)\s*(?<season>\d{1,4})\s*(?:episode|ep|e)\s*(?<episode>\d{1,4})/i,
-  // EP03 / E03 seul (season inconnue → sera mise à 1)
+  // EP03 / E03 seul
   /\bep?(?<episode>\d{2,4})\b/i,
 ];
 
 /**
- * Détecte le numéro de saison depuis le nom d'un dossier.
- * Exemples : "Season 1", "Saison 02", "S1", "S01"
+ * Détecte le numéro de saison depuis le nom d'un dossier de depth 2.
+ * Couvre : S01, S1, Season 1, Saison 01, Saison 0, Bonus, Specials, OVA…
+ * Le groupe `special` indique une saison 0 (bonus/hors-série).
  */
 const SEASON_FOLDER_PATTERN =
-  /(?:season|saison|s(?:eason)?)\s*(?<season>\d{1,4})/i;
+  /^(?:s(?:aison|eason)?\s*(?<season>\d{1,4})|(?<special>bonus|specials?|extras?|ova|hors[- ]?s[eé]rie|sp))\b/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Service
@@ -104,258 +79,199 @@ export class SeriesScannerService {
   /**
    * Point d'entrée principal.
    *
-   * Lit récursivement `rootDir`, groupe les fichiers vidéo par série/saison
-   * et retourne un tableau de `ScannedSeries` triées et ordonnées, prêtes
-   * à être envoyées à TMDB puis insérées en base.
+   * Structure attendue sur le disque (identique à Jellyfin) :
    *
-   *   1. Extraction du pattern SxxExx dans le nom de fichier.
-   *   2. Fallback sur le nom du dossier parent (Season X / Saison X).
-   *   3. Regroupement par titre de série nettoyé (insensible à la casse).
-   *   4. Tri des saisons et des épisodes par numéro croissant.
+   *   rootDir/
+   *     SeriesName/            ← depth 1 → SÉRIE
+   *       S01/ ou Saison 1/    ← depth 2 → SAISON
+   *         episode.mkv        ← depth 3+ → ÉPISODE
+   *
+   * Tout sous-dossier supplémentaire (ex: nom de release) est ignoré :
+   * on descend jusqu'au premier fichier vidéo trouvé.
    */
   public async scanSeriesDirectory(rootDir: string): Promise<ScannedSeries[]> {
-    const allVideoFiles = await this.getAllVideoFiles(rootDir);
-    const parsedEpisodes = allVideoFiles.map((filePath) =>
-      this.parseEpisodeFromPath(filePath, rootDir),
+    // On liste les dossiers de depth 1 (chaque dossier = une série)
+    const seriesDirs = await this.listSubDirectories(rootDir);
+    const result: ScannedSeries[] = [];
+
+    for (const seriesDir of seriesDirs) {
+      const scanned = await this.scanOneSeries(seriesDir, rootDir);
+      if (scanned) result.push(scanned);
+    }
+
+    return result.sort((a, b) =>
+      a.seriesTitle.localeCompare(b.seriesTitle),
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // SCAN D'UNE SÉRIE
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Scanne un dossier de depth 1 (= une série).
+   * Ses sous-dossiers directs sont traités comme des saisons.
+   * Les fichiers vidéo directement à la racine sont ignorés
+   * (ils appartiennent à une saison implicite si nécessaire — cf. Jellyfin).
+   */
+  private async scanOneSeries(
+    seriesDir: string,
+    rootDir: string,
+  ): Promise<ScannedSeries | null> {
+    // Titre de la série = nom du dossier depth 1, nettoyé
+    const parsed = this.parseFilePathService.getCleanMediaTitle(
+      path.basename(seriesDir),
+    );
+    const seriesTitle = parsed.name;
+    const year        = parsed.year;
+
+    if (!seriesTitle) return null;
+
+    const seasons: ScannedSeason[] = [];
+
+    // Liste les entrées du dossier série
+    const entries = await fs.readdir(seriesDir, { withFileTypes: true });
+
+    // ── Dossiers depth 2 → saisons ───────────────────────────────────────
+    const subDirs = entries.filter(
+      (e) => e.isDirectory() && !e.name.startsWith('.'),
     );
 
-    return this.groupIntoSeries(parsedEpisodes, rootDir);
-  }
+    // Fichiers vidéo directement dans le dossier série (structure plate rare)
+    const rootVideos = entries.filter(
+      (e) => e.isFile() && this.isVideo(e.name),
+    );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // PARSING
-  // ───────────────────────────────────────────────────────────────────────────
+    for (const subDir of subDirs) {
+      const seasonFolderPath = path.join(seriesDir, subDir.name);
+      const seasonNumber     = this.parseSeasonNumber(subDir.name);
 
-  /**
-   * Extrait les informations série/saison/épisode depuis le chemin complet
-   * d'un fichier vidéo.
-   *
-   * Stratégie :
-   *
-   * 1. Chercher un pattern SxxExx dans le **nom du fichier** (sans extension).
-   * 2. Si la saison n'est pas trouvée dans le nom de fichier, regarder le
-   *    **nom du dossier parent** (Season 1, Saison 02, S01…).
-   * 3. Si toujours pas de saison → saison 1 par défaut.
-   * 4. Extraire le titre de la série :
-   *    - Tout ce qui précède le pattern SxxExx dans le nom de fichier.
-   *    - Sinon, si la structure est rootDir/SeriesName/Season X/fichier.mkv,
-   *      prendre le nom du dossier grand-parent.
-   *    - Sinon, utiliser ParseFilePathService pour nettoyer le nom du fichier.
-   */
-  public parseEpisodeFromPath(
-    filePath: string,
-    rootDir: string,
-  ): ParsedEpisode {
-    const filename = path.basename(filePath, path.extname(filePath));
-    const parentDir = path.dirname(filePath);
-    const parentName = path.basename(parentDir);
-    const grandParentDir = path.dirname(parentDir);
-    const grandParentName = path.basename(grandParentDir);
+      // Collecte récursive des épisodes dans ce dossier de saison
+      // (gère les sous-dossiers de release comme "Show.S02E05.1080p-GROUP/")
+      const videoFiles = await this.getAllVideoFiles(seasonFolderPath);
+      if (videoFiles.length === 0) continue;
 
-    // ── Étape 1 : pattern S/E dans le nom de fichier ──────────────────────
-    let seasonNumber: number | undefined;
-    let episodeNumber: number | undefined;
-    let titleRaw = filename;
+      const episodes: ScannedEpisode[] = videoFiles.map((filePath, idx) => ({
+        filePath,
+        episodeNumber: this.parseEpisodeNumber(path.basename(filePath), seasonNumber) ?? 0,
+      }));
 
-    for (const pattern of SE_PATTERNS) {
-      const match = filename.match(pattern);
-      if (match?.groups?.episode) {
-        episodeNumber = parseInt(match.groups.episode, 10);
-        if (match.groups?.season) {
-          seasonNumber = parseInt(match.groups.season, 10);
-        }
-        // Tout ce qui précède le match = titre brut de la série
-        titleRaw = filename.slice(0, match.index ?? 0).trim();
-        break;
-      }
-    }
+      episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
 
-    // ── Étape 2 : saison depuis le dossier parent si non trouvée ──────────
-    if (seasonNumber === undefined) {
-      const seasonFolderMatch = parentName.match(SEASON_FOLDER_PATTERN);
-      if (seasonFolderMatch?.groups?.season) {
-        seasonNumber = parseInt(seasonFolderMatch.groups.season, 10);
-      }
-    }
-
-    // ── Étape 3 : saison par défaut = 1 ───────────────────────────────────
-    if (seasonNumber === undefined) {
-      seasonNumber = 1;
-    }
-
-    // ── Étape 4 : titre de la série ───────────────────────────────────────
-    let seriesTitle: string;
-    let year: number | undefined;
-
-    const isInsideSeasonFolder = SEASON_FOLDER_PATTERN.test(parentName);
-
-    if (titleRaw.trim().length > 0) {
-      // Cas le plus fréquent : "Breaking.Bad.S01E03.mkv"
-      // → titleRaw = "Breaking.Bad." → nettoyé = "Breaking Bad"
-      const parsed = this.parseFilePathService.getCleanMediaTitle(titleRaw);
-      seriesTitle = parsed.name;
-      year = parsed.year;
-    } else if (isInsideSeasonFolder) {
-      // Structure : rootDir/Breaking Bad/Season 1/E01.mkv
-      // → grandParentName est le nom de la série si ce n'est pas rootDir
-      const isGrandParentRoot =
-        this.normalizePath(grandParentDir) === this.normalizePath(rootDir);
-      if (!isGrandParentRoot) {
-        const parsed = this.parseFilePathService.getCleanMediaTitle(grandParentName);
-        seriesTitle = parsed.name;
-        year = parsed.year;
-      } else {
-        // rootDir/Season 1/E01.mkv → pas de titre exploitable
-        const parsed = this.parseFilePathService.getCleanMediaTitle(parentName);
-        seriesTitle = parsed.name;
-        year = parsed.year;
-      }
-    } else {
-      // Structure plate : rootDir/Breaking Bad/E01.mkv ou rootDir/fichier.mkv
-      const isParentRoot =
-        this.normalizePath(parentDir) === this.normalizePath(rootDir);
-      const nameSource = isParentRoot ? filename : parentName;
-      const parsed = this.parseFilePathService.getCleanMediaTitle(nameSource);
-      seriesTitle = parsed.name;
-      year = parsed.year;
-    }
-
-    return { seriesTitle, year, seasonNumber, episodeNumber, filePath };
-  }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // REGROUPEMENT
-  // ───────────────────────────────────────────────────────────────────────────
-
-  /**
-   * Regroupe une liste plate de `ParsedEpisode` en `ScannedSeries[]`.
-   *
-   * Règles :
-   * - Clé de regroupement = titre normalisé (minuscules, espaces normalisés).
-   * - Dans chaque série, les saisons sont triées par `seasonNumber` croissant.
-   * - Dans chaque saison, les épisodes sont triés par `episodeNumber` croissant.
-   * - Les épisodes sans numéro détecté sont placés en fin de saison, triés
-   *   par nom de fichier.
-   * - Le `folderPath` d'une saison = dossier commun des épisodes de cette saison.
-   * - Le `folderPath` d'une série = dossier commun des saisons de cette série.
-   */
-  private groupIntoSeries(
-    parsedEpisodes: ParsedEpisode[],
-    rootDir: string,
-  ): ScannedSeries[] {
-    // Map<normalizedTitle, ScannedSeries>
-    const seriesMap = new Map<string, ScannedSeries>();
-
-    for (const ep of parsedEpisodes) {
-      const key = this.normalizeTitle(ep.seriesTitle);
-
-      if (!seriesMap.has(key)) {
-        seriesMap.set(key, {
-          seriesTitle: ep.seriesTitle,
-          year: ep.year,
-          folderPath: path.dirname(ep.filePath), // sera recalculé
-          seasons: [],
-        });
-      }
-
-      const series = seriesMap.get(key)!;
-      const seasonNum = ep.seasonNumber ?? 1;
-
-      let season = series.seasons.find((s) => s.seasonNumber === seasonNum);
-      if (!season) {
-        season = {
-          seasonNumber: seasonNum,
-          folderPath: path.dirname(ep.filePath), // sera recalculé
-          episodes: [],
-        };
-        series.seasons.push(season);
-      }
-
-      season.episodes.push({
-        filePath: ep.filePath,
-        episodeNumber: ep.episodeNumber ?? this.episodeFallbackIndex(season),
+      seasons.push({
+        seasonNumber,
+        folderPath: seasonFolderPath,
+        episodes,
       });
     }
 
-    // ── Post-traitement : tri + calcul des folderPaths ──────────────────────
-    for (const series of seriesMap.values()) {
-      // Trier les saisons
-      series.seasons.sort((a, b) => a.seasonNumber - b.seasonNumber);
+    // ── Fichiers vidéo à la racine de la série → saison 1 implicite ──────
+    if (rootVideos.length > 0) {
+      const implicitEpisodes: ScannedEpisode[] = rootVideos.map((e, idx) => {
+        const filePath = path.join(seriesDir, e.name);
+        return {
+          filePath,
+          episodeNumber: this.parseEpisodeNumber(e.name, 1) ?? 0,
+        };
+      });
+      implicitEpisodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
 
-      for (const season of series.seasons) {
-        // Trier les épisodes (épisodes sans numéro → placés à la fin via index énorme)
-        season.episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
-        // folderPath = dossier commun de tous les épisodes de cette saison
-        season.folderPath = this.commonAncestorDir(
-          season.episodes.map((e) => e.filePath),
-        );
-      }
-
-      // folderPath de la série = dossier commun de toutes les saisons
-      series.folderPath = this.commonAncestorDir(
-        series.seasons.map((s) => s.folderPath),
-      );
-
-      // Conserver l'année la plus fréquente (ou la première trouvée)
-      if (!series.year) {
-        const firstWithYear = parsedEpisodes.find(
-          (e) => this.normalizeTitle(e.seriesTitle) === this.normalizeTitle(series.seriesTitle) && e.year,
-        );
-        series.year = firstWithYear?.year;
+      // Fusionne avec une éventuelle saison 1 déjà détectée via dossier
+      const existing = seasons.find((s) => s.seasonNumber === 1);
+      if (existing) {
+        existing.episodes.push(...implicitEpisodes);
+        existing.episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
+      } else {
+        seasons.push({
+          seasonNumber: 1,
+          folderPath:   seriesDir,
+          episodes:     implicitEpisodes,
+        });
       }
     }
 
-    // Trier les séries par titre
-    return [...seriesMap.values()].sort((a, b) =>
-      a.seriesTitle.localeCompare(b.seriesTitle),
-    );
+    if (seasons.length === 0) return null;
+
+    seasons.sort((a, b) => a.seasonNumber - b.seasonNumber);
+
+    return { seriesTitle, year, folderPath: seriesDir, seasons };
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // PARSING SAISON / ÉPISODE
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Extrait le numéro de saison depuis le nom d'un dossier de depth 2.
+   *
+   * Exemples reconnus :
+   *   S01, S1, Season 1, Saison 01, Saison 0,
+   *   Bonus, Specials, OVA, Hors-série  → 0
+   *
+   * Fallback : 0 si le dossier ne ressemble à rien de connu.
+   */
+  private parseSeasonNumber(folderName: string): number {
+    const m = folderName.match(SEASON_FOLDER_PATTERN);
+    if (!m) return 0; // dossier non reconnu → saison 0
+    if (m.groups?.special) return 0;
+    return parseInt(m.groups!.season, 10);
+  }
+
+  /**
+   * Extrait le numéro d'épisode depuis le nom d'un fichier vidéo.
+   * Retourne undefined si aucun pattern ne correspond.
+   */
+  private parseEpisodeNumber(
+    filename: string,
+    seasonNumber: number,
+  ): number | undefined {
+    const name = path.basename(filename, path.extname(filename));
+    for (const pattern of SE_PATTERNS) {
+      const m = name.match(pattern);
+      if (m?.groups?.episode) {
+        // Si le pattern contient aussi la saison, on vérifie la cohérence
+        if (m.groups.season !== undefined) {
+          const fileSeason = parseInt(m.groups.season, 10);
+          // On accepte même si la saison du fichier diffère (le dossier fait foi)
+          // mais on garde le numéro d'épisode du fichier
+        }
+        return parseInt(m.groups.episode, 10);
+      }
+    }
+    return undefined;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
   // UTILITAIRES PRIVÉS
   // ───────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Renvoie un numéro très grand pour les épisodes sans numéro détecté,
-   * de sorte qu'ils soient placés en fin de liste mais triés entre eux
-   * par ordre d'insertion (= ordre alphabétique du scan).
-   */
-  private episodeFallbackIndex(season: ScannedSeason): number {
-    return 99000 + season.episodes.length;
+  private isVideo(filename: string): boolean {
+    return this.VIDEO_EXTENSIONS.has(path.extname(filename).toLowerCase());
+  }
+
+  private async listSubDirectories(dir: string): Promise<string[]> {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    return entries
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      .map((e) => path.join(dir, e.name));
   }
 
   /**
-   * Trouve le répertoire commun (ancêtre le plus proche) d'une liste de chemins.
-   * Ex: ["/a/b/c/file.mkv", "/a/b/d/file.mkv"] → "/a/b"
+   * Parcours récursif : collecte tous les fichiers vidéo sous `dir`.
+   * Gère les dossiers de release imbriqués (ex: depth 3+).
    */
-  private commonAncestorDir(filePaths: string[]): string {
-    if (filePaths.length === 0) return '';
-    if (filePaths.length === 1) return path.dirname(filePaths[0]);
-
-    const dirs = filePaths.map((p) =>
-      (path.extname(p) ? path.dirname(p) : p).split(path.sep),
+  private async getAllVideoFiles(dir: string): Promise<string[]> {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const files = await Promise.all(
+      entries.map(async (entry) => {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isSymbolicLink()) return [];
+        if (path.extname(entry.name).toLowerCase() === '.lnk') return [];
+        if (entry.isDirectory()) return this.getAllVideoFiles(fullPath);
+        return this.isVideo(entry.name) ? [fullPath] : [];
+      }),
     );
-    const first = dirs[0];
-    let i = 0;
-    while (
-      i < first.length &&
-      dirs.every((d) => d[i] === first[i])
-    ) {
-      i++;
-    }
-    return first.slice(0, i).join(path.sep) || path.sep;
-  }
-
-  /**
-   * Normalise un titre pour la clé de regroupement :
-   * minuscules, espaces normalisés, ponctuation supprimée.
-   */
-  private normalizeTitle(title: string): string {
-    return title
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s]/gu, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+    return files.flat();
   }
 
   private normalizePath(filePath: string): string {
@@ -364,26 +280,5 @@ export class SeriesScannerService {
       .replace(/\/+/g, '/')
       .replace(/\/$/, '')
       .toLowerCase();
-  }
-
-  /** Parcours récursif identique à getAllVideoFiles du LibraryService. */
-  private async getAllVideoFiles(dir: string): Promise<string[]> {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    const files = await Promise.all(
-      entries.map(async (entry) => {
-        const fullPath = path.resolve(dir, entry.name);
-
-        if (entry.isSymbolicLink()) return [];
-        if (path.extname(entry.name).toLowerCase() === '.lnk') return [];
-
-        if (entry.isDirectory()) {
-          return this.getAllVideoFiles(fullPath);
-        }
-
-        const ext = path.extname(entry.name).toLowerCase();
-        return this.VIDEO_EXTENSIONS.has(ext) ? [fullPath] : [];
-      }),
-    );
-    return files.flat();
   }
 }

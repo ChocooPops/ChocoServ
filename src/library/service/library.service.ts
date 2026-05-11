@@ -46,8 +46,8 @@ export class LibraryService {
     // ==============================================
     public async getMediaLibraryIdByTmdbId(tmdbId: number): Promise<string | null> {
         try {
-            const query: string = `SELECT id FROM Media_Library WHERE tmdbId = ? LIMIT 1;`;
-            const result: MediaLibrary[] = await this.pool.query(query, [tmdbId]);
+            const query: string = `SELECT id FROM Media_Library WHERE tmdbId = ? AND (type = ? OR type = ?) LIMIT 1;`;
+            const result: MediaLibrary[] = await this.pool.query(query, [tmdbId, MediaType.MOVIE, MediaType.SERIES]);
             return result[0].id ?? null;
         } catch(error) {
             return null;
@@ -506,7 +506,7 @@ export class LibraryService {
     
         if (mediaLibrary.tmdbId !== editMediaLibrary.tmdbId || existingSeries.length <= 0) {
     
-            const seriesTmdb: EditSeries = await this.tmdbService.searchSeriesByTmdbId(editMediaLibrary.tmdbId, library.lang);
+            const seriesTmdb: EditSeries = await this.tmdbService.searchSeriesByTmdbId(editMediaLibrary.tmdbId, editMediaLibrary.id, library.lang);
             let messageSeries: ReturnMessage;
             seriesTmdb.mediaLibraryId = editMediaLibrary.id;
     
@@ -975,7 +975,7 @@ export class LibraryService {
     
             for (const ml of seriesWithoutMedia) {
                 try {
-                    const editSeries = await this.tmdbService.searchSeriesByTmdbId(ml.tmdbId, lang);
+                    const editSeries = await this.tmdbService.searchSeriesByTmdbId(ml.tmdbId, ml.id, lang);
                     editSeries.mediaLibraryId = ml.id;
                     const msg = await this.seriesService.insertNewSeries(editSeries, true);
                     logTmdb.push(msg);
@@ -1003,28 +1003,33 @@ export class LibraryService {
             await this.pool.query(`UPDATE Library SET log = ? WHERE id = ?`, [JSON.stringify(result), libraryId]);
             return result;
         } finally {
-            try { await conn.release(); } catch {}
+            await conn.release();
             await this.pool.query('UPDATE Library SET state = ? WHERE id = ?', [StateLibrary.NOT_WORKED, libraryId]);
         }
     }
 
-    public async getSeriesMediaLibraryMaps(seriesTmdbId: number): Promise<{
-        seriesML:               MediaLibrary | null;
-        seasonByNumber:         Map<number, MediaLibrary>;
-        episodeBySeasonAndNum:  Map<string,  MediaLibrary>;
+    public async getSeriesMediaLibraryMaps(seriesMediaLibraryId: string): Promise<{
+        seriesML:              MediaLibrary | null;
+        seasonByNumber:        Map<number, MediaLibrary>;
+        episodeBySeasonAndNum: Map<string,  MediaLibrary[]>;  // tableau pour gérer les doublons episodeNumber=0
     }> {
         const conn = await this.pool.getConnection();
         try {
             const rows: MediaLibrary[] = await conn.query(
-                `SELECT id, type, parentId, seasonNumber, episodeNumber, path
+                `SELECT id, type, parentId, seasonNumber, episodeNumber, path, titleFormated
                 FROM Media_Library
-                WHERE tmdbId = ? AND type IN ('SERIES', 'SEASON', 'EPISODE')`,
-                [seriesTmdbId]
+                WHERE id = ?
+                    OR parentId = ?
+                    OR parentId IN (
+                        SELECT id FROM Media_Library
+                        WHERE parentId = ? AND type = 'SEASON'
+                    )`,
+                [seriesMediaLibraryId, seriesMediaLibraryId, seriesMediaLibraryId]
             );
     
             let seriesML: MediaLibrary | null = null;
             const seasonByNumber        = new Map<number, MediaLibrary>();
-            const episodeBySeasonAndNum = new Map<string,  MediaLibrary>();
+            const episodeBySeasonAndNum = new Map<string,  MediaLibrary[]>();
     
             for (const row of rows) {
                 if (row.type === 'SERIES') {
@@ -1032,14 +1037,21 @@ export class LibraryService {
                 } else if (row.type === 'SEASON' && row.seasonNumber != null) {
                     seasonByNumber.set(row.seasonNumber, row);
                 } else if (row.type === 'EPISODE' && row.seasonNumber != null && row.episodeNumber != null) {
-                    episodeBySeasonAndNum.set(`${row.seasonNumber}_${row.episodeNumber}`, row);
+                    // Clé "seasonNumber_episodeNumber" — plusieurs épisodes peuvent
+                    // partager la même clé quand episodeNumber = 0 (bonus non reconnus).
+                    // On stocke dans un tableau pour ne perdre aucun épisode.
+                    const key = `${row.seasonNumber}_${row.episodeNumber}`;
+                    if (!episodeBySeasonAndNum.has(key)) {
+                        episodeBySeasonAndNum.set(key, []);
+                    }
+                    episodeBySeasonAndNum.get(key)!.push(row);
                 }
             }
     
             return { seriesML, seasonByNumber, episodeBySeasonAndNum };
         } catch {
             return {
-                seriesML: null,
+                seriesML:              null,
                 seasonByNumber:        new Map(),
                 episodeBySeasonAndNum: new Map(),
             };
@@ -1047,5 +1059,6 @@ export class LibraryService {
             await conn.release();
         }
     }
+ 
 
 }

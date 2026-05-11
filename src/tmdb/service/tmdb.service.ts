@@ -104,7 +104,6 @@ export class TmdbService {
         }
     }
     public async searchMovieByTmdbId(id: number, lang: ISO_3166_1 | null): Promise<EditMovie> {
-        return null;
         const mediaLibraryId: string | null = await this.libraryService.getMediaLibraryIdByTmdbId(id);
         if (!lang) {
             lang = await this.libraryService.getLanguageByMediaLibraryTmdbId(id);
@@ -173,34 +172,37 @@ export class TmdbService {
         const url: string = `${this.apiTMDBSearchTv}?${this.apiKeyTMDB}${param}`;
         const response = await lastValueFrom(this.httpService.get(url));
         const id: number = Number(response.data.results[0].id);
-        return await this.searchSeriesByTmdbId(id, null);
+        return await this.searchSeriesByTmdbId(id, null, null);
     }
 
     public async searchSeriesByMediaLibraryId(mediaLibraryId: string): Promise<EditMovie> {
         const tmdbId: number | null = await this.libraryService.getTmdbIdByMediaLibrary(mediaLibraryId);
         if (tmdbId) {
-            return await this.searchSeriesByTmdbId(tmdbId, null);
+            return await this.searchSeriesByTmdbId(tmdbId, mediaLibraryId, null);
         } else {
             return null;
         }
     }
 
-    public async searchSeriesByTmdbId(id: number, lang: ISO_3166_1): Promise<EditSeries> {
+    public async searchSeriesByTmdbId(id: number, mediaLibraryId: string | null, lang: ISO_3166_1): Promise<EditSeries> {
         if (!lang) {
             lang = await this.libraryService.getLanguageByMediaLibraryTmdbId(id);
         }
+        if (!mediaLibraryId) {
+            mediaLibraryId = await this.libraryService.getMediaLibraryIdByTmdbId(id);
+        }
         const paramLanguage = this.getParamLanguage(lang);
-    
+
         const url: string = `${this.apiTMDBTv}/${id}?${this.apiKeyTMDB}&append_to_response=aggregate_credits,translations,keywords&${paramLanguage}`;
         const response = await lastValueFrom(this.httpService.get(url));
-    
-        const categories: CategorySimple[]   = await this.getCategories(response.data.genres);
-        const credits:    MediaCredit[]      = this.getCreditsForSeries(response.data.aggregate_credits, response.data.created_by);
-        const keywords:   string[]           = this.getKeyWords(response.data.keywords.results);
+
+        const categories: CategorySimple[]      = await this.getCategories(response.data.genres);
+        const credits:    MediaCredit[]         = this.getCreditsForSeries(response.data.aggregate_credits, response.data.created_by);
+        const keywords:   string[]              = this.getKeyWords(response.data.keywords.results);
         const otherLanguage: TranslationTitle[] = this.getAllTitlesFromDifferentLanguage(
             response.data.translations.translations, MediaType.SERIES, response.data.original_name
         );
-    
+
         let images: { back: string; logo: string; posterVertical: EditPoster[]; posterHorizontal: EditPoster[] };
         try {
             const urlPoster = `${this.apiTMDBTv}/${id}/images?${this.apiKeyTMDB}`;
@@ -209,10 +211,10 @@ export class TmdbService {
         } catch {
             images = { back: null, logo: null, posterVertical: [], posterHorizontal: [] };
         }
-    
+
         const { seriesML, seasonByNumber, episodeBySeasonAndNum } =
-            await this.libraryService.getSeriesMediaLibraryMaps(id);
-    
+            await this.libraryService.getSeriesMediaLibraryMaps(mediaLibraryId);
+
         const seasons: EditSeason[] = await this.getAllSeasonsBySeries(
             id,
             response.data.seasons,
@@ -220,111 +222,293 @@ export class TmdbService {
             seasonByNumber,
             episodeBySeasonAndNum,
         );
-    
-        const series: EditSeries = {
-            id:                              id,
+
+        return {
+            id,
             title:                           response.data.name,
             mediaLibraryId:                  seriesML?.id ?? null,
             otherTitles:                     otherLanguage,
-            categories:                      categories,
+            categories,
             keyWords:                        keywords,
             description:                     response.data.overview,
-            credits:                         credits,
+            credits,
             date:                            response.data.first_air_date,
             startShow:                       '00:00:00',
             endShow:                         '00:00:00',
             posters:                         images.posterVertical,
             logo:                            images.logo,
             backgroundImage:                 images.back,
-            seasons:                         seasons,
+            seasons,
             horizontalPoster:                images.posterHorizontal,
             horizontalPosterSameAsBackground: false,
         };
-    
-        return series;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
 
     private async getAllSeasonsBySeries(
-        seriesTmdbId:         number,
-        seasonsTmdb:          any[],
-        paramLanguage:        string,
-        seasonByNumber:       Map<number, MediaLibrary>,
-        episodeBySeasonAndNum: Map<string, MediaLibrary>,
+        seriesTmdbId:          number,
+        seasonsTmdb:           any[],
+        paramLanguage:         string,
+        seasonByNumber:        Map<number, MediaLibrary>,
+        episodeBySeasonAndNum: Map<string, MediaLibrary[]>,
     ): Promise<EditSeason[]> {
-    
-        const seasons: EditSeason[] = [];
-    
-        for (const seasonTmdb of seasonsTmdb) {
-            const seasonNumber: number = seasonTmdb.season_number;
-    
-            const seasonML = seasonByNumber.get(seasonNumber);
-            if (!seasonML) {
-                continue;
-            }
-    
-            const episodes: EditEpisode[] = await this.getAllEpisodesBySeason(
-                seriesTmdbId,
-                seasonTmdb.id,
-                seasonNumber,
-                paramLanguage,
-                episodeBySeasonAndNum,
-            );
-    
-            if (episodes.length === 0) continue;
-    
-            seasons.push({
-                id:             seasonTmdb.id,
-                seriesId:       seriesTmdbId,
-                mediaLibraryId: seasonML.id,
-                name:           seasonTmdb.name,
-                seasonNumber:   seasonNumber,
-                srcPoster:      await this.getEntirelyUrlImagesFromTMDB(seasonTmdb.poster_path),
-                episodes:       episodes,
-            });
-        }
-    
-        return seasons;
-    }
 
-    private async getAllEpisodesBySeason(
-        seriesTmdbId:         number,
-        seasonTmdbId:         number,
-        seasonNumber:         number,
-        paramLanguage:        string,
-        episodeBySeasonAndNum: Map<string, MediaLibrary>,
-    ): Promise<EditEpisode[]> {
-        try {
-            const url = `${this.apiTMDBTv}/${seriesTmdbId}/season/${seasonNumber}?${this.apiKeyTMDB}&${paramLanguage}`;
-            const response = await lastValueFrom(this.httpService.get(url));
-    
-            const episodes: EditEpisode[] = [];
-    
-            for (const episodeTmdb of response.data.episodes) {
-                const episodeNumber: number = episodeTmdb.episode_number;
-                const key = `${seasonNumber}_${episodeNumber}`;
-    
-                const episodeML = episodeBySeasonAndNum.get(key);
-                if (!episodeML) {
-                    continue;
+        // ── Types locaux ──────────────────────────────────────────────────────
+
+        interface TmdbEpisodeMeta {
+            episodeTmdbId: number;
+            seasonTmdbId:  number;
+            seasonNumber:  number;
+            episodeNumber: number;
+            name:          string;
+            overview:      string;
+            air_date:      string;
+            still_path:    string | null;
+        }
+
+        interface DbEpisodeEntry {
+            seasonNumber:  number;
+            episodeNumber: number;
+            ml:            MediaLibrary;
+            seasonML:      MediaLibrary;
+        }
+
+        // ── Saisons TMDB > 0, triées ──────────────────────────────────────────
+        const seasonsTmdbSorted = [...seasonsTmdb]
+            .filter((s) => s.season_number > 0)
+            .sort((a, b) => a.season_number - b.season_number);
+
+        // Numéros de saisons BDD > 0
+        const dbSeasonNums = [...seasonByNumber.keys()]
+            .filter((n) => n > 0)
+            .sort((a, b) => a - b);
+
+        // ── Détection du mode ─────────────────────────────────────────────────
+        // On compare les ensembles de numéros de saisons BDD et TMDB.
+        // Si les deux sets sont identiques → correspondance directe S+E.
+        // Si le nombre ou les numéros diffèrent → mode positionnel à plat.
+
+        const tmdbSeasonNums = seasonsTmdbSorted.map((s) => s.season_number);
+        const usePositional  =
+            dbSeasonNums.length !== tmdbSeasonNums.length ||
+            dbSeasonNums.some((n, i) => n !== tmdbSeasonNums[i]);
+
+        // ── Chargement des épisodes TMDB par saison (nécessaire dans les deux modes)
+        const tmdbEpisodesBySeason = new Map<number, TmdbEpisodeMeta[]>();
+
+        for (const seasonTmdb of seasonsTmdbSorted) {
+            try {
+                const url = `${this.apiTMDBTv}/${seriesTmdbId}/season/${seasonTmdb.season_number}?${this.apiKeyTMDB}&${paramLanguage}`;
+                const res = await lastValueFrom(this.httpService.get(url));
+                tmdbEpisodesBySeason.set(
+                    seasonTmdb.season_number,
+                    (res.data.episodes as any[]).map((ep) => ({
+                        episodeTmdbId: ep.id,
+                        seasonTmdbId:  seasonTmdb.id,
+                        seasonNumber:  seasonTmdb.season_number,
+                        episodeNumber: ep.episode_number,
+                        name:          ep.name,
+                        overview:      ep.overview,
+                        air_date:      ep.air_date,
+                        still_path:    ep.still_path,
+                    })),
+                );
+            } catch {
+                tmdbEpisodesBySeason.set(seasonTmdb.season_number, []);
+            }
+        }
+
+        // ── Séquence plate BDD (commune aux deux modes) ───────────────────────
+        // dbFlat  : épisodes normaux (seasonNumber > 0 ET episodeNumber > 0)
+        // dbBonus : bonus/non reconnus (seasonNumber = 0 OU episodeNumber = 0)
+
+        const dbFlat:  DbEpisodeEntry[] = [];
+        const dbBonus: DbEpisodeEntry[] = [];
+
+        const sortedSeasonNums = [...seasonByNumber.keys()].sort((a, b) => a - b);
+
+        for (const seasonNum of sortedSeasonNums) {
+            const seasonML = seasonByNumber.get(seasonNum)!;
+            const seasonEps: DbEpisodeEntry[] = [];
+
+            for (const [key, mlList] of episodeBySeasonAndNum.entries()) {
+                const [sStr, eStr] = key.split('_');
+                if (parseInt(sStr, 10) !== seasonNum) continue;
+                const episodeNumber = parseInt(eStr, 10);
+                for (const ml of mlList) {
+                    seasonEps.push({ seasonNumber: seasonNum, episodeNumber, ml, seasonML });
                 }
-    
-                episodes.push({
-                    id:             episodeTmdb.id,
-                    seasonId:       seasonTmdbId,
-                    mediaLibraryId: episodeML.id,
-                    name:           episodeTmdb.name,
-                    episodeNumber:  episodeNumber,
-                    srcPoster:      await this.getEntirelyUrlImagesFromTMDB(episodeTmdb.still_path),
-                    description:    episodeTmdb.overview,
-                    date:           episodeTmdb.air_date,
-                    path:           episodeML.path,
+            }
+
+            seasonEps.sort((a, b) => {
+                if (a.episodeNumber === 0 && b.episodeNumber !== 0) return 1;
+                if (a.episodeNumber !== 0 && b.episodeNumber === 0) return -1;
+                return a.episodeNumber - b.episodeNumber;
+            });
+
+            for (const entry of seasonEps) {
+                if (entry.seasonNumber === 0 || entry.episodeNumber === 0) {
+                    dbBonus.push(entry);
+                } else {
+                    dbFlat.push(entry);
+                }
+            }
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        // MODE A — Correspondance directe (saisons identiques BDD ↔ TMDB)
+        // ═════════════════════════════════════════════════════════════════════
+
+        interface MappedEpisode {
+            seasonNumber: number;
+            seasonML:     MediaLibrary;
+            episode:      EditEpisode;
+        }
+
+        const mapped: MappedEpisode[] = [];
+
+        if (!usePositional) {
+
+            for (const dbEp of dbFlat) {
+                const tmdbSeasonEps = tmdbEpisodesBySeason.get(dbEp.seasonNumber) ?? [];
+                const tmdbEp = tmdbSeasonEps.find((e) => e.episodeNumber === dbEp.episodeNumber);
+
+                mapped.push({
+                    seasonNumber: dbEp.seasonNumber,
+                    seasonML:     dbEp.seasonML,
+                    episode: {
+                        id:             tmdbEp?.episodeTmdbId ?? 0,
+                        seasonId:       tmdbEp?.seasonTmdbId  ?? 0,
+                        mediaLibraryId: dbEp.ml.id,
+                        name:           tmdbEp?.name ?? dbEp.ml.titleFormated,
+                        episodeNumber:  dbEp.episodeNumber,
+                        srcPoster:      tmdbEp?.still_path
+                                            ? await this.getEntirelyUrlImagesFromTMDB(tmdbEp.still_path)
+                                            : null,
+                        description:    tmdbEp?.overview ?? undefined,
+                        date:           tmdbEp?.air_date  ? new Date(tmdbEp.air_date) : undefined,
+                        path:           dbEp.ml.path,
+                    },
                 });
             }
-    
-            return episodes;
-        } catch {
-            return [];
+
+        // ═════════════════════════════════════════════════════════════════════
+        // MODE B — Correspondance positionnelle à plat (saisons divergentes)
+        // ═════════════════════════════════════════════════════════════════════
+
+        } else {
+
+            // Séquence plate TMDB dans l'ordre des saisons
+            const tmdbFlat: TmdbEpisodeMeta[] = [];
+            for (const sNum of tmdbSeasonNums) {
+                tmdbFlat.push(...(tmdbEpisodesBySeason.get(sNum) ?? []));
+            }
+
+            for (let i = 0; i < dbFlat.length; i++) {
+                const dbEp   = dbFlat[i];
+                const tmdbEp = tmdbFlat[i]; // undefined si BDD > TMDB
+
+                mapped.push({
+                    seasonNumber: dbEp.seasonNumber,
+                    seasonML:     dbEp.seasonML,
+                    episode: {
+                        id:             tmdbEp?.episodeTmdbId ?? 0,
+                        seasonId:       tmdbEp?.seasonTmdbId  ?? 0,
+                        mediaLibraryId: dbEp.ml.id,
+                        name:           tmdbEp?.name ?? dbEp.ml.titleFormated,
+                        episodeNumber:  dbEp.episodeNumber,
+                        srcPoster:      tmdbEp?.still_path
+                                            ? await this.getEntirelyUrlImagesFromTMDB(tmdbEp.still_path)
+                                            : null,
+                        description:    tmdbEp?.overview ?? undefined,
+                        date:           tmdbEp?.air_date  ? new Date(tmdbEp.air_date) : undefined,
+                        path:           dbEp.ml.path,
+                    },
+                });
+            }
         }
+
+        // ── Bonus — toujours sans correspondance TMDB ─────────────────────────
+
+        for (const dbEp of dbBonus) {
+            mapped.push({
+                seasonNumber: dbEp.seasonNumber,
+                seasonML:     dbEp.seasonML,
+                episode: {
+                    id:             0,
+                    seasonId:       0,
+                    mediaLibraryId: dbEp.ml.id,
+                    name:           dbEp.ml.titleFormated,
+                    episodeNumber:  dbEp.episodeNumber,
+                    srcPoster:      null,
+                    description:    undefined,
+                    date:           undefined,
+                    path:           dbEp.ml.path,
+                },
+            });
+        }
+
+        // ── Regroupement par saison BDD ───────────────────────────────────────
+
+        const seasonMap = new Map<number, { seasonML: MediaLibrary; episodes: EditEpisode[] }>();
+        for (const m of mapped) {
+            if (!seasonMap.has(m.seasonNumber)) {
+                seasonMap.set(m.seasonNumber, { seasonML: m.seasonML, episodes: [] });
+            }
+            seasonMap.get(m.seasonNumber)!.episodes.push(m.episode);
+        }
+
+        // ── Métadonnées de saison ─────────────────────────────────────────────
+
+        // En mode positionnel, on calcule l'offset BDD pour retrouver la saison
+        // TMDB de référence quand il n'y a pas d'équivalent direct.
+        const seasonOffsets = new Map<number, number>();
+        if (usePositional) {
+            let off = 0;
+            for (const sNum of sortedSeasonNums.filter((n) => n > 0)) {
+                seasonOffsets.set(sNum, off);
+                off += dbFlat.filter((e) => e.seasonNumber === sNum).length;
+            }
+        }
+
+        // Séquence plate TMDB pour la recherche d'offset (mode positionnel)
+        const tmdbFlatForOffset: TmdbEpisodeMeta[] = usePositional
+            ? tmdbSeasonNums.flatMap((sNum) => tmdbEpisodesBySeason.get(sNum) ?? [])
+            : [];
+
+        const result: EditSeason[] = [];
+
+        for (const [seasonNum, { seasonML, episodes }] of
+            [...seasonMap.entries()].sort((a, b) => a[0] - b[0])
+        ) {
+            let refSeasonTmdb: any = seasonsTmdb.find((s) => s.season_number === seasonNum);
+
+            // En mode positionnel, si pas d'équivalent direct, chercher via offset
+            if (!refSeasonTmdb && usePositional && seasonNum > 0) {
+                const off = seasonOffsets.get(seasonNum) ?? 0;
+                const coveringEp = tmdbFlatForOffset[off];
+                if (coveringEp) {
+                    refSeasonTmdb = seasonsTmdb.find(
+                        (s) => s.season_number === coveringEp.seasonNumber
+                    );
+                }
+            }
+
+            result.push({
+                id:             refSeasonTmdb?.id   ?? 0,
+                seriesId:       seriesTmdbId,
+                mediaLibraryId: seasonML.id,
+                name:           refSeasonTmdb?.name ?? seasonML.titleFormated,
+                seasonNumber:   seasonNum,
+                srcPoster:      refSeasonTmdb?.poster_path
+                                    ? await this.getEntirelyUrlImagesFromTMDB(refSeasonTmdb.poster_path)
+                                    : null,
+                episodes,
+            });
+        }
+
+        return result;
     }
 
     private async getCategories(categoriesTmbd: CategoryTmdb[]): Promise<CategorySimple[]> {

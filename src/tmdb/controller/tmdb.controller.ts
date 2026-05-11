@@ -31,7 +31,7 @@ export class TmdbController {
     async searchSeriesByTitleOrTmdbId(@Param('series') series: string): Promise<EditMovie> {
         const isNumeric = /^\d+$/.test(series);
         if (isNumeric) {
-            return await this.tmdbService.searchSeriesByTmdbId(Number(series), null);
+            return await this.tmdbService.searchSeriesByTmdbId(Number(series), null, null);
         } else {
             return await this.tmdbService.searchSeriesByTitle(series);
         }
@@ -40,7 +40,7 @@ export class TmdbController {
     async searchSeriesByMediaLibraryId(@Param('mediaLibraryId') series: string): Promise<EditMovie> {
         const isNumeric = /^\d+$/.test(series);
         if (isNumeric) {
-            return await this.tmdbService.searchSeriesByTmdbId(Number(series), null);
+            return await this.tmdbService.searchSeriesByTmdbId(Number(series), null, null);
         } else {
             return await this.tmdbService.searchSeriesByMediaLibraryId(series);
         }
