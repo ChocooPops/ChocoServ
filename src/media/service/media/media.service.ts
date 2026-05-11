@@ -41,7 +41,10 @@ export class MediaService {
     public async getSimpleMediaById(mediaId: number): Promise<Media | null> {
         const conn = await this.pool.getConnection();
         try {
-            const query: string = `SELECT * FROM Media WHERE id = ?`;
+            const query: string = `SELECT m.*, mlib.path as path 
+                FROM Media m
+                LEFT JOIN media_library mlib ON mlib.id = m.mediaLibraryId
+                WHERE m.id = ?`;
             const result: Media[] = await conn.query(query, [mediaId]);
             return result[0] ?? null;
         } catch (error) {

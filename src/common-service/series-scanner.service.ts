@@ -50,6 +50,9 @@ const SE_PATTERNS: RegExp[] = [
   /(?:season|saison|s)\s*(?<season>\d{1,4})\s*(?:episode|ep|e)\s*(?<episode>\d{1,4})/i,
   // EP03 / E03 seul
   /\bep?(?<episode>\d{2,4})\b/i,
+  // "- 10 " ou "- 50 " : numéro isolé précédé d'un tiret-espace et suivi d'un espace ou fin de nom
+  // Couvre : "[Group] Series - 10 TAG", "[Group] Series - 10"
+  /(?<=\s-\s)(?<episode>\d{1,4})(?=\s|$)/,
 ];
 
 /**
@@ -146,14 +149,28 @@ export class SeriesScannerService {
       const seasonFolderPath = path.join(seriesDir, subDir.name);
       const seasonNumber     = this.parseSeasonNumber(subDir.name);
 
-      // Collecte récursive des épisodes dans ce dossier de saison
-      // (gère les sous-dossiers de release comme "Show.S02E05.1080p-GROUP/")
       const videoFiles = await this.getAllVideoFiles(seasonFolderPath);
       if (videoFiles.length === 0) continue;
 
-      const episodes: ScannedEpisode[] = videoFiles.map((filePath, idx) => ({
+      // Tri alphabétique des fichiers avant attribution des index
+      const sortedFiles = [...videoFiles].sort((a, b) =>
+        path.basename(a).localeCompare(path.basename(b), undefined, { numeric: true, sensitivity: 'base' })
+      );
+
+      // Premier passage : on tente de parser le numéro d'épisode depuis le nom
+      const rawEpisodes = sortedFiles.map((filePath) => ({
         filePath,
-        episodeNumber: this.parseEpisodeNumber(path.basename(filePath), seasonNumber) ?? 0,
+        episodeNumber: this.parseEpisodeNumber(path.basename(filePath), seasonNumber),
+      }));
+
+      // Si TOUS les épisodes de la saison sont sans numéro reconnu → index positionnel
+      // Si CERTAINS seulement sont sans numéro → on les laisse à 0 (bonus isolés)
+      const allUnknown = rawEpisodes.every((e) => e.episodeNumber === undefined);
+
+      const episodes: ScannedEpisode[] = rawEpisodes.map((e, idx) => ({
+        filePath:      e.filePath,
+        episodeNumber: e.episodeNumber
+          ?? (allUnknown ? idx + 1 : 0),
       }));
 
       episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
@@ -167,13 +184,22 @@ export class SeriesScannerService {
 
     // ── Fichiers vidéo à la racine de la série → saison 1 implicite ──────
     if (rootVideos.length > 0) {
-      const implicitEpisodes: ScannedEpisode[] = rootVideos.map((e, idx) => {
-        const filePath = path.join(seriesDir, e.name);
-        return {
-          filePath,
-          episodeNumber: this.parseEpisodeNumber(e.name, 1) ?? 0,
-        };
-      });
+      const sortedRootVideos = [...rootVideos].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+      );
+
+      const rawImplicit = sortedRootVideos.map((e) => ({
+        filePath:      path.join(seriesDir, e.name),
+        episodeNumber: this.parseEpisodeNumber(e.name, 1),
+      }));
+
+      const allUnknown = rawImplicit.every((e) => e.episodeNumber === undefined);
+
+      const implicitEpisodes: ScannedEpisode[] = rawImplicit.map((e, idx) => ({
+        filePath:      e.filePath,
+        episodeNumber: e.episodeNumber ?? (allUnknown ? idx + 1 : 0),
+      }));
+
       implicitEpisodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
 
       // Fusionne avec une éventuelle saison 1 déjà détectée via dossier

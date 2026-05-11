@@ -219,7 +219,10 @@ export class SeriesService extends MediaService {
     public async getSimpleEpisodeById(episodeId: number): Promise<Episode | null> {
         const conn = await this.pool.getConnection();
         try {
-            const query: string = `SELECT * FROM Episode WHERE id = ?`;
+            const query: string = `SELECT e.*, mlib.path as path 
+            FROM Episode e
+            LEFT JOIN media_library mlib ON mlib.id = e.mediaLibraryId
+            WHERE e.id = ?`;
             const result: Episode[] = await conn.query(query, [episodeId]);
             return result[0] ?? null;
         } catch (error) {
