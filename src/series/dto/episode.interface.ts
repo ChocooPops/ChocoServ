@@ -2,6 +2,7 @@ import { StatState } from "src/stat-user/dto/stat-state.enum"
 
 export interface Episode {
     id: number,
+    seriesId: number,
     seasonId: number,
     mediaLibraryId: string
     name: string,

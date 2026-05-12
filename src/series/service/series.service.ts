@@ -408,6 +408,7 @@ export class SeriesService extends MediaService {
             results.forEach((result: any) => {
                 episodes.push({
                     id: Number(result.id),
+                    seriesId: Number(result.seriesId),
                     seasonId: Number(result.seasonId),
                     mediaLibraryId: result.mediaLibraryId,
                     name: result.name,
@@ -507,7 +508,7 @@ export class SeriesService extends MediaService {
         return messageReturned;
     }
 
-    private async insertManySeasons(seasons: EditSeason[], seriesId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
+    public async insertManySeasons(seasons: EditSeason[], seriesId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             if (seasons.length > 0) {
                 let message !: string;
@@ -534,7 +535,7 @@ export class SeriesService extends MediaService {
         }
     }
 
-    private async insertManyEpisodes(episodes: EditEpisode[], seriesId: number, seasonId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
+    public async insertManyEpisodes(episodes: EditEpisode[], seriesId: number, seasonId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             if (episodes.length > 0) {
                 const values: any[] = [];
@@ -685,7 +686,7 @@ export class SeriesService extends MediaService {
         }
     }
 
-    private async deleteManySeasons(seasons: Season[], formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
+    public async deleteManySeasons(seasons: Season[], formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             let message: string = '';
             if (seasons.length > 0) {
@@ -709,7 +710,7 @@ export class SeriesService extends MediaService {
             throw error;
         }
     }
-    private async deleteManyEpisodes(episodes: Episode[], formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
+    public async deleteManyEpisodes(episodes: Episode[], formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             let message = '';
             for (const episode of episodes) {
