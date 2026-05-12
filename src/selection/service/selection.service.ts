@@ -131,20 +131,14 @@ export class SelectionService {
     public async getSelectionByResearched(keyWord: string): Promise<Selection[]> {
         const conn = await this.pool.getConnection();
         try {
-            const items: SearchItem[] = await conn.query(`SELECT id, name as title FROM Selection`);
-            const selectionIds: number[] = this.searchService.getItemByResearch(keyWord, items);
-            if (selectionIds.length > 0) {
-                const WHERE: string = `WHERE id IN (${selectionIds.map(() => '?').join(', ')})`;
-                const ORDER: string = `ORDER BY FIELD (id, ${selectionIds.map(() => '?').join(', ')})`;;
-                const query: string = this.getQuerySimpleSelections(WHERE, ORDER);
-                const selections: Selection[] = await conn.query(query, [...selectionIds, ...selectionIds]);
-                selections.forEach((selection: Selection) => {
+            const WHERE: string = `WHERE name = ?`;
+            const ORDER: string = ` ORDER BY ABS(CHAR_LENGTH(name) - CHAR_LENGTH(?)) ASC`;
+            const query: string = this.getQuerySimpleSelections(WHERE, ORDER);
+            const selections: Selection[] = await conn.query(query, [`%${keyWord}%`, keyWord]);
+            selections.forEach((selection: Selection) => {
                     selection.mediaList = [];
-                });
-                return selections;
-            } else {
-                return [];
-            }
+            });
+            return selections;
         } catch (error) {
             return [];
         } finally {
@@ -184,7 +178,7 @@ export class SelectionService {
                     message: `Sélection insérée avec succès \n ${messageMediaSelection}`,
                     other: { id: selectionId }
                 }
-            } catch (error) {
+            } catch (error: any) {
                 await conn.rollback();
                 returnedMessage = {
                     id: -1,
@@ -232,7 +226,7 @@ export class SelectionService {
                     message: "Sélection introuvable"
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             await conn.rollback();
             return {
                 id: -1,
@@ -259,7 +253,7 @@ export class SelectionService {
                 state: true,
                 message: 'Selection supprimée avec succès'
             }
-        } catch (error) {
+        } catch (error: any) {
             await conn.rollback();
             returnMessage = {
                 id: -1,
@@ -320,7 +314,7 @@ export class SelectionService {
                     message: `Aucune sélection n'a été ajoutée dans la page ${pageType}`
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             await conn.rollback();
             return {
                 id: -1,

@@ -51,7 +51,9 @@ export class CreditService {
                 WHERE c.id like '${keyWord}%'
                 OR c.tmdbId like '${keyWord}%'
                 OR c.fullName like '%${keyWord}%' 
-                OR c.originalFullName like '%${keyWord}%'
+                OR c.originalFullName like '%${keyWord}%
+                ORDER BY ABS(CHAR_LENGTH(c.fullName) - CHAR_LENGTH(${keyWord})), 
+                    ABS(CHAR_LENGTH(c.originalFullName) - CHAR_LENGTH(${keyWord})) ASC'
                 LIMIT 50`);
             credits.forEach((credit: Credit) => {
                 credit.srcPoster = this.formatPathService.getOneFormatedPosterUrl(credit.id, MediaType.CREDIT, credit.srcPoster as string);

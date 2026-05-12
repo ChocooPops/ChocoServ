@@ -1,6 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { MediaController } from './controller/media.controller';
-import { SearchService } from 'src/common-service/search.service';
 import { VerifTimerShowService } from 'src/common-service/verif-timer-show.service';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { PosterModule } from 'src/poster/poster.module';
@@ -14,7 +13,7 @@ import { MediaService } from './service/media/media.service';
 
 @Module({
   imports: [PosterModule, forwardRef(() => UserModule), forwardRef(() => MovieModule), forwardRef(() => SeriesModule), forwardRef(() => StatUserModule), CreditModule],
-  providers: [MediaService, SearchService, VerifTimerShowService, FormatPathService, MediaSubstitutionSerivce],
+  providers: [MediaService, VerifTimerShowService, FormatPathService, MediaSubstitutionSerivce],
   controllers: [MediaController],
   exports: [MediaService]
 })

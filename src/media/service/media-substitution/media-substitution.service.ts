@@ -12,8 +12,6 @@ import { MediaInfo } from 'src/media/dto/media-info.interface';
 import { Media } from 'src/media/dto/media.interface';
 import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 import { FormatPathService } from '../../../common-service/format-path.service';
-import { SearchItem } from 'src/common-interface/search-item.interface';
-import { SearchService } from 'src/common-service/search.service';
 import { MediaService } from '../media/media.service';
 
 @Injectable()
@@ -23,46 +21,39 @@ export class MediaSubstitutionSerivce {
     @Inject(DATABASE_POOL) private readonly pool: mariadb.Pool,
     private readonly creditService: CreditService,
     private readonly mediaService: MediaService,
-    private readonly formatPathService: FormatPathService,
-    private readonly searchService: SearchService
+    private readonly formatPathService: FormatPathService
   ) {}
 
   private readonly LIMIT_CREDIT: number = 12;
 
-  public async getMoviesAndSeriesByResearch(
-    userId: number,
-    keyWord: string,
-  ): Promise<any[]> {
+  public async getMoviesAndSeriesByResearch(userId: number, keyWord: string): Promise<any[]> {
     const conn = await this.pool.getConnection();
     try {
-      const querySelectAllMedias: string = `SELECT id, title FROM Media`;
-      const resultSelectAllMedias: SearchItem[] =
-        await conn.query(querySelectAllMedias);
-      const mediaIds: number[] = this.searchService.getItemByResearch(
-        keyWord,
-        resultSelectAllMedias,
-      );
-      const medias: Media[] = [];
-      if (mediaIds.length > 0) {
-        const JOIN: string = '';
-        const WHERE: string = `WHERE m.id IN (${mediaIds.map(() => '?').join(', ')})`;
-        const ORDER: string = `ORDER BY FIELD (m.id, ${mediaIds.map(() => '?').join(', ')})`;
-        const LIMIT: string = `LIMIT 50`;
-        const queryFiltered: string = this.mediaService.getQuerySelectMedia(
+
+      const JOIN: string = `LEFT JOIN Translation_Title tt ON tt.mediaId = m.id`
+      const WHERE: string = `WHERE m.title like ? OR tt.title like ? OR mlib.id = ?
+                            GROUP BY m.id`;
+      const ORDER: string = `ORDER BY LEAST(
+                              ABS(CHAR_LENGTH(m.title) - CHAR_LENGTH(?)),
+                              COALESCE(ABS(CHAR_LENGTH(tt.title) - CHAR_LENGTH(?)), 999999)
+                            ) ASC`;
+      const LIMIT: string = `LIMIT 50`;
+      const queryFiltered: string = this.mediaService.getQuerySelectMedia(
           JOIN,
           WHERE,
           ORDER,
           LIMIT,
         );
-        const results: any[] = await conn.query(queryFiltered, [
+      const results: any[] = await conn.query(queryFiltered, [
           userId,
           userId,
-          ...mediaIds,
-          ...mediaIds,
+          `%${keyWord}%`,
+          `%${keyWord}%`,
+          `%${keyWord}%`,
+          keyWord,
+          keyWord
         ]);
-        return results;
-      }
-      return medias;
+      return results;
     } catch (error) {
       return [];
     } finally {

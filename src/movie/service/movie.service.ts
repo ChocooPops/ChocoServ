@@ -3,7 +3,6 @@ import { Movie } from '../dto/movie.interface';
 import { EditMovie } from '../dto/edit-movie.interface';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { MediaType } from 'src/media/dto/media-type.enum';
-import { SearchService } from 'src/common-service/search.service';
 import { DATABASE_POOL } from 'src/database/database.module';
 import * as mariadb from 'mariadb';
 import { VerifTimerShowService } from 'src/common-service/verif-timer-show.service';
@@ -26,7 +25,6 @@ export class MovieService extends MediaService {
     protected override currentMediaType: MediaType = MediaType.MOVIE;
 
     constructor(@Inject(DATABASE_POOL) pool: mariadb.Pool,
-        searchService: SearchService,
         verifTimerShowService: VerifTimerShowService,
         formatPathService: FormatPathService,
         posterService: PosterService,
@@ -36,7 +34,7 @@ export class MovieService extends MediaService {
         private readonly uploadImageService: UploadImageService,
         private readonly creditService: CreditService,
     ) {
-        super(pool, searchService, verifTimerShowService, formatPathService, posterService);
+        super(pool, verifTimerShowService, formatPathService, posterService);
     }
 
     public async getNodesMovie(): Promise<Node[]> {
@@ -167,7 +165,6 @@ export class MovieService extends MediaService {
             const result: any[] = await conn.query(query, [id]);
             return this.getFormatedMovie(result[0]);
         } catch (error) {
-            console.log(error)
             return null;
         } finally {
             await conn.release();
@@ -192,26 +189,13 @@ export class MovieService extends MediaService {
     }
 
     async getMovieByResearch(keyWord: string): Promise<Movie[]> {
+        const medias: any[] = await this.getMediaByResearch(keyWord);
         const movies: Movie[] = [];
-        const conn = await this.pool.getConnection();
-        try {
-            const mediaIds: number[] = await this.getMediaByResearch(keyWord, conn);
-            if (mediaIds.length > 0) {
-                const WHERE: string = `WHERE m.id IN (${mediaIds.map(() => '?').join(', ')})`;
-                const ORDER: string = `ORDER BY FIELD (m.id, ${mediaIds.map(() => '?').join(', ')})`;
-                const LIMIT: string = `LIMIT 50`;
-                const query: string = this.getQuerySelectMovies(false, WHERE, ORDER, LIMIT);
-                const results: any[] = await conn.query(query, [...mediaIds, ...mediaIds]);
-                results.forEach((result) => {
-                    movies.push(this.getFormatedMovie(result));
-                });
-            }
-            return movies;
-        } catch (error) {
-            return [];
-        } finally {
-            await conn.release();
-        }
+        medias.forEach((result: any) => {
+            movies.push(this.getFormatedMovie(result));
+        });
+        console.log(movies)
+        return movies;
     }
 
     async getRandomMovie(): Promise<Movie> {

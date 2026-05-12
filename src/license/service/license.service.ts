@@ -7,8 +7,6 @@ import { PosterService } from 'src/poster/service/poster.service';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import * as mariadb from 'mariadb';
 import { MediaType } from 'src/media/dto/media-type.enum';
-import { SearchItem } from 'src/common-interface/search-item.interface';
-import { SearchService } from 'src/common-service/search.service';
 import { Media } from 'src/media/dto/media.interface';
 import { MovieService } from 'src/movie/service/movie.service';
 import { SeriesService } from 'src/series/service/series.service';
@@ -17,7 +15,6 @@ import { Selection } from 'src/selection/dto/selection.interface';
 import { Graph } from 'src/common-interface/graph.intrface';
 import { Node } from 'src/common-interface/node.interface';
 import { Link } from 'src/common-interface/link.interface';
-import { UploadImageService } from 'src/common-service/upload-image.service';
 import { MediaService } from 'src/media/service/media/media.service';
 
 @Injectable()
@@ -26,12 +23,10 @@ export class LicenseService {
     constructor(@Inject(DATABASE_POOL) private readonly pool: mariadb.Pool,
         private readonly formatPathService: FormatPathService,
         private readonly posterService: PosterService,
-        private readonly searchService: SearchService,
         private readonly mediaService: MediaService,
         private readonly movieService: MovieService,
         private readonly seriesService: SeriesService,
-        private readonly selectionService: SelectionService,
-        private readonly uploadImageService: UploadImageService) { }
+        private readonly selectionService: SelectionService) { }
 
     public async getGraphLicense(): Promise<Graph> {
         const conn = await this.pool.getConnection();
@@ -189,20 +184,14 @@ export class LicenseService {
     public async getLicenseByResearched(keyWord: string): Promise<License[]> {
         const conn = await this.pool.getConnection();
         try {
-            const items: SearchItem[] = await conn.query(`SELECT id, name as title FROM License;`);
-            const licenseIds: number[] = this.searchService.getItemByResearch(keyWord, items);
-            if (licenseIds.length > 0) {
-                const WHERE: string = `WHERE l.id IN (${licenseIds.map(() => '?').join(', ')})`;
-                const ORDER: string = `ORDER BY FIELD (l.id, ${licenseIds.map(() => '?').join(', ')})`;
-                const query: string = this.getQuerySelectSimpleLicense(WHERE, ORDER);
-                const licenses: License[] = await conn.query(query, [...licenseIds, ...licenseIds]);
-                licenses.forEach((license: License, index) => {
-                    licenses[index] = this.getFormatedLicense(license);
-                });
-                return licenses;
-            } else {
-                return [];
-            }
+            const WHERE: string = `WHERE l.name = ?`;
+            const ORDER: string = `ORDER BY ABS(CHAR_LENGTH(l.name) - CHAR_LENGTH(?)) ASC`;
+            const query: string = this.getQuerySelectSimpleLicense(WHERE, ORDER);
+            const licenses: License[] = await conn.query(query, [`%${keyWord}%`, keyWord]);
+            licenses.forEach((license: License, index) => {
+                licenses[index] = this.getFormatedLicense(license);
+            });
+            return licenses;
         } catch (error) {
             return [];
         } finally {

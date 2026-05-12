@@ -1,10 +1,8 @@
 import { Injectable, Inject } from '@nestjs/common';
 import * as mariadb from 'mariadb';
 import { CategorySimple } from 'src/category/dto/categorySimple.interface';
-import { SearchService } from 'src/common-service/search.service';
 import { VerifTimerShowService } from 'src/common-service/verif-timer-show.service';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
-import { SearchItem } from 'src/common-interface/search-item.interface';
 import { DATABASE_POOL } from 'src/database/database.module';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { PosterService } from 'src/poster/service/poster.service';
@@ -20,7 +18,6 @@ export class MediaService {
     protected currentMediaType !: MediaType;
 
     constructor(@Inject(DATABASE_POOL) protected readonly pool: mariadb.Pool,
-        private readonly searchService: SearchService,
         protected readonly verifTimerShowService: VerifTimerShowService,
         protected readonly formatPathService: FormatPathService,
         protected readonly posterService: PosterService
@@ -194,7 +191,43 @@ export class MediaService {
         ${ORDER}
         ${LIMIT}`
     }
-    
+
+    protected async getMediaByResearch(keyWord: string): Promise<Media[]> {
+        const conn = await this.pool.getConnection();
+        try {
+            const JOIN: string = `LEFT JOIN Translation_Title tt ON tt.mediaId = m.id
+                                    AND iso_639_1 IN ('VO', 'US', 'GB', 'ES', 'FR', 'IT')`
+            const WHERE: string = `WHERE m.mediaType = ? AND m.title like ? OR tt.title like ? OR mlib.id = ?
+                                    GROUP BY m.id`;
+            const ORDER: string = `ORDER BY LEAST(
+                                    ABS(CHAR_LENGTH(m.title) - CHAR_LENGTH(?)),
+                                    COALESCE(ABS(CHAR_LENGTH(tt.title) - CHAR_LENGTH(?)), 999999)
+                                    ) ASC`;
+            const LIMIT: string = `LIMIT 50`;
+            const queryFiltered: string = this.getQuerySelectMedia(
+                JOIN,
+                WHERE,
+                ORDER,
+                LIMIT,
+                );
+            const results: any[] = await conn.query(queryFiltered, [
+                -1, 
+                -1,
+                this.currentMediaType,
+                `%${keyWord}%`,
+                `%${keyWord}%`,
+                `%${keyWord}%`,
+                keyWord,
+                keyWord
+                ]);
+            return results;
+        } catch (error) {
+            return [];
+        } finally {
+            await conn.release();
+        }
+    }
+
     public async getMediaWithNullPoster(): Promise<{ movies: Node[], series: Node[] }> {
         const conn = await this.pool.getConnection();
         const nodeMovies: Node[] = [];
@@ -341,16 +374,6 @@ export class MediaService {
             return await this.insertKeyword(mediaId, keywords, conn);
         } catch (error) {
             throw error;
-        }
-    }
-
-    protected async getMediaByResearch(keyWord: string, conn: mariadb.PoolConnection): Promise<number[]> {
-        try {
-            const query: string = `SELECT id, title FROM Media WHERE mediaType = ?`
-            const result: SearchItem[] = await conn.query(query, [this.currentMediaType]);
-            return this.searchService.getItemByResearch(keyWord, result);
-        } catch (error) {
-            return [];
         }
     }
 

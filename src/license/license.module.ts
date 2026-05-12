@@ -3,7 +3,6 @@ import { LicenseService } from './service/license.service';
 import { LicenseController } from './controller/license.controller';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { PosterModule } from 'src/poster/poster.module';
-import { SearchService } from 'src/common-service/search.service';
 import { MovieModule } from 'src/movie/movie.module';
 import { SeriesModule } from 'src/series/series.module';
 import { SelectionModule } from 'src/selection/selection.module';
@@ -13,7 +12,7 @@ import { UserModule } from 'src/user/user.module';
 
 @Module({
   imports: [UserModule, PosterModule, MediaModule, MovieModule, SeriesModule, SelectionModule],
-  providers: [LicenseService, FormatPathService, SearchService, UploadImageService],
+  providers: [LicenseService, FormatPathService, UploadImageService],
   controllers: [LicenseController]
 })
 export class LicenseModule { }

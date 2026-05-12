@@ -4,7 +4,6 @@ import { Episode } from '../dto/episode.interface';
 import { EditSeries } from '../dto/edit-series.interface';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { MediaType } from 'src/media/dto/media-type.enum';
-import { SearchService } from 'src/common-service/search.service';
 import { VerifTimerShowService } from 'src/common-service/verif-timer-show.service';
 import { DATABASE_POOL } from 'src/database/database.module';
 import * as mariadb from 'mariadb';
@@ -16,7 +15,6 @@ import { FormatPathService } from 'src/common-service/format-path.service';
 import { Season } from '../dto/season.interface';
 import { SimilarTitleService } from 'src/similar-title/service/similar-title.service';
 import { Node } from 'src/common-interface/node.interface';
-import { UploadImageService } from 'src/common-service/upload-image.service';
 import { promises as fs } from "fs";
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
@@ -30,17 +28,15 @@ export class SeriesService extends MediaService {
     protected override currentMediaType: MediaType = MediaType.SERIES;
 
     constructor(@Inject(DATABASE_POOL) pool: mariadb.Pool,
-        searchService: SearchService,
         verifTimerShowService: VerifTimerShowService,
         formatPathService: FormatPathService,
         posterService: PosterService,
         @Inject(forwardRef(() => SimilarTitleService))
         private readonly similarTitleService: SimilarTitleService,
         private readonly statUserService: StatUserService,        
-        private readonly uploadImageService: UploadImageService,
         private readonly creditService: CreditService,
     ) {
-        super(pool, searchService, verifTimerShowService, formatPathService, posterService);
+        super(pool, verifTimerShowService, formatPathService, posterService);
     }
 
     public async getNodesSeries(): Promise<Node[]> {
@@ -355,26 +351,12 @@ export class SeriesService extends MediaService {
     }
 
     public async getSeriesByResearch(keyWord: string): Promise<Series[]> {
-        const series: Series[] = [];
-        const conn = await this.pool.getConnection();
-        try {
-            const mediaIds: number[] = await this.getMediaByResearch(keyWord, conn);
-            if (mediaIds.length > 0) {
-                const WHERE: string = `WHERE m.id IN (${mediaIds.map(() => '?').join(', ')})`;
-                const ORDER: string = `ORDER BY FIELD (m.id, ${mediaIds.map(() => '?').join(', ')})`;
-                const LIMIT: string = `LIMIT 50`;
-                const query: string = this.getQuerySelectSeries(false, WHERE, ORDER, LIMIT);
-                const results: any[] = await conn.query(query, [...mediaIds, ...mediaIds]);
-                results.forEach((result) => {
-                    series.push(this.getFormatedSeries(result));
-                });
-            }
-            return series;
-        } catch (error) {
-            return [];
-        } finally {
-            await conn.release();
-        }
+        const medias: any[] = await this.getMediaByResearch(keyWord);
+        const movies: Series[] = [];
+        medias.forEach((result) => {
+            movies.push(this.getFormatedSeries(result));
+        });
+        return movies;
     }
 
     public async getEpisodesBySeriesAndSeasonId(userId: number, idSeries: number, idSeason: number): Promise<Episode[]> {
