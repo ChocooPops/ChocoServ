@@ -11,7 +11,6 @@ import { PosterService } from 'src/poster/service/poster.service';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { SimilarTitleService } from 'src/similar-title/service/similar-title.service';
 import { Node } from 'src/common-interface/node.interface';
-import { UploadImageService } from 'src/common-service/upload-image.service';
 import { promises as fs } from "fs";
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
@@ -31,7 +30,6 @@ export class MovieService extends MediaService {
         @Inject(forwardRef(() => SimilarTitleService))
         private readonly similarTitleService: SimilarTitleService,
         private readonly statUserService: StatUserService,
-        private readonly uploadImageService: UploadImageService,
         private readonly creditService: CreditService,
     ) {
         super(pool, verifTimerShowService, formatPathService, posterService);
@@ -194,7 +192,6 @@ export class MovieService extends MediaService {
         medias.forEach((result: any) => {
             movies.push(this.getFormatedMovie(result));
         });
-        console.log(movies)
         return movies;
     }
 

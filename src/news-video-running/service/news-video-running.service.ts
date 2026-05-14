@@ -117,7 +117,6 @@ export class NewsVideoRunningService {
             });
             return news ?? [];
         } catch (error) {
-            console.log(error)
             return [];
         } finally {
             await conn.release();

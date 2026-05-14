@@ -1,7 +1,9 @@
 import { MediaType } from "src/media/dto/media-type.enum";
+import { StateLibrary } from "./state-library.enum";
 
 export interface MediaLibrary {
     id: string,
+    state: StateLibrary,
     libraryId: string,
     parentId: string,
     seasonNumber: number,

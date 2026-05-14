@@ -269,7 +269,6 @@ export class MediaSubstitutionSerivce {
 
       return results;
     } catch (error) {
-      console.log(error);
       return [];
     } finally {
       await conn.release();

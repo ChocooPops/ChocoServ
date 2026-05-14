@@ -352,11 +352,11 @@ export class SeriesService extends MediaService {
 
     public async getSeriesByResearch(keyWord: string): Promise<Series[]> {
         const medias: any[] = await this.getMediaByResearch(keyWord);
-        const movies: Series[] = [];
+        const series: Series[] = [];
         medias.forEach((result) => {
-            movies.push(this.getFormatedSeries(result));
+            series.push(this.getFormatedSeries(result));
         });
-        return movies;
+        return series;
     }
 
     public async getEpisodesBySeriesAndSeasonId(userId: number, idSeries: number, idSeason: number): Promise<Episode[]> {
@@ -493,7 +493,7 @@ export class SeriesService extends MediaService {
     public async insertManySeasons(seasons: EditSeason[], seriesId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             if (seasons.length > 0) {
-                let message !: string;
+                let message: string = "";
                 const values: any[] = [];
                 seasons.forEach((season: EditSeason) => {
                     values.push(seriesId, season.name?.trim() ?? null, season.mediaLibraryId, season.seasonNumber);
@@ -504,8 +504,9 @@ export class SeriesService extends MediaService {
                 const startIdNumber = Number(result.insertId);
                 const count = Number(result.affectedRows);
                 const insertedIds: number[] = Array.from({ length: count }, (_, i) => startIdNumber + i);
-                message = await this.posterService.insertManySeasonPoster(insertedIds, seasons, formatedTitle, conn);
+                await this.posterService.insertManySeasonPoster(insertedIds, seasons, formatedTitle, conn);
                 for (const [index, id] of insertedIds.entries()) {
+                    message += `Saison ${seasons[index].seasonNumber} inséré (ID: ${id}) \n`;
                     message += await this.insertManyEpisodes(seasons[index].episodes, seriesId, id, formatedTitle, conn) + '\n ';
                 }
                 return message;
@@ -520,6 +521,7 @@ export class SeriesService extends MediaService {
     public async insertManyEpisodes(episodes: EditEpisode[], seriesId: number, seasonId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
             if (episodes.length > 0) {
+                let message: string = '';
                 const values: any[] = [];
                 for (const episode of episodes) {
                     values.push(seriesId, seasonId, episode.mediaLibraryId, episode.name?.trim() ?? null, episode.episodeNumber, episode.description, this.getStringFromDate(episode.date));
@@ -531,7 +533,11 @@ export class SeriesService extends MediaService {
                 const startIdNumber = Number(result.insertId);
                 const count = Number(result.affectedRows);
                 const insertedIds: number[] = Array.from({ length: count }, (_, i) => startIdNumber + i);
-                return await this.posterService.insertManyEpisodePoster(insertedIds, episodes, formatedTitle, conn);
+                await this.posterService.insertManyEpisodePoster(insertedIds, episodes, formatedTitle, conn);
+                for (const [index, id] of insertedIds.entries()) {
+                    message += `Episode ${episodes[index].episodeNumber} inséré (ID : ${id}) \n`;
+                }
+                return message;
             } else {
                 return `Aucun épisode n'a été ajouté dans la saison ${seasonId}`;
             }
@@ -602,9 +608,9 @@ export class SeriesService extends MediaService {
 
     private async insertUpdateOrDeleteSeasons(updateSeasons: EditSeason[], oldSeasons: Season[], seriesId: number, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
         try {
-            const seasonToDelete: Season[] = oldSeasons.filter((oldSeason) => !updateSeasons.some((updatSeason) => updatSeason.id === oldSeason.id));
-            const seasonToUpdate: EditSeason[] = updateSeasons.filter((updatSeason) => oldSeasons.some((oldSeason) => oldSeason.id === updatSeason.id));
-            const seasonToInsert: EditSeason[] = updateSeasons.filter((updatSeason) => !oldSeasons.some((oldSeason) => oldSeason.id === updatSeason.id));
+            const seasonToDelete: Season[] = oldSeasons.filter((oldSeason) => !updateSeasons.some((updatSeason) => updatSeason.mediaLibraryId === oldSeason.mediaLibraryId));
+            const seasonToUpdate: EditSeason[] = updateSeasons.filter((updatSeason) => oldSeasons.some((oldSeason) => oldSeason.mediaLibraryId === updatSeason.mediaLibraryId));
+            const seasonToInsert: EditSeason[] = updateSeasons.filter((updatSeason) => !oldSeasons.some((oldSeason) => oldSeason.mediaLibraryId === updatSeason.mediaLibraryId));
 
             const messageSeasonDelete: string = await this.deleteManySeasons(seasonToDelete, formatedTitle, conn);
             const messageSeasonToUpdate: string = await this.updateManySeasons(seasonToUpdate, oldSeasons, seriesId, formatedTitle, conn);
@@ -621,20 +627,20 @@ export class SeriesService extends MediaService {
             let message: string = '';
             if (updateSeasons.length > 0) {
                 for (const updateSeason of updateSeasons) {
-                    const oldSeason: Season = oldSeasons.find((item) => item.id === updateSeason.id);
+                    const oldSeason: Season = oldSeasons.find((item) => item.mediaLibraryId === updateSeason.mediaLibraryId);
                     if (oldSeason) {
                         const querySeasonUpdate: string = `UPDATE Season
                             SET name = ?, mediaLibraryId = ?, seasonNumber = ?
-                            WHERE id = ?`;
-                        await conn.query(querySeasonUpdate, [updateSeason?.name.trim() ?? '', updateSeason.mediaLibraryId, updateSeason.seasonNumber, updateSeason.id]);
-                        await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(updateSeason.id, updateSeason.srcPoster, oldSeason.srcPoster, formatedTitle, 'Season', conn);
-                        const episodeToDelete: Episode[] = oldSeason.episodes.filter((oldEpisode) => !updateSeason.episodes.some((updateEpisode) => updateEpisode.id === oldEpisode.id));
-                        const episodeToUpdate: EditEpisode[] = updateSeason.episodes.filter((updateEpisode) => oldSeason.episodes.some((oldEpisode) => updateEpisode.id === oldEpisode.id));
-                        const episodeToInsert: EditEpisode[] = updateSeason.episodes.filter((updateEpisode) => !oldSeason.episodes.some((oldEpisode) => oldEpisode.id === updateEpisode.id));
+                            WHERE mediaLibraryId = ?`;
+                        await conn.query(querySeasonUpdate, [updateSeason?.name.trim() ?? '', updateSeason.mediaLibraryId, updateSeason.seasonNumber, updateSeason.mediaLibraryId]);
+                        await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(oldSeason.id, updateSeason.srcPoster, oldSeason.srcPoster, formatedTitle, 'Season', conn);
+                        const episodeToDelete: Episode[] = oldSeason.episodes.filter((oldEpisode) => !updateSeason.episodes.some((updateEpisode) => updateEpisode.mediaLibraryId === oldEpisode.mediaLibraryId));
+                        const episodeToUpdate: EditEpisode[] = updateSeason.episodes.filter((updateEpisode) => oldSeason.episodes.some((oldEpisode) => updateEpisode.mediaLibraryId === oldEpisode.mediaLibraryId));
+                        const episodeToInsert: EditEpisode[] = updateSeason.episodes.filter((updateEpisode) => !oldSeason.episodes.some((oldEpisode) => oldEpisode.mediaLibraryId === updateEpisode.mediaLibraryId));
 
                         const messageDeleteEpisodes: string = await this.deleteManyEpisodes(episodeToDelete, formatedTitle, conn);
-                        const messageInsertEpisodes: string = await this.insertManyEpisodes(episodeToInsert, seriesId, updateSeason.id, formatedTitle, conn);
-                        const messageUpdateEpisodes: string = await this.updateManyEpisodes(episodeToUpdate, oldSeason.episodes, updateSeason.id, formatedTitle, conn);
+                        const messageInsertEpisodes: string = await this.insertManyEpisodes(episodeToInsert, seriesId, oldSeason.id, formatedTitle, conn);
+                        const messageUpdateEpisodes: string = await this.updateManyEpisodes(episodeToUpdate, oldSeason.episodes, oldSeason.id, formatedTitle, conn);
                         message += `Saison ${updateSeason.id} modifiée \n ${messageDeleteEpisodes} \n ${messageInsertEpisodes} \n ${messageUpdateEpisodes}`;
                     }
                 }
@@ -651,16 +657,16 @@ export class SeriesService extends MediaService {
             let message: string = '';
             if (updateEpisodes.length > 0) {
                 for (const episode of updateEpisodes) {
-                    const oldEpisode: Episode = oldEpisodes.find((item) => item.id === episode.id);
-                    await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(episode.id, episode.srcPoster, oldEpisode?.srcPoster, formatedTitle, 'Episode', conn);
+                    const oldEpisode: Episode = oldEpisodes.find((item) => item.mediaLibraryId === episode.mediaLibraryId);
+                    await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(oldEpisode.id, episode.srcPoster, oldEpisode?.srcPoster, formatedTitle, 'Episode', conn);
                     const query: string = `UPDATE Episode
                         SET mediaLibraryId = ?, name = ?, episodeNumber = ?,
                         description = ?, date = ?
-                        WHERE id = ?;`;
-                    await conn.query(query, [episode.mediaLibraryId, episode?.name.trim() ?? '', episode.episodeNumber, episode.description, this.getStringFromDate(episode.date), episode.id]);
+                        WHERE mediaLibraryId = ?;`;
+                    await conn.query(query, [episode.mediaLibraryId, episode?.name.trim() ?? '', episode.episodeNumber, episode.description, this.getStringFromDate(episode.date), episode.mediaLibraryId]);
                 }
             } else {
-                message = `Aucun episode n'a été modifié dans la saison ${seasonId}`;
+                message = `Aucun episode n'a été modifié dans la saison (ID : ${seasonId})`;
             }
             return message;
         } catch (error) {
@@ -674,15 +680,15 @@ export class SeriesService extends MediaService {
             if (seasons.length > 0) {
                 for (const season of seasons) {
                     const episodes: Episode[] = await conn.query(`
-                        SELECT e.id, p.name as srcPoster FROM Episode e
+                        SELECT e.id, e.episodeNumber, p.name as srcPoster FROM Episode e
                         LEFT JOIN Poster p ON p.id = e.srcPoster
                         WHERE e.seasonId = ?`, [season.id]);
-                    await this.deleteManyEpisodes(episodes, formatedTitle, conn);
+                    message += await this.deleteManyEpisodes(episodes, formatedTitle, conn);
 
                     await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(season.id, null, season.srcPoster, formatedTitle, 'Season', conn);
                     await conn.query(`DELETE FROM Season WHERE id = ?`, [season.id]);
 
-                    message += `Saison ${season.id} supprimé`;
+                    message += `Saison ${season.seasonNumber} (ID : ${season.id}) supprimé \n`;
                 }
             } else {
                 return `Aucune saison n'a été supprimé`;
@@ -698,8 +704,9 @@ export class SeriesService extends MediaService {
             for (const episode of episodes) {
                 const posterEpisode: string | null = episode.srcPoster ? episode.srcPoster.toString() : null;
                 await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(episode.id, null, posterEpisode, formatedTitle, 'Episode', conn);
+                await conn.query(`DELETE FROM Stat_User WHERE episodeId = ?`, [episode.id]);
                 await conn.query(`DELETE FROM Episode WHERE id = ?`, [episode.id]);
-                message += `Episode ${episode.id} supprimé`;
+                message += `Episode ${episode.episodeNumber}  (ID : ${episode.id}) supprimé \n`;
             }
             return message;
         } catch (error) {

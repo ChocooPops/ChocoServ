@@ -441,7 +441,6 @@ export class PosterService {
             }
             return [posterId, messagePoster];
         } catch (error) {
-            console.log(error)
             throw error;
         }
     }

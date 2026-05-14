@@ -197,7 +197,7 @@ export class TmdbService {
         const response = await lastValueFrom(this.httpService.get(url));
 
         const categories: CategorySimple[]      = await this.getCategories(response.data.genres);
-        const credits:    MediaCredit[]         = this.getCreditsForSeries(response.data.aggregate_credits, response.data.created_by);
+        let credits:    MediaCredit[]         = this.getCreditsForSeries(response.data.aggregate_credits, response.data.created_by);
         const keywords:   string[]              = this.getKeyWords(response.data.keywords.results);
         const otherLanguage: TranslationTitle[] = this.getAllTitlesFromDifferentLanguage(
             response.data.translations.translations, MediaType.SERIES, response.data.original_name
@@ -804,7 +804,6 @@ export class TmdbService {
             const base64 = buffer.toString('base64');
             return `data:${contentType};base64,${base64}`;
         } catch (error) {
-            console.error('Erreur de conversion en base64:', error);
             return null;
         }
     }

@@ -6,14 +6,13 @@ import { VerifTimerShowService } from 'src/common-service/verif-timer-show.servi
 import { PosterModule } from 'src/poster/poster.module';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { SimilarTitleModule } from 'src/similar-title/similar-title.module';
-import { UploadImageService } from 'src/common-service/upload-image.service';
 import { UserModule } from 'src/user/user.module';
 import { StatUserModule } from 'src/stat-user/stat-user.module';
 import { CreditModule } from 'src/credit/credit.module';
 
 @Module({
   imports: [forwardRef(() => UserModule), forwardRef(() => SimilarTitleModule), PosterModule, StatUserModule, CreditModule],
-  providers: [MovieService, SearchService, VerifTimerShowService, FormatPathService, UploadImageService],
+  providers: [MovieService, SearchService, VerifTimerShowService, FormatPathService],
   controllers: [MovieController],
   exports: [MovieService]
 })

@@ -197,7 +197,7 @@ export class MediaService {
         try {
             const JOIN: string = `LEFT JOIN Translation_Title tt ON tt.mediaId = m.id
                                     AND iso_639_1 IN ('VO', 'US', 'GB', 'ES', 'FR', 'IT')`
-            const WHERE: string = `WHERE m.mediaType = ? AND m.title like ? OR tt.title like ? OR mlib.id = ?
+            const WHERE: string = `WHERE m.mediaType = ? AND (m.title like ? OR tt.title like ? OR mlib.id = ?)
                                     GROUP BY m.id`;
             const ORDER: string = `ORDER BY LEAST(
                                     ABS(CHAR_LENGTH(m.title) - CHAR_LENGTH(?)),

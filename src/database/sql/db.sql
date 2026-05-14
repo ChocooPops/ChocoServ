@@ -535,6 +535,7 @@ CREATE TABLE
         year INT DEFAULT 0,
         path VARCHAR(1000) NOT NULL,
         type ENUM ('MOVIE', 'SERIES', 'SEASON', 'EPISODE'),
+        state ENUM ('NOT WORKED', 'IN PROGRESS') NOT NULL DEFAULT 'NOT WORKED',
         tmdbId INT DEFAULT 0,
         duration BIGINT UNSIGNED DEFAULT 0,
         frames BIGINT UNSIGNED DEFAULT 0,
