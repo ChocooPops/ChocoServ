@@ -75,6 +75,7 @@ export class SeriesService extends MediaService {
             SELECT = `'otherTitles', ot.otherTitles,
                       'categories', cat.categories,
                       'keyWords', kw.keywords,
+                      'path', mlib.path,
                       ${this.creditService.getQuerySelectCredits()}`;
 
             JOIN = `LEFT JOIN (
@@ -163,6 +164,7 @@ export class SeriesService extends MediaService {
                             JSON_OBJECT(
                                 'id', s.id,
                                 'mediaLibraryId', mlib.id,
+                                ${otherInfos ? `'path', mlib.path,`: ''}
                                 'seriesId', s.seriesId,
                                 'name', s.name,
                                 'seasonNumber', s.seasonNumber,
@@ -215,7 +217,12 @@ export class SeriesService extends MediaService {
     public async getSimpleEpisodeById(episodeId: number): Promise<Episode | null> {
         const conn = await this.pool.getConnection();
         try {
-            const query: string = `SELECT e.*, mlib.path as path 
+            const query: string = `SELECT e.*, 
+            mlib.path,
+            mlib.frames,
+            mlib.bytes,
+            mlib.width,
+            mlib.height
             FROM Episode e
             LEFT JOIN media_library mlib ON mlib.id = e.mediaLibraryId
             WHERE e.id = ?`;
@@ -339,7 +346,7 @@ export class SeriesService extends MediaService {
             const series: Series = this.getFormatedSeries(result[0]);
             await conn.release();
             for (const [index, season] of series.seasons.entries()) {
-                const episodes: Episode[] = await this.getEpisodesBySeriesAndSeasonId(-1, series.id, season.id);
+                const episodes: Episode[] = await this.getEpisodesBySeriesAndSeasonId(-1, series.id, season.id, true);
                 series.seasons[index].episodes = episodes;
             }
             return series;
@@ -359,7 +366,7 @@ export class SeriesService extends MediaService {
         return series;
     }
 
-    public async getEpisodesBySeriesAndSeasonId(userId: number, idSeries: number, idSeason: number): Promise<Episode[]> {
+    public async getEpisodesBySeriesAndSeasonId(userId: number, idSeries: number, idSeason: number, getOtherField: boolean): Promise<Episode[]> {
         const conn = await this.pool.getConnection();
         try {
             const query: string = `
@@ -374,6 +381,11 @@ export class SeriesService extends MediaService {
                     e.description,
                     mlib.duration,
                     mlib.resolution,
+                    ${getOtherField ? `mlib.path,
+                                       mlib.frames,
+                                       mlib.bytes,
+                                       mlib.width,
+                                       mlib.height,` : ''}
                     e.date,
                     p.name AS srcPoster,
                     su.watchProgress,
@@ -401,7 +413,13 @@ export class SeriesService extends MediaService {
                     resolution: result.resolution,
                     srcPoster: this.formatPathService.getOneFormatedPosterUrl(result.mediaId, MediaType.SERIES, result.srcPoster),
                     watchProgress : result.watchProgress ?? 0,
-                    stateProgress: result.stateProgress ?? StatState.NOT_WATCHED
+                    stateProgress: result.stateProgress ?? StatState.NOT_WATCHED,
+
+                    path: result.path,
+                    frames: result.frames,
+                    bytes: result.bytes,
+                    width: result.width,
+                    height: result.height
                 });
             });
             return episodes;

@@ -369,10 +369,6 @@ export class SimilarTitleService {
         score += commonDirectorIds.length * 2; // réalisateur — poids moyen
         score += commonKeywords.length    * 2; // keywords    — poids moyen
 
-        console.log(commonDirectorIds.length);
-        console.log(commonActorIds.length);
-        console.log("-------------------------");
-
         // Proximité année
         if (source.productionYear && candidate.productionYear) {
         const diff = Math.abs(source.productionYear - candidate.productionYear);

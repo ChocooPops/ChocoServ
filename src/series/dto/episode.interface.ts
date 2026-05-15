@@ -12,7 +12,12 @@ export interface Episode {
     duration: number,
     resolution: string,
     srcPoster: string,
-    path?: string,
     watchProgress: number,
-    stateProgress: StatState
+    stateProgress: StatState,
+
+    path?: string,
+    frames?: number,
+    bytes?: number,
+    width?: number,
+    height?:number
 }

@@ -26,7 +26,7 @@ export class SeriesController {
 
     @Get('episodes/:idSeries/:idSeason')
     async getEpisodesBySeriesAndSeasonId(@CurrentUser('sub') userId: number, @Param('idSeries', ParseIntPipe) idSeries: number, @Param('idSeason', ParseIntPipe) idSeason: number): Promise<Episode[]> {
-        return await this.seriesService.getEpisodesBySeriesAndSeasonId(userId, idSeries, idSeason);
+        return await this.seriesService.getEpisodesBySeriesAndSeasonId(userId, idSeries, idSeason, false);
     }
 
     @Get('random-series')

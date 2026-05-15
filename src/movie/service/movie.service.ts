@@ -67,10 +67,15 @@ export class MovieService extends MediaService {
         let SELECT: string = '';
         let JOIN: string = '';
         if (otherInfos) {
-            SELECT = `'otherTitles', ot.otherTitles,
-                      'categories', cat.categories,
-                      'keyWords', kw.keywords,
-                      ${this.creditService.getQuerySelectCredits()}`;
+            SELECT = `  'otherTitles', ot.otherTitles,
+                        'categories', cat.categories,
+                        'keyWords', kw.keywords,
+                        'path', mlib.path,
+                        'frames', mlib.frames,
+                        'bytes', mlib.bytes,
+                        'width', mlib.width,
+                        'height', mlib.height,
+                        ${this.creditService.getQuerySelectCredits()}`;
 
             JOIN = `LEFT JOIN (
                     SELECT mediaId,
