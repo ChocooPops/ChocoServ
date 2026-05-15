@@ -30,7 +30,8 @@ export class MediaSubstitutionSerivce {
     const conn = await this.pool.getConnection();
     try {
 
-      const JOIN: string = `LEFT JOIN Translation_Title tt ON tt.mediaId = m.id`
+      const JOIN: string = `LEFT JOIN Translation_Title tt ON tt.mediaId = m.id
+                              AND iso_639_1 IN ('VO', 'US', 'FR')`
       const WHERE: string = `WHERE m.title like ? OR tt.title like ? OR mlib.id = ?
                             GROUP BY m.id`;
       const ORDER: string = `ORDER BY LEAST(

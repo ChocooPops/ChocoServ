@@ -5,9 +5,10 @@ import { MovieModule } from 'src/movie/movie.module';
 import { SeriesModule } from 'src/series/series.module';
 import { MediaModule } from 'src/media/media.module';
 import { UserModule } from 'src/user/user.module';
+import { CreditModule } from 'src/credit/credit.module';
 
 @Module({
-  imports: [forwardRef(() => UserModule), MediaModule, forwardRef(() => MovieModule), forwardRef(() => SeriesModule)],
+  imports: [forwardRef(() => UserModule), MediaModule, forwardRef(() => MovieModule), forwardRef(() => SeriesModule), CreditModule],
   providers: [SimilarTitleService],
   controllers: [SimilarTitleController],
   exports: [SimilarTitleService]

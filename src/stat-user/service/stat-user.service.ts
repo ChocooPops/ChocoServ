@@ -151,7 +151,9 @@ export class StatUserService {
           : StatState.IN_PROGRESS;
 
       const statInProgress: StatUser[] = await conn.query(
-        `SELECT * FROM Stat_User WHERE userId = ? AND movieId = ? AND state = ?`,
+        `SELECT * FROM Stat_User 
+        WHERE userId = ? AND movieId = ? AND state = ?
+        FOR UPDATE`,
         [userId, movieId, StatState.IN_PROGRESS],
       );
 
@@ -171,7 +173,8 @@ export class StatUserService {
                         WHERE userId = ? 
                         AND movieId = ? 
                         AND state = ? 
-                        AND DATE(updatedAt) = CURDATE()`,
+                        AND DATE(updatedAt) = CURDATE()
+                        FOR UPDATE`,
           [userId, movieId, StatState.FINISHED],
         );
 
@@ -222,7 +225,9 @@ export class StatUserService {
           : StatState.IN_PROGRESS;
 
       const statInProgress: StatUser[] = await conn.query(
-        `SELECT * FROM Stat_User WHERE userId = ? AND episodeId = ? AND state = ?`,
+        `SELECT * FROM Stat_User 
+        WHERE userId = ? AND episodeId = ? AND state = ?
+        FOR UPDATE`,
         [userId, episodeId, StatState.IN_PROGRESS],
       );
 
@@ -242,7 +247,8 @@ export class StatUserService {
                         WHERE userId = ? 
                         AND episodeId = ? 
                         AND state = ? 
-                        AND DATE(updatedAt) = CURDATE()`,
+                        AND DATE(updatedAt) = CURDATE()
+                        FOR UPDATE`,
           [userId, episodeId, StatState.FINISHED],
         );
 
@@ -323,9 +329,9 @@ export class StatUserService {
             GROUP BY c.id, c.translationKey
         ),
         total_count AS (
-            -- Calculer le total de contenus regardés
-            SELECT COUNT(DISTINCT mediaId) as total
-            FROM user_content
+            -- Total = somme des counts par catégorie (base commune pour que sum(%) = 100)
+            SELECT SUM(count) as total
+            FROM category_counts
         )
         SELECT 
             cc.categoryId,
@@ -416,8 +422,9 @@ export class StatUserService {
                 GROUP BY c.id, c.translationKey
             ),
             total_weighted AS (
-                SELECT SUM(weight / 100.0) as total
-                FROM user_content_weighted
+                -- Total = somme des weighted_count par catégorie (base commune pour que sum(%) = 100)
+                SELECT SUM(weighted_count) as total
+                FROM category_weighted_counts
             )
             SELECT 
                 cwc.categoryId,
@@ -482,13 +489,14 @@ export class StatUserService {
                     SELECT 
                     m.id as mediaId,
                     'MOVIE' as contentType,
-                    (m.time * MAX(su.watchProgress) / 100.0) as time_watched
+                    (mlib.duration * MAX(su.watchProgress) / 100.0) as time_watched
                     FROM Stat_User su
                     INNER JOIN Media m ON m.id = su.movieId
+                    INNER JOIN Media_Library mlib ON mlib.id = m.mediaLibraryId
                     WHERE su.userId = ?
                     AND su.movieId IS NOT NULL
-                    AND m.time IS NOT NULL
-                    GROUP BY m.id, m.time
+                    AND mlib.duration IS NOT NULL
+                    GROUP BY m.id, mlib.duration
                     
                     UNION ALL
                     
@@ -496,12 +504,13 @@ export class StatUserService {
                     SELECT 
                     e.seriesId as mediaId,
                     'SERIES' as contentType,
-                    SUM(e.time * su.watchProgress / 100.0) as time_watched
+                    SUM(mlib.duration * su.watchProgress / 100.0) as time_watched
                     FROM Stat_User su
                     INNER JOIN Episode e ON e.id = su.episodeId
+                    INNER JOIN Media_Library mlib ON mlib.id = e.mediaLibraryId
                     WHERE su.userId = ?
                     AND su.episodeId IS NOT NULL
-                    AND e.time IS NOT NULL
+                    AND mlib.duration IS NOT NULL
                     GROUP BY e.seriesId
                 ),
                 category_time_counts AS (
@@ -516,8 +525,9 @@ export class StatUserService {
                     GROUP BY c.id, c.translationKey
                 ),
                 total_time AS (
-                    SELECT SUM(time_watched) as total
-                    FROM user_content_time
+                    -- Total = somme des total_time par catégorie (base commune pour que sum(%) = 100)
+                    SELECT SUM(total_time) as total
+                    FROM category_time_counts
                 )
                 SELECT 
                     ctc.categoryId,
@@ -550,14 +560,15 @@ export class StatUserService {
         -- time est en bigint, diviser par 10_00 pour obtenir les secondes
         SELECT 
           m.id as movie_id,
-          (m.time / 1000) as time_seconds,
+          (mlib.duration / 1000) as time_seconds,
           MAX(su.watchProgress) as max_progress
         FROM Stat_User su
         INNER JOIN Media m ON m.id = su.movieId
+        INNER JOIN Media_Library mlib ON mlib.id = m.mediaLibraryId
         WHERE su.userId = ?
           AND su.movieId IS NOT NULL
-          AND m.time IS NOT NULL
-        GROUP BY m.id, m.time
+          AND mlib.duration IS NOT NULL
+        GROUP BY m.id, mlib.duration
       ),
       movie_stats AS (
         SELECT
@@ -571,14 +582,15 @@ export class StatUserService {
         SELECT 
           e.id as episode_id,
           e.seriesId,
-          (e.time / 10000) as time_seconds,
+          (mlib.duration / 1000) as time_seconds,
           MAX(su.watchProgress) as max_progress
         FROM Stat_User su
         INNER JOIN Episode e ON e.id = su.episodeId
+        INNER JOIN Media_Library mlib ON mlib.id = e.mediaLibraryId
         WHERE su.userId = ?
           AND su.episodeId IS NOT NULL
-          AND e.time IS NOT NULL
-        GROUP BY e.id, e.seriesId, e.time
+          AND mlib.duration IS NOT NULL
+        GROUP BY e.id, e.seriesId, mlib.duration
       ),
       series_stats AS (
         SELECT
@@ -745,15 +757,16 @@ export class StatUserService {
         SELECT 
           DATE_FORMAT(su.createdAt, '${dateFormat}') as period,
           m.id as content_id,
-          (m.time / 10000000) as time_seconds,
+          (mlib.duration / 1000) as time_seconds,
           MAX(su.watchProgress) as max_progress
         FROM Stat_User su
         INNER JOIN Media m ON m.id = su.movieId
+        INNER JOIN Media_Library mlib ON mlib.id = m.mediaLibraryId
         WHERE su.userId = ?
           AND su.movieId IS NOT NULL
-          AND m.time IS NOT NULL
+          AND mlib.duration IS NOT NULL
           AND su.createdAt >= ?
-        GROUP BY period, m.id, m.time
+        GROUP BY period, m.id, mlib.duration
       ),
       movie_stats AS (
         SELECT 
@@ -768,15 +781,16 @@ export class StatUserService {
           DATE_FORMAT(su.createdAt, '${dateFormat}') as period,
           e.id as episode_id,
           e.seriesId,
-          (e.time / 10000000) as time_seconds,
+          (mlib.duration / 1000) as time_seconds,
           MAX(su.watchProgress) as max_progress
         FROM Stat_User su
         INNER JOIN Episode e ON e.id = su.episodeId
+        INNER JOIN Media_Library mlib ON mlib.id = e.mediaLibraryId
         WHERE su.userId = ?
           AND su.episodeId IS NOT NULL
-          AND e.time IS NOT NULL
+          AND mlib.duration IS NOT NULL
           AND su.createdAt >= ?
-        GROUP BY period, e.id, e.seriesId, e.time
+        GROUP BY period, e.id, e.seriesId, mlib.duration
       ),
       series_stats AS (
         SELECT 
@@ -862,8 +876,8 @@ export class StatUserService {
         mediaType: row.mediaType,
         description: row.description,
         date: row.date,
-        quality: row.quality,
-        posterName: this.formatPathService.getOneFormatedPosterUrl(row.title, row.mediaType, row.posterName),
+        resolution: row.resolution,
+        posterName: this.formatPathService.getOneFormatedPosterUrl(row.mediaId.toString(), row.mediaType, row.posterName),
         posterType: row.posterType,
         watchCount: parseInt(row.watchCount),
         totalProgress: parseFloat(row.totalProgress),
@@ -894,15 +908,16 @@ export class StatUserService {
           m.mediaType,
           m.description,
           m.date,
-          m.quality,
+          mlib.resolution,
           COUNT(su.id) as watch_count,
           SUM(su.watchProgress) as total_progress,
           AVG(su.watchProgress) as avg_progress
         FROM Stat_User su
         INNER JOIN Media m ON m.id = su.movieId
+        INNER JOIN Media_Library mlib ON mlib.id = m.mediaLibraryId
         WHERE su.userId = ?
           AND su.movieId IS NOT NULL
-        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, m.quality
+        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, mlib.resolution
       `;
     } else if (mediaType === 'SERIES') {
       // Uniquement les séries
@@ -913,16 +928,17 @@ export class StatUserService {
           m.mediaType,
           m.description,
           m.date,
-          m.quality,
+          mlib.resolution,
           COUNT(DISTINCT su.episodeId) as watch_count,
           SUM(su.watchProgress) as total_progress,
           AVG(su.watchProgress) as avg_progress
         FROM Stat_User su
         INNER JOIN Episode e ON e.id = su.episodeId
         INNER JOIN Media m ON m.id = e.seriesId
+        INNER JOIN Media_Library mlib ON mlib.id = e.mediaLibraryId
         WHERE su.userId = ?
           AND su.episodeId IS NOT NULL
-        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, m.quality
+        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, mlib.resolution
       `;
     } else {
       // Tous les médias (films et séries)
@@ -933,15 +949,16 @@ export class StatUserService {
           m.mediaType,
           m.description,
           m.date,
-          m.quality,
+          mlib.resolution,
           COUNT(su.id) as watch_count,
           SUM(su.watchProgress) as total_progress,
           AVG(su.watchProgress) as avg_progress
         FROM Stat_User su
         INNER JOIN Media m ON m.id = su.movieId
+        INNER JOIN Media_Library mlib ON mlib.id = m.mediaLibraryId
         WHERE su.userId = ?
           AND su.movieId IS NOT NULL
-        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, m.quality
+        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, mlib.resolution
         
         UNION ALL
         
@@ -951,16 +968,17 @@ export class StatUserService {
           m.mediaType,
           m.description,
           m.date,
-          m.quality,
+          mlib.resolution,
           COUNT(DISTINCT su.episodeId) as watch_count,
           SUM(su.watchProgress) as total_progress,
           AVG(su.watchProgress) as avg_progress
         FROM Stat_User su
         INNER JOIN Episode e ON e.id = su.episodeId
         INNER JOIN Media m ON m.id = e.seriesId
+        INNER JOIN Media_Library mlib ON mlib.id = e.mediaLibraryId
         WHERE su.userId = ?
           AND su.episodeId IS NOT NULL
-        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, m.quality
+        GROUP BY m.id, m.title, m.mediaType, m.description, m.date, mlib.resolution
       `;
     }
 
@@ -975,7 +993,7 @@ export class StatUserService {
           mediaType,
           description,
           date,
-          quality,
+          resolution,
           watch_count,
           total_progress,
           avg_progress,
@@ -1022,7 +1040,7 @@ export class StatUserService {
         tm.mediaType,
         tm.description,
         DATE_FORMAT(tm.date, '%Y-%m-%d') as date,
-        tm.quality,
+        tm.resolution,
         pp.posterName,
         pp.posterType,
         tm.watch_count as watchCount,

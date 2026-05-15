@@ -5,7 +5,7 @@ export interface TopMedia {
   mediaType: 'MOVIE' | 'SERIES';
   description: string | null;
   date: string;
-  quality: string | null;
+  resolution: string | null;
   posterName: string | null;
   posterType: 'SPECIAL' | 'NORMAL' | 'LICENSE' | null;
   watchCount: number;

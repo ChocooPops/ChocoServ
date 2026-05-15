@@ -10,6 +10,7 @@ import { Link } from "src/common-interface/link.interface";
 import { Node } from "src/common-interface/node.interface";
 import { Job } from "src/credit/dto/job.enum";
 import { MediaService } from "src/media/service/media/media.service";
+import { CreditService } from "src/credit/service/credit.service";
 
 interface MediaRow {
   id: number;
@@ -19,8 +20,8 @@ interface MediaRow {
   mediaType: MediaType;
   productionYear: number;
   categoryIds: string | null;
-  actorIds: string | null;
-  directorIds: string | null;
+  castIds: string | null;
+  crewIds: string | null;
   keywords: string | null;
 }
 
@@ -40,13 +41,15 @@ export interface SimilarMediaResult {
 export class SimilarTitleService {
 
     private maxSimilarTitles: number = 20;
+    private readonly LIMIT_CREDIT: number = 15;
 
     constructor(@Inject(DATABASE_POOL) protected readonly pool: mariadb.Pool,
+        private readonly creditService: CreditService,
         private readonly mediaService: MediaService,
         @Inject(forwardRef(() => MovieService))
         private readonly movieService: MovieService,
         @Inject(forwardRef(() => SeriesService))
-        private readonly seriesService: SeriesService) { }
+        private readonly seriesService: SeriesService,) { }
 
     public async getLinksSimilarTitle(): Promise<Link[]> {
         const conn = await this.pool.getConnection();
@@ -112,22 +115,46 @@ export class SimilarTitleService {
 
        private async getMediaFormated(conn: mariadb.PoolConnection): Promise<{ medias: MediaRow[], translations: TranslationRow[] }>{
         try {
+            const jobFilters: string = `${this.creditService
+                .getJobToFilters()
+                .map((item) => `'${item}'`)
+                .join(', ')}`;
+
             const medias: MediaRow[] = await conn.query(`
                 SELECT
-                m.id,
-                m.title,
-                m.description,
-                m.date,
-                m.mediaType,
-                YEAR(m.date) AS productionYear,
-                GROUP_CONCAT(DISTINCT mc.categoryId ORDER BY mc.categoryId SEPARATOR ',')                   AS categoryIds,
-                GROUP_CONCAT(DISTINCT CASE WHEN mcr.job = '${Job.ACTOR}'    THEN mcr.creditId END SEPARATOR ',')       AS actorIds,
-                GROUP_CONCAT(DISTINCT CASE WHEN mcr.job IN ('${Job.DIRECTOR}') THEN mcr.creditId END SEPARATOR ',')       AS directorIds,
-                GROUP_CONCAT(DISTINCT k.name        ORDER BY k.name        SEPARATOR ',')                   AS keywords
+                    m.id,
+                    m.title,
+                    m.description,
+                    m.date,
+                    m.mediaType,
+                    YEAR(m.date) AS productionYear,
+                    GROUP_CONCAT(DISTINCT mc.categoryId ORDER BY mc.categoryId SEPARATOR ',') AS categoryIds,
+                    GROUP_CONCAT(DISTINCT actors.creditId SEPARATOR ',')    AS castIds,
+                    GROUP_CONCAT(DISTINCT crew.creditId SEPARATOR ',')      AS crewIds,
+                    GROUP_CONCAT(DISTINCT k.name ORDER BY k.name SEPARATOR ',') AS keywords
                 FROM Media m
                 LEFT JOIN Media_Category mc ON mc.mediaId = m.id
-                LEFT JOIN Media_Credit    mcr ON mcr.mediaId = m.id
-                LEFT JOIN Keyword        k  ON k.mediaId  = m.id
+                LEFT JOIN (
+                    SELECT creditId, mediaId
+                    FROM (
+                        SELECT creditId, mediaId,
+                            ROW_NUMBER() OVER (PARTITION BY mediaId ORDER BY creditId) AS rn
+                        FROM Media_Credit
+                        WHERE job = '${Job.ACTOR}'
+                    ) ranked_actors
+                    WHERE rn <= ${this.LIMIT_CREDIT}
+                ) actors ON actors.mediaId = m.id
+                LEFT JOIN (
+                    SELECT creditId, mediaId
+                    FROM (
+                        SELECT creditId, mediaId,
+                            ROW_NUMBER() OVER (PARTITION BY mediaId ORDER BY creditId) AS rn
+                        FROM Media_Credit
+                        WHERE job IN (${jobFilters}) AND job != '${Job.ACTOR}'
+                    ) ranked_crew
+                    WHERE rn <= ${this.LIMIT_CREDIT}
+                ) crew ON crew.mediaId = m.id
+                LEFT JOIN Keyword k ON k.mediaId = m.id
                 GROUP BY m.id
             `);
 
@@ -324,11 +351,11 @@ export class SimilarTitleService {
         const commonCategoryIds = [...this.toSet(source.categoryIds)].filter((x) =>
             this.toSet(candidate.categoryIds).has(x),
         );
-        const commonActorIds = [...this.toSet(source.actorIds)].filter((x) =>
-            this.toSet(candidate.actorIds).has(x),
+        const commonActorIds = [...this.toSet(source.castIds)].filter((x) =>
+            this.toSet(candidate.castIds).has(x),
         );
-        const commonDirectorIds = [...this.toSet(source.directorIds)].filter((x) =>
-            this.toSet(candidate.directorIds).has(x),
+        const commonDirectorIds = [...this.toSet(source.crewIds)].filter((x) =>
+            this.toSet(candidate.crewIds).has(x),
         );
         const commonKeywords = [...this.toSet(source.keywords)].filter((x) =>
             this.toSet(candidate.keywords).has(x),
@@ -341,6 +368,10 @@ export class SimilarTitleService {
         score += commonActorIds.length    * 3; // acteurs     — poids fort
         score += commonDirectorIds.length * 2; // réalisateur — poids moyen
         score += commonKeywords.length    * 2; // keywords    — poids moyen
+
+        console.log(commonDirectorIds.length);
+        console.log(commonActorIds.length);
+        console.log("-------------------------");
 
         // Proximité année
         if (source.productionYear && candidate.productionYear) {

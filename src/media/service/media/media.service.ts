@@ -196,7 +196,7 @@ export class MediaService {
         const conn = await this.pool.getConnection();
         try {
             const JOIN: string = `LEFT JOIN Translation_Title tt ON tt.mediaId = m.id
-                                    AND iso_639_1 IN ('VO', 'US', 'GB', 'ES', 'FR', 'IT')`
+                                    AND iso_639_1 IN ('VO', 'US', 'FR')`
             const WHERE: string = `WHERE m.mediaType = ? AND (m.title like ? OR tt.title like ? OR mlib.id = ?)
                                     GROUP BY m.id`;
             const ORDER: string = `ORDER BY LEAST(
