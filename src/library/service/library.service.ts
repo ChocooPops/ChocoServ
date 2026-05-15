@@ -212,9 +212,9 @@ export class LibraryService {
 
     public async refreshLibrary(libraryId: string, mediaType: MediaType): Promise<any> {
         if (mediaType === MediaType.MOVIE) {
-            return await this.refreshLibraryMovies(libraryId);
+            return await this.refreshLibraryMovies(libraryId, null);
         } else if (mediaType === MediaType.SERIES) {
-            return await this.refreshLibrarySeries(libraryId);
+            return await this.refreshLibrarySeries(libraryId, null);
         } else {
             return {
                 id: -1,
@@ -249,7 +249,7 @@ export class LibraryService {
         return await conn.query(`UPDATE Library SET state = ? WHERE id = ?`, [StateLibrary.NOT_WORKED, libraryId]);
     }
 
-    public async refreshLibraryMovies(libraryId: string): Promise<any> {
+    public async refreshLibraryMovies(libraryId: string, mediaLibraryId: string | null): Promise<any> {
         const conn = await this.pool.getConnection();
         try {
             // ── Chargement et garde ───────────────────────────────────────────
@@ -281,9 +281,10 @@ export class LibraryService {
 
                 // ── 1. État actuel en base + fichiers sur le disque ───────────────
                 const existingML: MediaLibrary[] = await conn.query(
-                    `SELECT id, path, tmdbId FROM Media_Library WHERE libraryId = ?`,
-                    [libraryId]
+                    `SELECT id, path, tmdbId FROM Media_Library WHERE libraryId = ? ${mediaLibraryId ? 'AND id = ?': ''}`,
+                    [libraryId, mediaLibraryId]
                 );
+                
                 const diskPaths: string[] = await this.getAllVideoFiles(rootPath);
 
                 const existingMLByPath = new Map<string, MediaLibrary>(
@@ -345,7 +346,7 @@ export class LibraryService {
                 }
 
                 // ── 4. À AJOUTER — nouveaux fichiers pas encore en base ───────────
-                const toAdd = diskPaths.filter(
+                const toAdd = mediaLibraryId ? [] : diskPaths.filter(
                     (p) => !existingMLByPath.has(this.normalizePath(p))
                 );
 
@@ -560,7 +561,7 @@ export class LibraryService {
         };
     }
 
-    public async reloadMediaLibraryMetedata(mediaLibraryId: string): Promise<ReturnMessage> {
+    public async reloadMediaLibraryMetadata(mediaLibraryId: string): Promise<ReturnMessage> {
         const conn = await this.pool.getConnection();
         try {
             const mediaLibraries: MediaLibrary[] = await conn.query(`SELECT * FROM Media_Library WHERE id = ?`, [mediaLibraryId]);
@@ -572,9 +573,9 @@ export class LibraryService {
                     await this.lockMediaLibrary(mediaLibraryId, conn);
                     try {
                         if (library.mediaType === MediaType.MOVIE) {
-                            return await this.reloadMovieLibraryMetedata(mediaLibrary, library, conn);
+                            return await this.reloadMovieLibraryMetadata(mediaLibrary, library, conn);
                         } else if (library.mediaType === MediaType.SERIES) {
-                            return await this.reloadSeriesLibraryMetedata(mediaLibrary, library, conn);
+                            return await this.reloadSeriesLibraryMetadata(mediaLibrary, library, conn);
                         }
                     } catch(error) {
                         throw error;
@@ -605,7 +606,7 @@ export class LibraryService {
             await conn.release();
         }
     }
-    private async reloadMovieLibraryMetedata(mediaLibrary: MediaLibrary, library: Library, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
+    private async reloadMovieLibraryMetadata(mediaLibrary: MediaLibrary, library: Library, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
         const existingMovies: Movie[] = await conn.query(`SELECT id FROM Media WHERE mediaLibraryId = ?`, [mediaLibrary.id]);
         const movieTmdb: EditMovie = await this.tmdbService.searchMovieByTmdbId(mediaLibrary.tmdbId, library.lang);
         let messageMovie!: ReturnMessage;
@@ -618,7 +619,7 @@ export class LibraryService {
         }
         return messageMovie;
     }
-    private async reloadSeriesLibraryMetedata(mediaLibrary: MediaLibrary, library: Library, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
+    private async reloadSeriesLibraryMetadata(mediaLibrary: MediaLibrary, library: Library, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
         const existingSeries: Media[] = await conn.query(
             `SELECT id FROM Media WHERE mediaLibraryId = ?`,
             [mediaLibrary.id]
@@ -634,6 +635,52 @@ export class LibraryService {
             messageSeries = await this.seriesService.insertNewSeries(seriesTmdb, true);
         }
         return messageSeries;
+    }
+
+    public async reloadMediaLibraryFile(mediaLibraryId: string): Promise<ReturnMessage> {
+        const conn = await this.pool.getConnection();
+        try {
+            const mediaLibraries: MediaLibrary[] = await conn.query(`SELECT * FROM Media_Library WHERE id = ?`, [mediaLibraryId]);
+            if (mediaLibraries.length > 0) {
+                const mediaLibrary: MediaLibrary = mediaLibraries[0];
+                const libraries: Library[] = await conn.query(`SELECT * FROM Library WHERE id = ?`, [mediaLibrary.libraryId]);
+                const library: Library = libraries[0];
+                if (mediaLibrary.state === StateLibrary.NOT_WORKED && library.state === StateLibrary.NOT_WORKED) {
+                    await this.lockMediaLibrary(mediaLibraryId, conn);
+                    try {
+                        if (library.mediaType === MediaType.MOVIE) {
+                            return this.refreshLibraryMovies(library.id, mediaLibraryId);
+                        } else if (library.mediaType === MediaType.SERIES) {
+                            return this.refreshLibrarySeries(library.id, mediaLibraryId);
+                        }
+                    } catch(error) {
+                        throw error;
+                    } finally {
+                        await this.unlockMediaLibrary(mediaLibraryId, conn);
+                    }
+                } else {
+                    return {
+                        id: -1,
+                        state: false,
+                        message: `La librairie ou le média est bloqué (traitement en cours)`
+                    }
+                }
+            } else {
+                return {
+                    id: -1,
+                    state: false,
+                    message: `Médiathèque introuvable, id incorrect`
+                }
+            }
+        } catch(error: any) {
+            return {
+                id: -1,
+                state: false,
+                message: `Error : ${error.sqlMessage}`
+            }
+        } finally {
+            await conn.release();
+        }
     }
 
     public async deleteLibraryById(libraryId: string): Promise<ReturnMessage> {
@@ -802,10 +849,9 @@ export class LibraryService {
             .toLowerCase();
     }
 
-    public async refreshLibrarySeries(libraryId: string): Promise<any> {
+    public async refreshLibrarySeries(libraryId: string, mediaLibraryId: string | null): Promise<any> {
         const conn = await this.pool.getConnection();
         try {
-            // ── Chargement et garde ───────────────────────────────────────────
             const libraries: Library[] = await conn.query(
                 `SELECT * FROM Library WHERE id = ?`, [libraryId]
             );
@@ -816,7 +862,7 @@ export class LibraryService {
 
             const isUnlocked: boolean = await this.getIfLibraryIsUnlock(libraryId, conn);
             if (!isUnlocked) {
-                return { id: -1, state: false, message: `La librairie est bloqué (un traitement est en cours)` };
+                return { id: -1, state: false, message: `La librairie est bloquée (un traitement est en cours)` };
             }
 
             await this.lockLibrary(libraryId, conn);
@@ -827,32 +873,70 @@ export class LibraryService {
                 const rootPath: string = library.path;
                 const lang: ISO_3166_1 = library.lang;
 
-                // ── 1. Scan du disque ─────────────────────────────────────────────
-                const scannedSeries: ScannedSeries[] =
-                    await this.seriesScannerService.scanSeriesDirectory(rootPath);
+                // ── 1. Scan du disque ─────────────────────────────────────────
+                // En mode ciblé : on appelle scanOneSeries() directement sur le
+                // dossier de la série (targetFolderPath), ce qui évite de rescanner
+                // tout rootPath et garantit que les sous-dossiers sont bien traités
+                // comme des SAISONS et non comme des séries.
+                // En mode global : scanSeriesDirectory() comme d'habitude.
+                let scannedSeries: ScannedSeries[];
 
-                // ── 2. État actuel en base ────────────────────────────────────────
-                const existingML: MediaLibrary[] = await conn.query(
-                    `SELECT id, path, type, tmdbId, parentId, seasonNumber, episodeNumber
-                    FROM Media_Library WHERE libraryId = ?`,
-                    [libraryId]
-                );
+                if (mediaLibraryId) {
+                    const targetML: MediaLibrary[] = await conn.query(
+                        `SELECT path FROM Media_Library WHERE id = ? AND type = 'SERIES'`,
+                        [mediaLibraryId]
+                    );
+                    if (targetML.length === 0) {
+                        return { id: -1, state: false, message: `Media_Library introuvable ou non de type SERIES` };
+                    }
+                    const targetFolderPath = targetML[0].path;
+                    // scanOneSeries attend (seriesDir, rootDir) — rootDir sert uniquement
+                    // à vérifier si on est à la racine ; on passe le parent du dossier série.
+                    const scanned = await this.seriesScannerService.scanOneSeries(
+                        targetFolderPath, rootPath
+                    );
+                    scannedSeries = scanned ? [scanned] : [];
+                } else {
+                    scannedSeries = await this.seriesScannerService.scanSeriesDirectory(rootPath);
+                }
+
+                // ── 2. État actuel en base ────────────────────────────────────
+                let existingML: MediaLibrary[];
+                if (mediaLibraryId) {
+                    existingML = await conn.query(
+                        `SELECT id, path, type, tmdbId, parentId, seasonNumber, episodeNumber
+                        FROM Media_Library
+                        WHERE id = ?
+                            OR parentId = ?
+                            OR parentId IN (
+                                SELECT id FROM Media_Library WHERE parentId = ? AND type = 'SEASON'
+                            )`,
+                        [mediaLibraryId, mediaLibraryId, mediaLibraryId]
+                    );
+                } else {
+                    existingML = await conn.query(
+                        `SELECT id, path, type, tmdbId, parentId, seasonNumber, episodeNumber
+                        FROM Media_Library WHERE libraryId = ?`,
+                        [libraryId]
+                    );
+                }
+
                 const existingMLByPath = new Map<string, MediaLibrary>(
                     existingML.map((ml) => [this.normalizePath(ml.path), ml])
                 );
 
-                const seenPaths     = new Set<string>();
-                const logInserted:  any[] = [];
-                const logKept:      any[] = [];
-                const logDeleted:   any[] = [];
-                const logTmdb:      any[] = [];
+                const seenPaths:   Set<string> = new Set();
+                const logInserted: any[] = [];
+                const logKept:     any[] = [];
+                const logDeleted:  any[] = [];
+                const logTmdb:     any[] = [];
 
-                // ── 3. Parcours des séries scannées ───────────────────────────────
+                // ── 3. Parcours des séries scannées ───────────────────────────
                 for (const series of scannedSeries) {
 
                     seenPaths.add(this.normalizePath(series.folderPath));
 
-                    // ── 3a. SÉRIE ─────────────────────────────────────────────────
+                    // ── 3a. SÉRIE ─────────────────────────────────────────────
                     const existingSeries = existingMLByPath.get(this.normalizePath(series.folderPath));
                     let seriesMLId: string;
 
@@ -875,7 +959,7 @@ export class LibraryService {
                         logInserted.push(`[SERIES] ${series.seriesTitle} (${series.year}) → ${seriesMLId}`);
                     }
 
-                    // ── 3b. Recherche TMDB (uniquement si inconnu) ────────────────
+                    // ── 3b. Recherche TMDB (uniquement si inconnu) ────────────
                     let seriesTmdbId = existingSeries?.tmdbId ?? 0;
                     if (seriesTmdbId === 0) {
                         try {
@@ -893,7 +977,7 @@ export class LibraryService {
                         }
                     }
 
-                    // ── 3c. SAISONS ───────────────────────────────────────────────
+                    // ── 3c. SAISONS ───────────────────────────────────────────
                     for (const season of series.seasons) {
 
                         seenPaths.add(this.normalizePath(season.folderPath));
@@ -925,7 +1009,7 @@ export class LibraryService {
                             );
                         }
 
-                        // ── 3d. ÉPISODES ──────────────────────────────────────────
+                        // ── 3d. ÉPISODES ──────────────────────────────────────
                         for (const episode of season.episodes) {
 
                             seenPaths.add(this.normalizePath(episode.filePath));
@@ -972,7 +1056,7 @@ export class LibraryService {
                     }
                 }
 
-                // ── 4. Suppressions ───────────────────────────────────────────────
+                // ── 4. Suppressions ───────────────────────────────────────────
                 const toDelete = existingML.filter(
                     (ml) => !seenPaths.has(this.normalizePath(ml.path))
                 );
@@ -984,7 +1068,6 @@ export class LibraryService {
                         episodes: toDelete.filter((ml) => ml.type === 'EPISODE'),
                     };
 
-                    // 4a. Séries supprimées → deleteSeriesById (cascade complète)
                     for (const ml of toDeleteByType.series) {
                         const medias: Media[] = await conn.query(
                             `SELECT id FROM Media WHERE mediaLibraryId = ? AND mediaType = ?`,
@@ -997,11 +1080,10 @@ export class LibraryService {
                         logDeleted.push(`[DEL ML SERIES] ${ml.path}`);
                     }
 
-                    // 4b. Saisons supprimées (série toujours présente)
                     if (toDeleteByType.seasons.length > 0) {
                         const seasonMLIds = toDeleteByType.seasons.map((ml) => ml.id);
                         const seasonsToDelete: Season[] = await conn.query(
-                            `SELECT s.id, s.seriesId, s.name, s.seasonNumber, p.name as srcPoster
+                            `SELECT s.id, s.seriesId, s.name, s.seasonNumber, p.name as srcPoster, s.mediaLibraryId
                             FROM Season s
                             LEFT JOIN Poster p ON p.id = s.srcPoster
                             WHERE s.mediaLibraryId IN (${seasonMLIds.map(() => '?').join(',')})`,
@@ -1014,20 +1096,17 @@ export class LibraryService {
                                 seriesIdGroups.get(s.seriesId)!.push(s);
                             }
                             for (const [seriesId, seasons] of seriesIdGroups) {
-                                const msg = await this.seriesService.deleteManySeasons(
-                                    seasons, seriesId.toString(), conn
-                                );
+                                const msg = await this.seriesService.deleteManySeasons(seasons, seriesId.toString(), conn);
                                 logDeleted.push(`[DEL SEASONS] seriesId=${seriesId} → ${msg}`);
                             }
                         }
                         logDeleted.push(...toDeleteByType.seasons.map((ml) => `[DEL ML SEASON] ${ml.path}`));
                     }
 
-                    // 4c. Épisodes supprimés (saison toujours présente)
                     if (toDeleteByType.episodes.length > 0) {
                         const episodeMLIds = toDeleteByType.episodes.map((ml) => ml.id);
                         const episodesToDelete: Episode[] = await conn.query(
-                            `SELECT e.id, e.seriesId, e.seasonId, p.name as srcPoster
+                            `SELECT e.id, e.seriesId, e.seasonId, p.name as srcPoster, e.mediaLibraryId
                             FROM Episode e
                             LEFT JOIN Poster p ON p.id = e.srcPoster
                             WHERE e.mediaLibraryId IN (${episodeMLIds.map(() => '?').join(',')})`,
@@ -1040,16 +1119,13 @@ export class LibraryService {
                                 seriesIdGroups.get(e.seriesId)!.push(e);
                             }
                             for (const [seriesId, episodes] of seriesIdGroups) {
-                                const msg = await this.seriesService.deleteManyEpisodes(
-                                    episodes, seriesId.toString(), conn
-                                );
+                                const msg = await this.seriesService.deleteManyEpisodes(episodes, seriesId.toString(), conn);
                                 logDeleted.push(`[DEL EPISODES] seriesId=${seriesId} → ${msg}`);
                             }
                         }
                         logDeleted.push(...toDeleteByType.episodes.map((ml) => `[DEL ML EPISODE] ${ml.path}`));
                     }
 
-                    // 4d. Suppression des lignes Media_Library (CASCADE via FK_ML_PARENT)
                     const toDeleteIds = toDelete.map((ml) => ml.id);
                     await conn.query(
                         `DELETE FROM Media_Library WHERE id IN (${toDeleteIds.map(() => '?').join(',')})`,
@@ -1059,14 +1135,18 @@ export class LibraryService {
 
                 await conn.commit();
 
-                // ── 5. Phase TMDB hors transaction ────────────────────────────────
+                // ── 5. Phase TMDB hors transaction ────────────────────────────
                 await conn.release();
+
+                const tmdbWhereClause5a = mediaLibraryId ? `AND ml.id = '${mediaLibraryId}'`         : '';
+                const tmdbWhereClause5b = mediaLibraryId ? `AND ml_series.id = '${mediaLibraryId}'`  : '';
 
                 // 5a. Nouvelles séries sans Media → insertNewSeries complet
                 const seriesWithoutMedia: MediaLibrary[] = await this.pool.query(
                     `SELECT ml.id, ml.tmdbId FROM Media_Library ml
                     WHERE ml.libraryId = ? AND ml.type = 'SERIES'
                     AND ml.tmdbId > 0
+                    ${tmdbWhereClause5a}
                     AND NOT EXISTS (SELECT 1 FROM Media m WHERE m.mediaLibraryId = ml.id)`,
                     [libraryId]
                 );
@@ -1082,15 +1162,14 @@ export class LibraryService {
                     }
                 }
 
-                // 5b. Séries existantes avec de nouveaux contenus
-                // → insertion ciblée uniquement des nouvelles Season/Episode
-                //   sans toucher aux posters, crédits ou métadonnées globales
+                // 5b. Séries existantes avec de nouveaux contenus → insertion ciblée
                 const seriesWithNewContent: MediaLibrary[] = await this.pool.query(
                     `SELECT DISTINCT ml_series.id, ml_series.tmdbId
                     FROM Media_Library ml_series
                     WHERE ml_series.libraryId = ?
                     AND ml_series.type = 'SERIES'
                     AND ml_series.tmdbId > 0
+                    ${tmdbWhereClause5b}
                     AND EXISTS (SELECT 1 FROM Media m WHERE m.mediaLibraryId = ml_series.id)
                     AND (
                         EXISTS (
@@ -1112,7 +1191,6 @@ export class LibraryService {
 
                 for (const ml of seriesWithNewContent) {
                     try {
-                        // Récupère la série Media (id + formatedTitle)
                         const existingMediaRows: { id: number }[] = await this.pool.query(
                             `SELECT id FROM Media WHERE mediaLibraryId = ? AND mediaType = ?`,
                             [ml.id, MediaType.SERIES]
@@ -1121,17 +1199,12 @@ export class LibraryService {
 
                         const seriesMediaId = existingMediaRows[0].id;
                         const formatedTitle = seriesMediaId.toString();
-
-                        // Récupère les données TMDB pour les noms/posters des nouveaux contenus
-                        const editSeries = await this.tmdbService.searchSeriesByTmdbId(
-                            ml.tmdbId, ml.id, lang
-                        );
+                        const editSeries = await this.tmdbService.searchSeriesByTmdbId(ml.tmdbId, ml.id, lang);
 
                         const conn2 = await this.pool.getConnection();
                         try {
                             await conn2.beginTransaction();
 
-                            // ── Nouvelles saisons (ML SEASON sans Season en base) ──
                             const newSeasonMLRows: { id: string; seasonNumber: number }[] = await conn2.query(
                                 `SELECT ml_s.id, ml_s.seasonNumber
                                 FROM Media_Library ml_s
@@ -1142,9 +1215,7 @@ export class LibraryService {
 
                             if (newSeasonMLRows.length > 0) {
                                 const newEditSeasons: EditSeason[] = newSeasonMLRows.map((row) => {
-                                    const tmdbSeason = editSeries.seasons.find(
-                                        (s) => s.seasonNumber === row.seasonNumber
-                                    );
+                                    const tmdbSeason = editSeries.seasons.find((s) => s.seasonNumber === row.seasonNumber);
                                     return {
                                         id:             tmdbSeason?.id       ?? 0,
                                         seriesId:       seriesMediaId,
@@ -1155,22 +1226,17 @@ export class LibraryService {
                                         episodes:       [],
                                     };
                                 });
-
                                 const msg = await this.seriesService.insertManySeasons(
                                     newEditSeasons, seriesMediaId, formatedTitle, conn2
                                 );
                                 logTmdb.push(`[TMDB NEW SEASONS] tmdbId=${ml.tmdbId} → ${msg}`);
                             }
 
-                            // ── Nouveaux épisodes dans saisons existantes ──────────
                             const newEpisodeMLRows: {
-                                mlId: string;
-                                seasonNumber: number;
-                                episodeNumber: number;
-                                seasonDbId: number;
+                                mlId: string; seasonNumber: number;
+                                episodeNumber: number; seasonDbId: number;
                             }[] = await conn2.query(
-                                `SELECT ml_e.id AS mlId, ml_e.seasonNumber, ml_e.episodeNumber,
-                                        s.id AS seasonDbId
+                                `SELECT ml_e.id AS mlId, ml_e.seasonNumber, ml_e.episodeNumber, s.id AS seasonDbId
                                 FROM Media_Library ml_e
                                 INNER JOIN Media_Library ml_s ON ml_s.id = ml_e.parentId AND ml_s.type = 'SEASON'
                                 INNER JOIN Season s ON s.mediaLibraryId = ml_s.id
@@ -1180,21 +1246,15 @@ export class LibraryService {
                             );
 
                             if (newEpisodeMLRows.length > 0) {
-                                // Regroupe par seasonDbId
                                 const bySeasonId = new Map<number, typeof newEpisodeMLRows>();
                                 for (const row of newEpisodeMLRows) {
                                     if (!bySeasonId.has(row.seasonDbId)) bySeasonId.set(row.seasonDbId, []);
                                     bySeasonId.get(row.seasonDbId)!.push(row);
                                 }
-
                                 for (const [seasonDbId, rows] of bySeasonId) {
                                     const newEditEpisodes: EditEpisode[] = rows.map((row) => {
-                                        const tmdbSeason  = editSeries.seasons.find(
-                                            (s) => s.seasonNumber === row.seasonNumber
-                                        );
-                                        const tmdbEpisode = tmdbSeason?.episodes.find(
-                                            (e) => e.episodeNumber === row.episodeNumber
-                                        );
+                                        const tmdbSeason  = editSeries.seasons.find((s) => s.seasonNumber === row.seasonNumber);
+                                        const tmdbEpisode = tmdbSeason?.episodes.find((e) => e.episodeNumber === row.episodeNumber);
                                         return {
                                             id:             tmdbEpisode?.id          ?? 0,
                                             seasonId:       seasonDbId,
@@ -1207,7 +1267,6 @@ export class LibraryService {
                                             path:           undefined,
                                         };
                                     });
-
                                     const msg = await this.seriesService.insertManyEpisodes(
                                         newEditEpisodes, seriesMediaId, seasonDbId, formatedTitle, conn2
                                     );
@@ -1240,12 +1299,14 @@ export class LibraryService {
                     [JSON.stringify(result), libraryId]
                 );
                 return result;
-            } catch(error) {
+
+            } catch (error) {
                 await conn.rollback();
                 throw error;
             } finally {
                 await this.unlockLibrary(libraryId, conn);
             }
+
         } catch (error: any) {
             const result: ReturnMessage = {
                 id: -1, state: false, message: `Error: ${error?.message ?? error}`
@@ -1312,5 +1373,4 @@ export class LibraryService {
         }
     }
  
-
 }

@@ -43,8 +43,14 @@ export class LibraryController {
 
     @UseGuards(AdminUserGuard)
     @Put('reload-media-library-metadata/:mediaLibraryId')
+    async modifyMediaLibraryMetadata(@Param('mediaLibraryId') mediaLibraryId: string): Promise<any> {
+        return await this.libraryService.reloadMediaLibraryMetadata(mediaLibraryId);
+    }
+
+    @UseGuards(AdminUserGuard)
+    @Put('reload-media-library-file/:mediaLibraryId')
     async modifyMediaLibrary(@Param('mediaLibraryId') mediaLibraryId: string): Promise<any> {
-        return await this.libraryService.reloadMediaLibraryMetedata(mediaLibraryId);
+        return await this.libraryService.reloadMediaLibraryFile(mediaLibraryId);
     }
 
     @UseGuards(AdminUserGuard)

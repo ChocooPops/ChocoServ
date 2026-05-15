@@ -117,7 +117,7 @@ export class SeriesScannerService {
    * Les fichiers vidéo directement à la racine sont ignorés
    * (ils appartiennent à une saison implicite si nécessaire — cf. Jellyfin).
    */
-  private async scanOneSeries(
+  public async scanOneSeries(
     seriesDir: string,
     rootDir: string,
   ): Promise<ScannedSeries | null> {
