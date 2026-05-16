@@ -30,6 +30,18 @@ import { Season } from 'src/series/dto/season.interface';
 import { Episode } from 'src/series/dto/episode.interface';
 import { EditEpisode } from 'src/series/dto/edit-episode.interface';
 import { EditSeason } from 'src/series/dto/edit-season.interface';
+import { Link } from 'src/common-interface/link.interface';
+import { Node } from 'src/common-interface/node.interface';
+
+interface OrphanMediaLibrary {
+    id:             string;
+    type:           string;
+    path:           string;
+    tmdbId:         number;
+    libraryId:      string;
+    parentId:       string | null;
+    titleFormated:  string;
+}
 
 @Injectable()
 export class LibraryService {
@@ -1367,6 +1379,221 @@ export class LibraryService {
                 seriesML:              null,
                 seasonByNumber:        new Map(),
                 episodeBySeasonAndNum: new Map(),
+            };
+        } finally {
+            await conn.release();
+        }
+    }
+ 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Fonction 1 : Médias dont le fichier source n'existe plus sur le disque
+    //
+    // Retourne :
+    //   - Les Media de type MOVIE dont le chemin (via Media_Library) n'existe plus
+    //   - Les Episode dont le chemin (via Media_Library) n'existe plus
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    public async getMediaWithMissingFiles(): Promise<{
+        movies:   { id: number;  name: string; path: string; mediaLibraryId: string }[];
+        episodes: { id: number; name: string;  path: string; mediaLibraryId: string; seriesId: number; seasonId: number }[];
+    }> {
+        const conn = await this.pool.getConnection();
+        try {
+            // Films dont le chemin Media_Library n'existe plus sur le disque
+            const movieRows: {
+                id:        number;
+                name:          string;
+                path:           string;
+                mediaLibraryId: string;
+            }[] = await conn.query(
+                `SELECT m.id, m.title as name, ml.path, ml.id AS mediaLibraryId
+                FROM Media m
+                INNER JOIN Media_Library ml ON ml.id = m.mediaLibraryId
+                WHERE m.mediaType = 'MOVIE'`
+            );
+
+            // Épisodes dont le chemin Media_Library n'existe plus sur le disque
+            const episodeRows: {
+                id:      number;
+                name:           string;
+                path:           string;
+                mediaLibraryId: string;
+                seriesId:       number;
+                seasonId:       number;
+            }[] = await conn.query(
+                `SELECT e.id, e.name, ml.path, ml.id AS mediaLibraryId,
+                        e.seriesId, e.seasonId
+                FROM Episode e
+                INNER JOIN Media_Library ml ON ml.id = e.mediaLibraryId`
+            );
+
+            // Vérification de l'existence sur le disque (en parallèle par batch)
+            const checkExists = async (filePath: string): Promise<boolean> => {
+                try {
+                    await fs.access(filePath);
+                    return true;
+                } catch {
+                    return false;
+                }
+            };
+
+            const [movieExistsResults, episodeExistsResults] = await Promise.all([
+                Promise.all(movieRows.map((r) => checkExists(r.path))),
+                Promise.all(episodeRows.map((r) => checkExists(r.path))),
+            ]);
+
+            const missingMovies   = movieRows.filter((_, i) => !movieExistsResults[i]);
+            const missingEpisodes = episodeRows.filter((_, i) => !episodeExistsResults[i]);
+
+            return {
+                movies:   missingMovies,
+                episodes: missingEpisodes,
+            };
+        } finally {
+            await conn.release();
+        }
+    }
+
+    public async getOrphanMediaLibraries(): Promise<{
+        movies:   OrphanMediaLibrary[];
+        series:   OrphanMediaLibrary[];
+        seasons:  OrphanMediaLibrary[];
+        episodes: OrphanMediaLibrary[];
+    }> {
+        const conn = await this.pool.getConnection();
+        try {
+            const rows: OrphanMediaLibrary[] = await conn.query(
+                `SELECT ml.id, ml.titleFormated, ml.type, ml.path, ml.tmdbId, ml.libraryId,
+                        ml.parentId, ml.titleFormated
+                FROM Media_Library ml
+                WHERE
+                    (ml.type = 'MOVIE'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM Media m WHERE m.mediaLibraryId = ml.id
+                        )
+                    )
+                    OR
+                    (ml.type = 'SERIES'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM Media m WHERE m.mediaLibraryId = ml.id
+                        )
+                    )
+                    OR
+                    (ml.type = 'SEASON'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM Season s WHERE s.mediaLibraryId = ml.id
+                        )
+                        AND EXISTS (
+                            SELECT 1 FROM Media_Library p
+                            INNER JOIN Media m ON m.mediaLibraryId = p.id
+                            WHERE p.id = ml.parentId
+                        )
+                        AND NOT EXISTS (
+                            SELECT 1 FROM Media_Library ep
+                            INNER JOIN Episode e ON e.mediaLibraryId = ep.id
+                            WHERE ep.parentId = ml.id AND ep.type = 'EPISODE'
+                        )
+                    )
+                    OR
+                    (ml.type = 'EPISODE'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM Episode e WHERE e.mediaLibraryId = ml.id
+                        )
+                        AND EXISTS (
+                            SELECT 1 FROM Media_Library p
+                            INNER JOIN Season s ON s.mediaLibraryId = p.id
+                            WHERE p.id = ml.parentId
+                        )
+                    )
+                ORDER BY ml.type, ml.libraryId, ml.path`
+            );
+    
+            return {
+                movies:   rows.filter((r) => r.type === MediaType.MOVIE),
+                series:   rows.filter((r) => r.type === MediaType.SERIES),
+                seasons:  rows.filter((r) => r.type === MediaType.SEASON),
+                episodes: rows.filter((r) => r.type === MediaType.EPISODE),
+            };
+        } finally {
+            await conn.release();
+        }
+    }
+
+    public async getDuplicateTmdbIdGraph(): Promise<{
+        nodes: { movies: Node[]; series: Node[] };
+        links: { movies: Link[]; series: Link[] };
+    }> {
+        const conn = await this.pool.getConnection();
+        try {
+            const duplicateRows: {
+                tmdbId:        number;
+                type:          string;
+                id:            string;
+                titleFormated: string;
+                path:          string;
+                libraryId:     string;
+            }[] = await conn.query(
+                `SELECT ml.tmdbId, ml.type, ml.id, ml.titleFormated, ml.path, ml.libraryId
+                FROM Media_Library ml
+                WHERE ml.tmdbId > 0
+                AND ml.type IN ('MOVIE', 'SERIES')
+                AND (ml.tmdbId, ml.type, ml.libraryId) IN (
+                    SELECT tmdbId, type, libraryId
+                    FROM Media_Library
+                    WHERE tmdbId > 0
+                        AND type IN ('MOVIE', 'SERIES')
+                    GROUP BY tmdbId, type, libraryId
+                    HAVING COUNT(*) > 1
+                )
+                ORDER BY ml.type, ml.tmdbId, ml.id`
+            );
+    
+            if (duplicateRows.length === 0) {
+                return {
+                    nodes: { movies: [], series: [] },
+                    links: { movies: [], series: [] },
+                };
+            }
+    
+            const movieNodes: Node[] = [];
+            const seriesNodes: Node[] = [];
+            const movieLinks: Link[] = [];
+            const seriesLinks: Link[] = [];
+    
+            // tmdbId déjà ajouté comme nœud central (par type)
+            const tmdbNodeSet = new Set<string>();
+    
+            for (const row of duplicateRows) {
+                const isMovie    = row.type === 'MOVIE';
+                const tmdbKey    = `${row.tmdbId}_${row.type}`;
+                const nodeList   = isMovie ? movieNodes  : seriesNodes;
+                const linkList   = isMovie ? movieLinks  : seriesLinks;
+    
+                // Nœud central tmdbId — id = tmdbId (number)
+                if (!tmdbNodeSet.has(tmdbKey)) {
+                    tmdbNodeSet.add(tmdbKey);
+                    nodeList.push({
+                        id:   row.tmdbId,
+                        name: `tmdbId: ${row.tmdbId}`,
+                    });
+                }
+    
+                nodeList.push({
+                    id:   row.tmdbId * 1000 + nodeList.length, // id unique par nœud ML
+                    name: `${row.titleFormated} [${row.id}] — ${row.path}`,
+                });
+    
+                // Link : source = tmdbId, target = id du nœud ML qu'on vient de créer
+                linkList.push({
+                    source:     row.tmdbId,
+                    target:     nodeList[nodeList.length - 1].id,
+                    targetType: row.type as MediaType,
+                });
+            }
+    
+            return {
+                nodes: { movies: movieNodes, series: seriesNodes },
+                links: { movies: movieLinks, series: seriesLinks },
             };
         } finally {
             await conn.release();

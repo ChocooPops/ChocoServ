@@ -12,6 +12,24 @@ export class LibraryController {
     constructor(private readonly libraryService: LibraryService) { }
 
     @UseGuards(AdminUserGuard)
+    @Get('media-missing-files')
+    async getMediaWithMissingFiles(): Promise<any> {
+        return await this.libraryService.getMediaWithMissingFiles();
+    }
+
+    @UseGuards(AdminUserGuard)
+    @Get('orphan-media-library')
+    async getOrphanMediaLibraries(): Promise<any> {
+        return await this.libraryService.getOrphanMediaLibraries();
+    }
+
+    @UseGuards(AdminUserGuard)
+    @Get('duplicate-tmdb')
+    async getDuplicateTmdbIdGraph(): Promise<any> {
+        return await this.libraryService.getDuplicateTmdbIdGraph();
+    }
+
+    @UseGuards(AdminUserGuard)
     @Get('libraries')
     async getAllLibrary(): Promise<Library[]> {
         return this.libraryService.getAllLibrary();

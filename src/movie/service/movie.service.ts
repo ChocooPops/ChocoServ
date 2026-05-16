@@ -39,30 +39,6 @@ export class MovieService extends MediaService {
         return await this.getNodesMediaByType();
     }
 
-    public async getNodesMoviePathDontExist() : Promise<Node[]> {
-        const conn = await this.pool.getConnection();
-        try {
-            const query: string = `SELECT id, title, path FROM MEDIA WHERE mediaType = ?`;
-            const moviesWithoutPath: Node[] = [];
-            const movies : Movie[] = await conn.query(query, [this.currentMediaType]);
-            for (const movie of movies) {
-                try {
-                    await fs.access(movie.path);
-                } catch {
-                    moviesWithoutPath.push({
-                        id : movie.id,
-                        name : movie.title
-                    });
-                }
-            }
-            return moviesWithoutPath;
-        } catch (error) {
-            return null;
-        } finally {
-            await conn.release();
-        }
-    }
-
     private getQuerySelectMovies(otherInfos: boolean, WHERE: string, ORDER: string, LIMIT: string): string {
         let SELECT: string = '';
         let JOIN: string = '';

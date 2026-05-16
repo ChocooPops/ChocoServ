@@ -385,7 +385,7 @@ export class SimilarTitleService {
             this.normalizeTitle(candidate.title),
         );
         if (titleSimilarity >= 0.85) {
-            score += Math.round(titleSimilarity * 4); // max +4 points
+            score += Math.round(titleSimilarity * 5); // max +4 points
         }
 
         return { score, commonCategoryIds, commonActorIds, commonDirectorIds, commonKeywords };

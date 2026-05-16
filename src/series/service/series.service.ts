@@ -43,31 +43,6 @@ export class SeriesService extends MediaService {
         return await this.getNodesMediaByType();
     }
 
-    public async getNodesEpisodePathDontExist(): Promise<Node[]> {
-        const conn = await this.pool.getConnection();
-        try {
-            const query: string = `SELECT e.id, CONCAT(m.title, ' : ', e.name) AS name, e.path FROM episode e
-                                    LEFT JOIN media m ON e.seriesId = m.id;`;
-            const episodesWithoutPath: Node[] = [];
-            const episodes: Episode[] = await conn.query(query);
-            for (const episode of episodes) {
-                try {
-                    await fs.access(episode.path);
-                } catch {
-                    episodesWithoutPath.push({
-                        id: episode.id,
-                        name: episode.name
-                    });
-                }
-            }
-            return episodesWithoutPath;
-        } catch (error) {
-            return [];
-        } finally {
-            await conn.release();
-        }
-    }
-
     private getQuerySelectSeries(otherInfos: boolean, WHERE: string, ORDER: string, LIMIT: string): string {
         let SELECT: string = '';
         let JOIN: string = '';
