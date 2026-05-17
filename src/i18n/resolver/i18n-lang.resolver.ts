@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { I18nResolver } from 'nestjs-i18n';
 import { ExecutionContext } from '@nestjs/common';
 
-const AVAILABLE_LANGS = ['fr', 'en', 'none'];
+const AVAILABLE_LANGS = ['fr', 'en', 'ja', 'none'];
 const DEFAULT_LANG = 'en';
 
 @Injectable()
