@@ -5,11 +5,12 @@
   "compilerOptions": {
     "assets": [
       {
-        "include": "templates/**/*"
+        "include": "templates/**/*",
+        "watchAssets": true
       },
       {
         "include": "i18n/**/*",
-        "outDir": "dist/i18n"
+        "watchAssets": true
       }
     ],
     "watchAssets": true,

@@ -15,6 +15,7 @@ import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { MediaService } from 'src/media/service/media/media.service';
+import { I18nService } from 'nestjs-i18n';
 
 const execAsync = promisify(exec);
 
@@ -27,7 +28,8 @@ export class NewsVideoRunningService {
         private readonly verifTimerShowService: VerifTimerShowService,
         private readonly mediaService: MediaService,
         private readonly movieService: MovieService,
-        private readonly seriesService: SeriesService) { }
+        private readonly seriesService: SeriesService,
+        private readonly i18nService: I18nService) { }
 
 
     public async getSimpleNewsRunningById(newsId: number): Promise<NewsVideoRunning | null> {
@@ -307,8 +309,12 @@ export class NewsVideoRunningService {
             return {
                 id: 0,
                 state: true,
-                message: `News (${mediaType}) \n Insérées: ${insertedCount} \ Mises à jour: ${updatedCount} \ ` +
-                    `\n Vidéos traitées: ${processedCount} \n Réutilisées: ${skippedCount} \ Supprimées: ${newsToDelete.length}`
+                message: `  ${this.i18nService.t("common.NEWS.NEWS")} (${mediaType}) \n 
+                            ${this.i18nService.t("common.NEWS.ADDED")} ${insertedCount} \n 
+                            ${this.i18nService.t("common.NEWS.UPDATED")}: ${updatedCount} \n
+                            ${this.i18nService.t("common.NEWS.PROCESSED_VIDEOS")}: ${processedCount} \n 
+                            ${this.i18nService.t("common.NEWS.REUSED")}: ${skippedCount} \n 
+                            ${this.i18nService.t("common.NEWS.DELETED")}: ${newsToDelete.length}`
             };
 
         } catch (error: any) {
@@ -316,7 +322,7 @@ export class NewsVideoRunningService {
             return {
                 id: -1,
                 state: false,
-                message: `Erreur ${error.sqlMessage || error.message}`
+                message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage || error.message}`
             };
         } finally {
             await conn.release();

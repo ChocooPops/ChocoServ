@@ -16,6 +16,7 @@ import { Graph } from 'src/common-interface/graph.intrface';
 import { Node } from 'src/common-interface/node.interface';
 import { Link } from 'src/common-interface/link.interface';
 import { MediaService } from 'src/media/service/media/media.service';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class LicenseService {
@@ -26,7 +27,8 @@ export class LicenseService {
         private readonly mediaService: MediaService,
         private readonly movieService: MovieService,
         private readonly seriesService: SeriesService,
-        private readonly selectionService: SelectionService) { }
+        private readonly selectionService: SelectionService,
+        private readonly i18nService: I18nService) { }
 
     public async getGraphLicense(): Promise<Graph> {
         const conn = await this.pool.getConnection();
@@ -236,7 +238,7 @@ export class LicenseService {
                 returnMessage = {
                     id: 1,
                     state: true,
-                    message: `License insérée \n ${messageMediaLicense} \n ${messageSelectonLicense} \n ${messageSrcIcon} \n ${messageSrcLogo} \n ${messageSrcBackground}`,
+                    message: `${this.i18nService.t("common.LICENSE.LICENSE_INSERTED")} \n ${messageMediaLicense} \n ${messageSelectonLicense} \n ${messageSrcIcon} \n ${messageSrcLogo} \n ${messageSrcBackground}`,
                     other: { id: licenseId }
                 }
 
@@ -245,7 +247,7 @@ export class LicenseService {
                 returnMessage = {
                     id: -1,
                     state: false,
-                    message: `Erreur : ${error.sqlMessage}`
+                    message: `${this.i18nService.t("common.ERROR")} : ${error.sqlMessage}`
                 }
             } finally {
                 await conn.release();
@@ -254,7 +256,7 @@ export class LicenseService {
             returnMessage = {
                 id: -1,
                 state: false,
-                message: "Le nom de doit pas être vide"
+                message: this.i18nService.t("common.LICENSE.NAME_FIELD_CANNOT_BLANK")
             }
         }
         return returnMessage;
@@ -285,14 +287,14 @@ export class LicenseService {
                     returnMessage = {
                         id: 1,
                         state: true,
-                        message: `License insérée \n ${messageMediaLicense} \n ${messageSelectonLicense} \n ${messageSrcIcon} \n ${messageSrcLogo} \n ${messageSrcBackground}`,
+                        message: `${this.i18nService.t("common.LICENSE.LICENSE_UPDATED")} \n ${messageMediaLicense} \n ${messageSelectonLicense} \n ${messageSrcIcon} \n ${messageSrcLogo} \n ${messageSrcBackground}`,
                         other: { id: updateLicense.id }
                     }
                 } else {
                     returnMessage = {
                         id: -1,
                         state: false,
-                        message: "License introuvable"
+                        message: this.i18nService.t("common.LICENSE.LICENSE_UNFOUND")
                     }
                 }
             } catch (error: any) {
@@ -300,7 +302,7 @@ export class LicenseService {
                 returnMessage = {
                     id: -1,
                     state: false,
-                    message: `Erreur : ${error.sqlMessage}`
+                    message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
                 }
             } finally {
                 await conn.release();
@@ -309,7 +311,7 @@ export class LicenseService {
             returnMessage = {
                 id: -1,
                 state: false,
-                message: "Le nom de doit pas être vide"
+                message: this.i18nService.t("common.LICENSE.NAME_FIELD_CANNOT_BLANK")
             }
         }
         return returnMessage;
@@ -321,25 +323,33 @@ export class LicenseService {
             await conn.beginTransaction();
             let message: string = '';
             const licenses: License[] = await conn.query(`SELECT id, name FROM LICENSE WHERE position = ?`, [position]);
-            const licensesByPostion: number[] = licenseIds.filter((id) => licenses.some((license: License) => license.id === id));
-            for (const [index, licenseId] of licensesByPostion.entries()) {
-                const query: string = `UPDATE License SET orderIndex = ? WHERE id = ?`;
-                await conn.query(query, [index, licenseId]);
-                const name: string = licenses.find((license: License) => license.id === licenseId).name;
-                message += `${name} => ${index} \n`;
-            }
-            await conn.commit();
-            return {
-                id: 1,
-                state: true,
-                message: message
+            if (licenses.length > 0) {
+                const licensesByPostion: number[] = licenseIds.filter((id) => licenses.some((license: License) => license.id === id));
+                for (const [index, licenseId] of licensesByPostion.entries()) {
+                    const query: string = `UPDATE License SET orderIndex = ? WHERE id = ?`;
+                    await conn.query(query, [index, licenseId]);
+                    const name: string = licenses.find((license: License) => license.id === licenseId).name;
+                    message += `${name} => ${index} \n`;
+                }
+                await conn.commit();
+                return {
+                    id: 1,
+                    state: true,
+                    message: message
+                }
+            } else {
+                return {
+                    id: 1,
+                    state: true,
+                    message: this.i18nService.t("common.LICENSE.NO_CHANGES")
+                }
             }
         } catch (error: any) {
             await conn.rollback();
             return {
                 id: -1,
                 state: false,
-                message: `Erreur :  ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")}:  ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -359,14 +369,14 @@ export class LicenseService {
             returnMessage = {
                 id: -1,
                 state: true,
-                message: `License supprimée avec succès \n ${resultDeleteLicenseMedia.affectedRows} \n ${resultDeleteLicenseSelection.affectedRows} \n ${resultDeletePoster}`
+                message: `${this.i18nService.t("common.LICENSE.LICENSE_DELETED")} \n ${resultDeleteLicenseMedia.affectedRows} \n ${resultDeleteLicenseSelection.affectedRows} \n ${resultDeletePoster}`
             }
         } catch (error: any) {
             await conn.rollback();
             returnMessage = {
                 id: -1,
                 state: false,
-                message: `Erreur : ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -385,9 +395,13 @@ export class LicenseService {
                         INSERT INTO License_Media (licenseId, mediaId, orderIndex)
                         VALUES ${medias.map(() => '(?, ?, ?)').join(', ')}`;
                 await conn.query(query, values);
-                return `${medias.length} media ont été ajouté dans la license`;
+                return this.i18nService.t('common.LICENSE.COUNT_MEDIA_ADDED_INTO_LICENSE', {
+                    args: {
+                        count: medias.length
+                    }
+                });
             } else {
-                return "Aucun media n'est à ajouter dans la license";
+                return this.i18nService.t('common.LICENSE.NO_MEDIA_ADDED_INTO_LICENSE');
             }
         } catch (error) {
             throw error;
@@ -405,9 +419,13 @@ export class LicenseService {
                         INSERT INTO License_Selection (licenseId, selectionId, orderIndex)
                         VALUES ${selections.map(() => '(?, ?, ?)').join(', ')}`;
                 await conn.query(query, values);
-                return `${selections.length} sélections ont été ajouté dans la license`;
+                return this.i18nService.t('common.LICENSE.COUNT_SELECTION_ADDED_INTO_LICENSE', {
+                    args: {
+                        count: selections.length
+                    }
+                });
             } else {
-                return "Aucune sélection n'est à ajouter dans la license";
+                return this.i18nService.t('common.LICENSE.NO_SELECTION_ADDED_INTO_LICENSE');
             }
         } catch (error) {
             throw error;

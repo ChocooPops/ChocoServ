@@ -11,6 +11,7 @@ import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import * as bcrypt from 'bcryptjs';
 import { jwtConstants } from 'src/auth/constant';
 import { ConfigService } from '@nestjs/config';
+import { I18nService, I18nContext } from 'nestjs-i18n';
 
 @Injectable()
 export class AuthService {
@@ -21,7 +22,8 @@ export class AuthService {
     constructor(private readonly jwtService: JwtService,
         private readonly userService: UserService,
         private readonly mailService: MailService,
-        private readonly configService: ConfigService
+        private readonly configService: ConfigService,
+        private readonly i18nService: I18nService
     ) { }
 
     async signIn(email: string, password: string): Promise<TokenModel> {
@@ -34,16 +36,16 @@ export class AuthService {
                             access_token: await this.generateJwt(user)
                         };
                     } else {
-                        throw new UnauthorizedException('Utilisateur suspendu');
+                        throw new UnauthorizedException(this.i18nService.t('common.AUTH.ACCOUNT_SUSPENDED'));
                     }
                 } else {
-                    throw new NotFoundException('Mots de passe incorrect');
+                    throw new NotFoundException(this.i18nService.t('common.AUTH.INCORRECT_PASSWORD'));
                 }
             } else {
-                throw new UnauthorizedException('Utilisateur non activé');
+                throw new UnauthorizedException(this.i18nService.t('common.AUTH.ACCOUNT_NOT_ACTIVATED'));
             }
         } else {
-            throw new NotFoundException('Email introuvable');
+            throw new NotFoundException(this.i18nService.t('common.AUTH.EMAIL_ADRESS_NOT_FOUND'));
         }
     }
 
@@ -54,6 +56,8 @@ export class AuthService {
 
     //CODE DE VERIFICATION SendVerificationCode
     public async sendVerificationCode(newUser: RegisterUser): Promise<ReturnMessage> {
+        const lang = I18nContext.current()?.lang;
+
         const message = {
             id: 0,
             state: false,
@@ -63,30 +67,30 @@ export class AuthService {
             const userBd: User | null = await this.userService.getUserByEmail(newUser.email);
             if (userBd) {
                 if (userBd.role === Role.NOT_ACTIVATE) {
-                    message.message = "Votre demande d'inscription est en attente de validation";
+                    message.message = this.i18nService.t('common.AUTH.REGISTRATION_REQUEST_PENDING_APPROVAL');
                     message.state = false;
                 } else {
-                    message.message = "Cette identifiant existe déjà";
+                    message.message = this.i18nService.t('common.AUTH.USERNAME_ALREADY_EXISTS');
                     message.state = false;
                 }
             } else {
                 if (this.isValidEmail(newUser.email)) {
                     if (newUser.pseudo.trim().length >= 5) {
                         if (this.hasCodeForEmail(newUser.email)) {
-                            message.message = "Un code vous a déjà été envoyé";
+                            message.message = this.i18nService.t('common.AUTH.CODE_ALREADY_SENT');
                             message.state = true;
                         } else {
                             const code: number = this.generateUnique6DigitCode(newUser);
-                            await this.mailService.sendVerificationCode(newUser.email, code);
-                            message.message = "Un code de vérification vous a été envoyé";
+                            await this.mailService.sendVerificationCode(newUser.email, code, lang);
+                            message.message = this.i18nService.t('common.AUTH.CODE_SEND');
                             message.state = true;
                         }
                     } else {
-                        message.message = "Pseudo invalide (minimum 5 caractères)";
+                        message.message = this.i18nService.t('common.AUTH.INVALID_USERNAME');
                         message.state = false;
                     }
                 } else {
-                    message.message = "Email invalide";
+                    message.message = this.i18nService.t('common.AUTH.INVALID_EMAIL_ADDRESS');
                     message.state = false;
                 }
             }
@@ -104,7 +108,7 @@ export class AuthService {
                     return {
                         id: 0,
                         state: true,
-                        message: "Votre demande d'inscription a été envoyé"
+                        message: this.i18nService.t('common.AUTH.REGISTRATION_REQUEST_SENT')
                     }
                 } catch (error: any) {
                     return {
@@ -117,14 +121,14 @@ export class AuthService {
                 return {
                     id: 0,
                     state: false,
-                    message: "Code de vérification incorrecte"
+                    message: this.i18nService.t('common.AUTH.INVALID_VERIFICATION_CODE')
                 }
             }
         } else {
             return {
                 id: 0,
                 state: false,
-                message: "Utilisateur déjà enregistré"
+                message: this.i18nService.t('common.AUTH.USER_ALREADY_REGISTERED')
             }
         }
     }
@@ -146,13 +150,14 @@ export class AuthService {
 
         setTimeout(() => {
             this.temporaryCode = this.temporaryCode.filter(c => c.code !== code);
-            console.log(`Code ${code} supprimé automatiquement après 5 minutes.`);
         }, this.timeAfterRemoving);
 
         return code;
     }
 
     public async createNewCodeCodeByEmail(email: string): Promise<ReturnMessage> {
+        const lang = I18nContext.current()?.lang;
+
         const userAlreadyExist: User | null = await this.userService.getUserByEmail(email);
         if (!userAlreadyExist) {
             try {
@@ -160,31 +165,31 @@ export class AuthService {
                 if (user) {
                     this.deleteCodeByEmail(email);
                     const code: number = this.generateUnique6DigitCode(user);
-                    await this.mailService.sendVerificationCode(user.email, code);
+                    await this.mailService.sendVerificationCode(user.email, code, lang);
                     return {
                         id: 0,
                         state: true,
-                        message: "Code envoyé"
+                        message: this.i18nService.t('common.AUTH.CODE_SENT')
                     }
                 } else {
                     return {
                         id: 0,
                         state: false,
-                        message: "Email introuvable"
+                        message: this.i18nService.t('common.AUTH.EMAIL_ADRESS_NOT_FOUND')
                     }
                 }
             } catch (error) {
                 return {
                     id: 0,
                     state: false,
-                    message: "Erreur"
+                    message: this.i18nService.t('common.ERROR')
                 }
             }
         } else {
             return {
                 id: 0,
                 state: false,
-                message: "Utilisateur déjà enregistré"
+                message: this.i18nService.t('common.AUTH.USER_ALREADY_REGISTERED')
             }
         }
     }
@@ -214,18 +219,18 @@ export class AuthService {
 
     public async verifToken(token: string): Promise<boolean> {
         if (!token) {
-            throw new UnauthorizedException('Token manquant ou mal formé');
+            throw new UnauthorizedException(this.i18nService.t('common.AUTH.MISSING_INVALID_TOKEN'));
         }
         try {
             const payload = await this.jwtService.verifyAsync(token, {
                 secret: jwtConstants(this.configService).secret,
             });
             const user: User = await this.userService.getUserById(payload.sub);
-            if (!user || user.role === 'NOT_ACTIVATE') {
-                throw new UnauthorizedException('Utilisateur désactivé ou inexistant');
+            if (!user || user.role === Role.NOT_ACTIVATE || user.role === Role.SUSPENDED) {
+                throw new UnauthorizedException(this.i18nService.t('common.AUTH.USER_DISABLED_OR_NOT_EXIST'));
             }
         } catch (error) {
-            throw new UnauthorizedException('Token invalide ou expiré');
+            throw new UnauthorizedException(this.i18nService.t('common.AUTH.INVALID_EXPIRED_TOKEN'));
         }
         return true;
     }

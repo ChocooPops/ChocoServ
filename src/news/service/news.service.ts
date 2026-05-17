@@ -9,6 +9,7 @@ import { SeriesService } from 'src/series/service/series.service';
 import * as mariadb from 'mariadb';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { MediaService } from 'src/media/service/media/media.service';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class NewsService {
@@ -17,7 +18,8 @@ export class NewsService {
         private readonly formatPathService: FormatPathService,
         private readonly mediaService: MediaService,
         private readonly movieService: MovieService,
-        private readonly seriesService: SeriesService) { }
+        private readonly seriesService: SeriesService,
+        private readonly i18nService: I18nService) { }
 
     private getQuerySelectNews(WHERE: string): string {
         return `
@@ -79,14 +81,14 @@ export class NewsService {
                 return {
                     id: 0,
                     state: true,
-                    message: `News insérées (${result.affectedRows})`
+                    message: `${this.i18nService.t("common.NEWS.NEWS_INSERTED")} (${result.affectedRows})`
                 }
             } else {
                 await conn.commit();
                 return {
                     id: 0,
                     state: true,
-                    message: `Aucune News n'a été insérée`
+                    message: this.i18nService.t("common.NEWS.NO_NEWS_INSERTED")
                 }
             }
         } catch (error: any) {
@@ -94,7 +96,7 @@ export class NewsService {
             return {
                 id: -1,
                 state: false,
-                message: `Erreur ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
             }
         } finally {
             await conn.release();

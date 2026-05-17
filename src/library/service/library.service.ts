@@ -32,6 +32,7 @@ import { EditEpisode } from 'src/series/dto/edit-episode.interface';
 import { EditSeason } from 'src/series/dto/edit-season.interface';
 import { Link } from 'src/common-interface/link.interface';
 import { Node } from 'src/common-interface/node.interface';
+import { I18nService } from 'nestjs-i18n';
 
 interface OrphanMediaLibrary {
     id:             string;
@@ -49,6 +50,7 @@ export class LibraryService {
     constructor(@Inject(DATABASE_POOL) private readonly pool: mariadb.Pool,
         private readonly parseFilePathService: ParseFilePathService,
         private readonly seriesScannerService: SeriesScannerService,
+        private readonly i18nService: I18nService,
         @Inject(forwardRef(() => TmdbService))
         private readonly tmdbService: TmdbService,
         @Inject(forwardRef(() => MovieService))
@@ -114,7 +116,7 @@ export class LibraryService {
 
             const mediaLibraries: MediaLibrary[] = await conn.query(query, [StateLibrary.NOT_WORKED, libraryId]);
 
-            const isSeriesLibrary = mediaLibraries.some((ml) => ml.type === 'SERIES');
+            const isSeriesLibrary = mediaLibraries.some((ml) => ml.type === MediaType.SERIES);
             if (!isSeriesLibrary) {
                 return mediaLibraries.sort((a, b) =>
                     new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -125,9 +127,9 @@ export class LibraryService {
                 mediaLibraries.map((ml) => [ml.id, ml])
             );
 
-            const series  = mediaLibraries.filter((ml) => ml.type === 'SERIES');
-            const seasons = mediaLibraries.filter((ml) => ml.type === 'SEASON');
-            const episodes = mediaLibraries.filter((ml) => ml.type === 'EPISODE');
+            const series  = mediaLibraries.filter((ml) => ml.type === MediaType.SERIES);
+            const seasons = mediaLibraries.filter((ml) => ml.type === MediaType.SEASON);
+            const episodes = mediaLibraries.filter((ml) => ml.type === MediaType.EPISODE);
 
             const seasonsBySeries = new Map<string, MediaLibrary[]>();
             for (const season of seasons) {
@@ -199,7 +201,7 @@ export class LibraryService {
                 return {
                     id: 0,
                     state: true,
-                    message: `Librairie inséré avec succès`,
+                    message: this.i18nService.t("common.LIBRARY.LIBRARY_SUCCESSFULLY_LOADED"),
                     other: libraryInserted[0]
                 }
 
@@ -207,7 +209,7 @@ export class LibraryService {
                 return {
                     id: -1,
                     state: false,
-                    message: `Le chemin de la librairie n'existe pas sur le serveur`
+                    message: this.i18nService.t("common.LIBRARY.LIBRARY_PATH_NOT_EXIST")
                 }
             }
         } catch(error: any) {
@@ -215,7 +217,7 @@ export class LibraryService {
             return {
                 id: -1,
                 state: false,
-                message: `Error : ${error.sqlMessage}`
+                message: `${this.i18nService.t('common.ERROR')}: ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -231,7 +233,7 @@ export class LibraryService {
             return {
                 id: -1,
                 state: false,
-                message: `Aucune librarie n'est associé à ce type`
+                message: this.i18nService.t("common.LIBRARY.NO_LIBARY_ASSOCIATED_TYPE")
             }
         }
     }
@@ -275,7 +277,7 @@ export class LibraryService {
 
             const isUnlocked: boolean = await this.getIfLibraryIsUnlock(libraryId, conn);
             if (!isUnlocked) {
-                return { id: -1, state: false, message: `La librairie est bloqué (un traitement est en cours)` };
+                return { id: -1, state: false, message: this.i18nService.t("common.LIBRARY.LIBRARY_LOCK") };
             }
 
             await this.lockLibrary(libraryId, conn);
@@ -306,7 +308,7 @@ export class LibraryService {
 
                 // ── 2. À GARDER — fichiers toujours présents sur le disque ────────
                 const toKeep = existingML.filter((ml) => diskPathSet.has(this.normalizePath(ml.path)));
-                logKept.push(`${toKeep.length} fichier(s) déjà en base conservé(s)`);
+                logKept.push(`${toKeep.length} ${this.i18nService.t("common.LIBRARY.FILE_ALREADY_IN_DATABASE_RETAINED")}`);
 
                 // Parmi ceux conservés : ceux qui n'ont pas encore de Media associé
                 // (cas d'un refresh partiel précédent ayant échoué côté TMDB)
@@ -322,9 +324,9 @@ export class LibraryService {
                         try {
                             const editMovie: EditMovie = await this.tmdbService.searchMovieByTmdbId(ml.tmdbId, lang);
                             const msg: ReturnMessage   = await this.movieService.insertNewMovie(editMovie, false);
-                            logKept.push(`[TMDB RÉCUPÉRÉ] tmdbId=${ml.tmdbId} → ${msg.message}`);
+                            logKept.push(`${this.i18nService.t("common.LIBRARY.TMDB_RETRIEVED")} tmdbId=${ml.tmdbId} → ${msg.message}`);
                         } catch (e) {
-                            logKept.push(`[TMDB RÉCUPÉRÉ ERREUR] tmdbId=${ml.tmdbId} — ${e}`);
+                            logKept.push(`${this.i18nService.t("common.LIBRARY.TMDB_ERROR")} tmdbId=${ml.tmdbId} — ${e}`);
                         }
                     }
                 }
@@ -343,10 +345,10 @@ export class LibraryService {
                         try {
                             if (media.mediaType === MediaType.MOVIE) {
                                 const msg = await this.movieService.deleteMovieById(media.id);
-                                logDeleted.push(`[DEL MOVIE] mediaId=${media.id} → ${msg.message}`);
+                                logDeleted.push(`${this.i18nService.t("common.LIBRARY.DELETED_MOVIE")} mediaId=${media.id} → ${msg.message}`);
                             }
                         } catch (e) {
-                            logDeleted.push(`[DEL ERREUR] mediaId=${media.id} — ${e}`);
+                            logDeleted.push(`${this.i18nService.t("common.LIBRARY.DELETED_MOVIE_ERROR")} mediaId=${media.id} — ${e}`);
                         }
                     }
 
@@ -354,7 +356,7 @@ export class LibraryService {
                         `DELETE FROM Media_Library WHERE id IN (${toDelete.map(() => '?').join(',')})`,
                         toDelete.map((ml) => ml.id)
                     );
-                    logDeleted.push(...toDelete.map((ml) => `[DEL ML] ${ml.path}`));
+                    logDeleted.push(...toDelete.map((ml) => `${this.i18nService.t("common.LIBRARY.DEL_ML")} ${ml.path}`));
                 }
 
                 // ── 4. À AJOUTER — nouveaux fichiers pas encore en base ───────────
@@ -393,10 +395,10 @@ export class LibraryService {
                             metadata.resolution ?? 'SD']
                         );
                         logInserted.push(
-                            `[ML] ${parsed.name} (${parsed.year ?? '?'}) — tmdbId=${tmdbId}, ${metadata.duration}ms, ${metadata.resolution}, ${filePath}`
+                            `${this.i18nService.t("common.LIBRARY.ML")} ${parsed.name} (${parsed.year ?? '?'}) — tmdbId=${tmdbId}, ${metadata.duration}ms, ${metadata.resolution}, ${filePath}`
                         );
                     } catch (e) {
-                        logInserted.push(`[ML ERREUR] ${filePath} — ${e}`);
+                        logInserted.push(`${this.i18nService.t("common.LIBRARY.ML_ERROR")} ${filePath} — ${e}`);
                     }
                 }
 
@@ -409,9 +411,9 @@ export class LibraryService {
                     try {
                         const editMovie: EditMovie = await this.tmdbService.searchMovieByTmdbId(tmdbId, lang);
                         const msg: ReturnMessage   = await this.movieService.insertNewMovie(editMovie, false);
-                        logTmdb.push(`[TMDB INSERT] tmdbId=${tmdbId} → ${msg.message}`);
+                        logTmdb.push(`${this.i18nService.t("common.LIBRARY.TMDB_INSERT")} tmdbId=${tmdbId} → ${msg.message}`);
                     } catch (e) {
-                        logTmdb.push(`[TMDB INSERT ERREUR] tmdbId=${tmdbId} — ${e}`);
+                        logTmdb.push(`${this.i18nService.t("common.LIBRARY.TMDB_INSERT_ERROR")} tmdbId=${tmdbId} — ${e}`);
                     }
                 }
 
@@ -444,7 +446,7 @@ export class LibraryService {
             }
         } catch (error: any) {
             const result: ReturnMessage = {
-                id: -1, state: false, message: `Error: ${error?.message ?? error}`
+                id: -1, state: false, message: `${this.i18nService.t('common.ERROR')}: ${error?.message ?? error}`
             };
             await conn.query(
                 `UPDATE Library SET log = ? WHERE id = ?`,
@@ -493,21 +495,21 @@ export class LibraryService {
                         return {
                             id: -1,
                             state: false,
-                            message: `Aucune modification`
+                            message: this.i18nService.t("common.LIBRARY.NO_CHANGES")
                         }
                     }
                 } else {
                     return {
                         id: -1,
                         state: false,
-                        message: `La librairie ou le média est bloqué (traitement en cours)`
+                        message: this.i18nService.t("common.LIBRARY.LIBRARY_LOCK")
                     }
                 }
             } else {
                 return {
                     id: -1,
                     state: false,
-                    message: `Médiathèque introuvable, id incorrect`
+                    message: this.i18nService.t("common.LIBRARY.MEDIA_LIBRARY_UNFOUND")
                 }
             }
         } catch(error: any) {
@@ -515,7 +517,7 @@ export class LibraryService {
             return {
                 id: -1,
                 state: false,
-                message: `Error : ${error.sqlMessage}`
+                message: `${this.i18nService.t('common.ERROR')}: ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -526,16 +528,16 @@ export class LibraryService {
         return {
             id: 0,
             state: true,
-            message: `Identifiant TMDB du film modifées`
+            message: this.i18nService.t("common.LIBRARY.TMDB_UPDATED")
         }
     }
     private async modifyTmdbIdFromSeriesLibrary(mediaLibrary: MediaLibrary, tmdbId: number, conn: mariadb.PoolConnection): Promise<ReturnMessage> {
 
-        if (mediaLibrary.type !== 'SERIES') {
+        if (mediaLibrary.type !== MediaType.SERIES) {
             return {
                 id:      -1,
                 state:   false,
-                message: `Seules les lignes de type SERIES peuvent être modifiées`,
+                message: this.i18nService.t("common.LIBRARY.ONLY_SERIES_CAN_MODIFIED")
             };
         }
 
@@ -568,7 +570,7 @@ export class LibraryService {
         return {
             id: 0,
             state:   true,
-            message: `Identifiant TMDB de la série modifiées`,
+            message: this.i18nService.t("common.LIBRARY.TMDB_UPDATED"),
             other: updatedIds
         };
     }
@@ -598,21 +600,21 @@ export class LibraryService {
                     return {
                         id: -1,
                         state: false,
-                        message: `La librairie ou le média est bloqué (traitement en cours)`
+                        message: this.i18nService.t("common.LIBRARY.LIBRARY_LOCK")
                     }
                 }
             } else {
                 return {
                     id: -1,
                     state: false,
-                    message: `Médiathèque introuvable, id incorrect`
+                    message: this.i18nService.t("common.LIBRARY.MEDIA_LIBRARY_UNFOUND")
                 }
             }
         } catch(error: any) {
             return {
                 id: -1,
                 state: false,
-                message: `Error : ${error.sqlMessage}`
+                message: `${this.i18nService.t('common.ERROR')}: ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -674,21 +676,21 @@ export class LibraryService {
                     return {
                         id: -1,
                         state: false,
-                        message: `La librairie ou le média est bloqué (traitement en cours)`
+                        message: this.i18nService.t("common.LIBRARY.LIBRARY_LOCK")
                     }
                 }
             } else {
                 return {
                     id: -1,
                     state: false,
-                    message: `Médiathèque introuvable, id incorrect`
+                    message: this.i18nService.t("common.LIBRARY.MEDIA_LIBRARY_UNFOUND")
                 }
             }
         } catch(error: any) {
             return {
                 id: -1,
                 state: false,
-                message: `Error : ${error.sqlMessage}`
+                message: `${this.i18nService.t('common.ERROR')}: ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -704,7 +706,7 @@ export class LibraryService {
                 
                 const isUnlocked: boolean = await this.getIfLibraryIsUnlock(libraryId, conn);
                 if (!isUnlocked) {
-                    return { id: -1, state: false, message: `La librairie est bloqué (un traitement est en cours)` };
+                    return { id: -1, state: false, message: this.i18nService.t("common.LIBRARY.LIBRARY_LOCK") };
                 }
 
                 await this.lockLibrary(libraryId, conn);
@@ -727,7 +729,8 @@ export class LibraryService {
 
                     const resultMediaLibrary = await conn.query(`DELETE FROM Media_Library WHERE libraryId = ?`, [libraryId]);
                     const resultLibrary = await conn.query(`DELETE FROM Library WHERE id = ?`, [libraryId]);
-                    const message: string = `Media Librairie supprimé (${resultMediaLibrary.affectedRows}) \n librairie supprimé (${resultLibrary.affectedRows})`;
+                    const message: string = `${this.i18nService.t("common.LIBRARY.MEDIA_LIBRARY_DELETED")} (${resultMediaLibrary.affectedRows}) \n 
+                                            ${this.i18nService.t("common.LIBRARY.LIBRARY_DELETED")} (${resultLibrary.affectedRows})`;
                     await conn.commit();
 
                     return {
@@ -745,14 +748,14 @@ export class LibraryService {
                 return {
                     id: -1,
                     state: false,
-                    message: `Librairie introuvable, id incorrect` 
+                    message: this.i18nService.t("common.LIBRARY.LIBRARY_UNFOUND")
                 }
             }
         } catch(error: any) {
             const messages = {
                 id: -1,
                 state: false,
-                message: `Error : ${error.sqlMessage}`
+                message: `${this.i18nService.t('common.ERROR')}: ${error.sqlMessage}`
             }
             return messages;
         } finally {
@@ -868,13 +871,13 @@ export class LibraryService {
                 `SELECT * FROM Library WHERE id = ?`, [libraryId]
             );
             if (libraries.length === 0) {
-                return { id: -1, state: false, message: `Librairie introuvable` };
+                return { id: -1, state: false, message: this.i18nService.t("common.LIBRARY.LIBRARY_UNFOUND") };
             }
             const library = libraries[0];
 
             const isUnlocked: boolean = await this.getIfLibraryIsUnlock(libraryId, conn);
             if (!isUnlocked) {
-                return { id: -1, state: false, message: `La librairie est bloquée (un traitement est en cours)` };
+                return { id: -1, state: false, message: this.i18nService.t("common.LIBRARY.LIBRARY_LOCK") };
             }
 
             await this.lockLibrary(libraryId, conn);
@@ -899,7 +902,7 @@ export class LibraryService {
                         [mediaLibraryId]
                     );
                     if (targetML.length === 0) {
-                        return { id: -1, state: false, message: `Media_Library introuvable ou non de type SERIES` };
+                        return { id: -1, state: false, message: this.i18nService.t("common.LIBRARY.MEDIA_LIBRARY_UNFOUND_OR_NOT_SERIES") };
                     }
                     const targetFolderPath = targetML[0].path;
                     // scanOneSeries attend (seriesDir, rootDir) — rootDir sert uniquement
@@ -954,7 +957,7 @@ export class LibraryService {
 
                     if (existingSeries) {
                         seriesMLId = existingSeries.id;
-                        logKept.push(`[SERIES] ${series.seriesTitle} (${series.year}) — conservé`);
+                        logKept.push(`${this.i18nService.t("common.LIBRARY.SERIES")} ${series.seriesTitle} (${series.year}) — ${this.i18nService.t("common.LIBRARY.RETAINED")}`);
                     } else {
                         seriesMLId = this.generateIdUuid();
                         await conn.query(
@@ -968,7 +971,7 @@ export class LibraryService {
                             [seriesMLId, series.seriesTitle, series.year ?? 0,
                             series.folderPath, 0, libraryId]
                         );
-                        logInserted.push(`[SERIES] ${series.seriesTitle} (${series.year}) → ${seriesMLId}`);
+                        logInserted.push(`${this.i18nService.t("common.LIBRARY.SERIES")} ${series.seriesTitle} (${series.year}) → ${seriesMLId}`);
                     }
 
                     // ── 3b. Recherche TMDB (uniquement si inconnu) ────────────
@@ -985,7 +988,7 @@ export class LibraryService {
                                 );
                             }
                         } catch (e) {
-                            logTmdb.push(`[SERIES TMDB] ${series.seriesTitle} — erreur: ${e}`);
+                            logTmdb.push(`${this.i18nService.t("common.LIBRARY.SERIES_TMDB")} ${series.seriesTitle} — ${this.i18nService.t("common.LIBRARY.ERROR")}: ${e}`);
                         }
                     }
 
@@ -999,7 +1002,7 @@ export class LibraryService {
 
                         if (existingSeason) {
                             seasonMLId = existingSeason.id;
-                            logKept.push(`  [SEASON ${season.seasonNumber}] conservé`);
+                            logKept.push(`  [${this.i18nService.t("common.LIBRARY.SEASON")} ${season.seasonNumber}] ${this.i18nService.t("common.LIBRARY.RETAINED")}`);
                         } else {
                             seasonMLId = this.generateIdUuid();
                             await conn.query(
@@ -1017,7 +1020,7 @@ export class LibraryService {
                                 seriesMLId, season.seasonNumber]
                             );
                             logInserted.push(
-                                `  [SEASON ${season.seasonNumber}] ${season.folderPath} → ${seasonMLId} (parent: ${seriesMLId})`
+                                `  [${this.i18nService.t("common.LIBRARY.SEASON")} ${season.seasonNumber}] ${season.folderPath} → ${seasonMLId} (${this.i18nService.t("common.LIBRARY.PARENT")}: ${seriesMLId})`
                             );
                         }
 
@@ -1028,7 +1031,7 @@ export class LibraryService {
 
                             const existingEpisode = existingMLByPath.get(this.normalizePath(episode.filePath));
                             if (existingEpisode) {
-                                logKept.push(`    [EP ${episode.episodeNumber}] ${episode.filePath} — conservé`);
+                                logKept.push(`    [${this.i18nService.t("common.LIBRARY.EP")} ${episode.episodeNumber}] ${episode.filePath} — ${this.i18nService.t("common.LIBRARY.RETAINED")}`);
                                 continue;
                             }
 
@@ -1057,11 +1060,11 @@ export class LibraryService {
                                     metadata.resolution ?? 'SD']
                                 );
                                 logInserted.push(
-                                    `    [EP ${episode.episodeNumber}] ${episode.filePath} → ${episodeMLId} (parent: ${seasonMLId}, ${metadata.duration}ms, ${metadata.resolution})`
+                                    `    [${this.i18nService.t("common.LIBRARY.EP")} ${episode.episodeNumber}] ${episode.filePath} → ${episodeMLId} (${this.i18nService.t("common.LIBRARY.PARENT")}: ${seasonMLId}, ${metadata.duration}ms, ${metadata.resolution})`
                                 );
                             } catch (e) {
                                 logInserted.push(
-                                    `    [EP ${episode.episodeNumber}] ${episode.filePath} — ERREUR metadata: ${e}`
+                                    `    [${this.i18nService.t("common.LIBRARY.EP")} ${episode.episodeNumber}] ${episode.filePath} — ${this.i18nService.t("common.LIBRARY.ERROR_METADAT")}: ${e}`
                                 );
                             }
                         }
@@ -1075,9 +1078,9 @@ export class LibraryService {
 
                 if (toDelete.length > 0) {
                     const toDeleteByType = {
-                        series:   toDelete.filter((ml) => ml.type === 'SERIES'),
-                        seasons:  toDelete.filter((ml) => ml.type === 'SEASON'),
-                        episodes: toDelete.filter((ml) => ml.type === 'EPISODE'),
+                        series:   toDelete.filter((ml) => ml.type === MediaType.SERIES),
+                        seasons:  toDelete.filter((ml) => ml.type === MediaType.SEASON),
+                        episodes: toDelete.filter((ml) => ml.type === MediaType.EPISODE),
                     };
 
                     for (const ml of toDeleteByType.series) {
@@ -1087,9 +1090,9 @@ export class LibraryService {
                         );
                         for (const media of medias) {
                             const msg = await this.seriesService.deleteSeriesById(media.id);
-                            logDeleted.push(`[DEL SERIES] mediaId=${media.id} → ${msg.message}`);
+                            logDeleted.push(`${this.i18nService.t("common.LIBRARY.DEL_SERIES")} mediaId=${media.id} → ${msg.message}`);
                         }
-                        logDeleted.push(`[DEL ML SERIES] ${ml.path}`);
+                        logDeleted.push(`${this.i18nService.t("common.LIBRARY.DEL_ML_SERIES")} ${ml.path}`);
                     }
 
                     if (toDeleteByType.seasons.length > 0) {
@@ -1109,10 +1112,10 @@ export class LibraryService {
                             }
                             for (const [seriesId, seasons] of seriesIdGroups) {
                                 const msg = await this.seriesService.deleteManySeasons(seasons, seriesId.toString(), conn);
-                                logDeleted.push(`[DEL SEASONS] seriesId=${seriesId} → ${msg}`);
+                                logDeleted.push(`${this.i18nService.t("common.LIBRARY.DEL_SEASONS")} seriesId=${seriesId} → ${msg}`);
                             }
                         }
-                        logDeleted.push(...toDeleteByType.seasons.map((ml) => `[DEL ML SEASON] ${ml.path}`));
+                        logDeleted.push(...toDeleteByType.seasons.map((ml) => `${this.i18nService.t("common.LIBRARY.DEL_ML_SEASON")} ${ml.path}`));
                     }
 
                     if (toDeleteByType.episodes.length > 0) {
@@ -1132,10 +1135,10 @@ export class LibraryService {
                             }
                             for (const [seriesId, episodes] of seriesIdGroups) {
                                 const msg = await this.seriesService.deleteManyEpisodes(episodes, seriesId.toString(), conn);
-                                logDeleted.push(`[DEL EPISODES] seriesId=${seriesId} → ${msg}`);
+                                logDeleted.push(`${this.i18nService.t("common.LIBRARY.DEL_EPISODES")} seriesId=${seriesId} → ${msg}`);
                             }
                         }
-                        logDeleted.push(...toDeleteByType.episodes.map((ml) => `[DEL ML EPISODE] ${ml.path}`));
+                        logDeleted.push(...toDeleteByType.episodes.map((ml) => `${this.i18nService.t("common.LIBRARY.DEL_ML_EPISODE")} ${ml.path}`));
                     }
 
                     const toDeleteIds = toDelete.map((ml) => ml.id);
@@ -1168,9 +1171,9 @@ export class LibraryService {
                         const editSeries = await this.tmdbService.searchSeriesByTmdbId(ml.tmdbId, ml.id, lang);
                         editSeries.mediaLibraryId = ml.id;
                         const msg = await this.seriesService.insertNewSeries(editSeries, true);
-                        logTmdb.push(`[TMDB INSERT] tmdbId=${ml.tmdbId} → ${msg.message}`);
+                        logTmdb.push(`${this.i18nService.t("common.LIBRARY.TMDB_INSERT")} tmdbId=${ml.tmdbId} → ${msg.message}`);
                     } catch (e) {
-                        logTmdb.push(`[TMDB INSERT ERROR] tmdbId=${ml.tmdbId} — erreur: ${e}`);
+                        logTmdb.push(`${this.i18nService.t("common.LIBRARY.TMDB_INSERT_ERROR")} tmdbId=${ml.tmdbId} — erreur: ${e}`);
                     }
                 }
 
@@ -1241,7 +1244,7 @@ export class LibraryService {
                                 const msg = await this.seriesService.insertManySeasons(
                                     newEditSeasons, seriesMediaId, formatedTitle, conn2
                                 );
-                                logTmdb.push(`[TMDB NEW SEASONS] tmdbId=${ml.tmdbId} → ${msg}`);
+                                logTmdb.push(`${this.i18nService.t("common.LIBRARY.TMDB_NEW_SEASONS")} tmdbId=${ml.tmdbId} → ${msg}`);
                             }
 
                             const newEpisodeMLRows: {
@@ -1271,7 +1274,7 @@ export class LibraryService {
                                             id:             tmdbEpisode?.id          ?? 0,
                                             seasonId:       seasonDbId,
                                             mediaLibraryId: row.mlId,
-                                            name:           tmdbEpisode?.name        ?? `Épisode ${row.episodeNumber}`,
+                                            name:           tmdbEpisode?.name        ?? `${this.i18nService.t("common.LIBRARY.EPISODE")} ${row.episodeNumber}`,
                                             episodeNumber:  row.episodeNumber,
                                             srcPoster:      tmdbEpisode?.srcPoster   ?? null,
                                             description:    tmdbEpisode?.description ?? undefined,
@@ -1282,20 +1285,20 @@ export class LibraryService {
                                     const msg = await this.seriesService.insertManyEpisodes(
                                         newEditEpisodes, seriesMediaId, seasonDbId, formatedTitle, conn2
                                     );
-                                    logTmdb.push(`[TMDB NEW EPISODES] seasonId=${seasonDbId} → ${msg}`);
+                                    logTmdb.push(`${this.i18nService.t("common.LIBRARY.TMDB_NEW_EPISODES")} seasonId=${seasonDbId} → ${msg}`);
                                 }
                             }
 
                             await conn2.commit();
                         } catch (e) {
                             await conn2.rollback();
-                            logTmdb.push(`[TMDB NEW CONTENT ERROR] tmdbId=${ml.tmdbId} — erreur: ${e}`);
+                            logTmdb.push(`${this.i18nService.t("common.LIBRARY.TMDB_NEW_CONTENT_ERROR")} tmdbId=${ml.tmdbId} — erreur: ${e}`);
                         } finally {
                             await conn2.release();
                         }
 
                     } catch (e) {
-                        logTmdb.push(`[TMDB NEW CONTENT ERROR] tmdbId=${ml.tmdbId} — erreur: ${e}`);
+                        logTmdb.push(`${this.i18nService.t("common.LIBRARY.TMDB_NEW_CONTENT_ERROR")} tmdbId=${ml.tmdbId} — erreur: ${e}`);
                     }
                 }
 
@@ -1321,7 +1324,7 @@ export class LibraryService {
 
         } catch (error: any) {
             const result: ReturnMessage = {
-                id: -1, state: false, message: `Error: ${error?.message ?? error}`
+                id: -1, state: false, message: `${this.i18nService.t('common.ERROR')}: ${error?.message ?? error}`
             };
             await conn.query(
                 `UPDATE Library SET log = ? WHERE id = ?`,
@@ -1357,11 +1360,11 @@ export class LibraryService {
             const episodeBySeasonAndNum = new Map<string,  MediaLibrary[]>();
     
             for (const row of rows) {
-                if (row.type === 'SERIES') {
+                if (row.type === MediaType.SERIES) {
                     seriesML = row;
-                } else if (row.type === 'SEASON' && row.seasonNumber != null) {
+                } else if (row.type === MediaType.SEASON && row.seasonNumber != null) {
                     seasonByNumber.set(row.seasonNumber, row);
-                } else if (row.type === 'EPISODE' && row.seasonNumber != null && row.episodeNumber != null) {
+                } else if (row.type === MediaType.EPISODE && row.seasonNumber != null && row.episodeNumber != null) {
                     // Clé "seasonNumber_episodeNumber" — plusieurs épisodes peuvent
                     // partager la même clé quand episodeNumber = 0 (bonus non reconnus).
                     // On stocke dans un tableau pour ne perdre aucun épisode.
@@ -1564,7 +1567,7 @@ export class LibraryService {
             const tmdbNodeSet = new Set<string>();
     
             for (const row of duplicateRows) {
-                const isMovie    = row.type === 'MOVIE';
+                const isMovie    = row.type === MediaType.MOVIE;
                 const tmdbKey    = `${row.tmdbId}_${row.type}`;
                 const nodeList   = isMovie ? movieNodes  : seriesNodes;
                 const linkList   = isMovie ? movieLinks  : seriesLinks;

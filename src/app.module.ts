@@ -11,10 +11,11 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { LoggerMiddleware } from './common-middleware/logger-middle-ware';
 import { LoggerService } from './common-service/logger.service';
 
-import { I18nModule, HeaderResolver, QueryResolver, AcceptLanguageResolver } from 'nestjs-i18n';
+import { I18nModule } from 'nestjs-i18n';
+import { HeaderLanguageResolver } from './i18n/resolver/i18n-lang.resolver';
+
 import * as path from 'path';
 
-// modules (inchangés)
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { MediaModule } from './media/media.module';
@@ -39,14 +40,13 @@ import { LibraryModule } from './library/library.module';
 
 @Module({
   imports: [
-    // 🔥 I18N AJOUT
     I18nModule.forRoot({
       fallbackLanguage: 'en',
       loaderOptions: {
         path: path.join(__dirname, '/i18n/'),
         watch: true,
       },
-      resolvers: [AcceptLanguageResolver], // lit le header Accept-Language
+      resolvers: [HeaderLanguageResolver]
     }),
 
     ThrottlerModule.forRoot([
@@ -74,7 +74,6 @@ import { LibraryModule } from './library/library.module';
       inject: [ConfigService],
     }),
 
-    // modules existants
     UserModule,
     AuthModule,
     MediaModule,

@@ -21,6 +21,7 @@ import { TopMediaResponse } from '../dto/top-media-response.interface';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { MediaTypeFilter } from '../dto/media-type-filter.interface';
 import { MediaService } from 'src/media/service/media/media.service';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class StatUserService {
@@ -35,6 +36,7 @@ export class StatUserService {
     @Inject(forwardRef(() => SeriesService))
     private readonly seriesService: SeriesService,
     private readonly formatPathService: FormatPathService,
+    private readonly i18nService: I18nService
   ) {}
 
   public getQuerySelectMediaInProgress(): string {
@@ -124,7 +126,7 @@ export class StatUserService {
         });
         return {
           id: userId,
-          name: 'Vue récemment',
+          name: this.i18nService.t("common.STAT_USER.RECENTLY_VIEWED"),
           selectionType: SelectionType.NORMAL_POSTER,
           mediaList: medias,
         };

@@ -4,11 +4,13 @@ import * as mariadb from 'mariadb';
 import { Version } from '../dto/version.interface';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { OS } from '../dto/os.enum';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class VersionService {
 
-    constructor( @Inject(DATABASE_POOL) private readonly pool: mariadb.Pool) { }
+    constructor(@Inject(DATABASE_POOL) private readonly pool: mariadb.Pool,
+        private readonly i18nService: I18nService) { }
 
     public async getLastVersionByOS(OS: OS, conn: mariadb.PoolConnection | null = null): Promise<Version | null> {
         const query: string = `
@@ -90,20 +92,20 @@ export class VersionService {
                     return {
                         id: 0,
                         state: true,
-                        message: "Mise à jour effectué",
+                        message: this.i18nService.t("common.VERSION.UPDATE_COMPLETED"),
                         other: lastVersion
                     }
                 } else {
                     return {
                         id: -1,
-                        message: 'Format de la version incorrect',
+                        message: this.i18nService.t("common.VERSION.INCORRECT_VERSION_FORMAT"),
                         state: false
                     }
                 }
             } else {
                 return {
                     id: -1,
-                    message: 'OS incorrecte',
+                    message: this.i18nService.t("common.VERSION.INCORRECT_OS"),
                     state: false
                 }
             }

@@ -4,14 +4,13 @@ import { SelectionService } from './service/selection.service';
 import { MediaModule } from 'src/media/media.module';
 import { SeriesModule } from 'src/series/series.module';
 import { MovieModule } from 'src/movie/movie.module';
-import { SearchService } from 'src/common-service/search.service';
 import { CategoryModule } from 'src/category/category.module';
 import { UserModule } from 'src/user/user.module';
 import { StatUserModule } from 'src/stat-user/stat-user.module';
 
 @Module({
   imports: [UserModule, MediaModule, SeriesModule, MovieModule, CategoryModule, StatUserModule],
-  providers: [SelectionService, SearchService],
+  providers: [SelectionService],
   controllers: [SelectionController],
   exports: [SelectionService]
 })

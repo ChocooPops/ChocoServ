@@ -17,6 +17,7 @@ import { Node } from 'src/common-interface/node.interface';
 import { MediaService } from 'src/media/service/media/media.service';
 import { TmdbService } from 'src/tmdb/service/tmdb.service';
 import { CategoryTmdb } from '../dto/category-tmbd.interface';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class CategoryService {
@@ -28,7 +29,8 @@ export class CategoryService {
         @Inject(forwardRef(() => SeriesService))
         private readonly seriesService: SeriesService,
         @Inject(forwardRef(() => TmdbService))
-        private readonly tmdbService: TmdbService
+        private readonly tmdbService: TmdbService,
+        private readonly i18nService: I18nService
     ) { }
 
     public async getGraphCategory(): Promise<Graph> {
@@ -181,7 +183,7 @@ export class CategoryService {
                 returnedMessage = {
                     id: 1,
                     state: true,
-                    message: `Categorie insérée avec succès \n ${messageMediaSelection}`,
+                    message: `${this.i18nService.t("common.CATEGORY.CATEGORY_SUCCESSFULLY_ADDED")} \n ${messageMediaSelection}`,
                     other: {
                         id: categoryId,
                         translationKey: newCategory.translationKey
@@ -192,7 +194,7 @@ export class CategoryService {
                 returnedMessage = {
                     id: -1,
                     state: false,
-                    message: `Erreur : ${error.sqlMessage}`
+                    message: `${this.i18nService.t("common.ERROR")} : ${error.sqlMessage}`
                 }
             } finally {
                 await conn.release();
@@ -201,7 +203,7 @@ export class CategoryService {
             returnedMessage = {
                 id: -1,
                 state: false,
-                message: `Le nom de la categorie ne doit pas être vide`
+                message: this.i18nService.t("common.CATEGORY.CATEGORY_NAME_CANNOT_EMPTY")
             }
         }
         return returnedMessage;
@@ -226,7 +228,7 @@ export class CategoryService {
                 return {
                     id: 1,
                     state: true,
-                    message: `Categorie modifiée avec succès \n ${messageMediaSelection}`,
+                    message: `${this.i18nService.t("common.CATEGORY.CATEGORY_SUCCESSFULLY_UPDATED")} \n ${messageMediaSelection}`,
                     other: {
                         id: category.id,
                         translationKey: categoryUpdated.translationKey
@@ -236,7 +238,7 @@ export class CategoryService {
                 return {
                     id: -1,
                     state: false,
-                    message: "Categorie introuvable"
+                    message: this.i18nService.t("common.CATEGORY.CATEGORY_NOT_FOUND")
                 }
             }
         } catch (error: any) {
@@ -244,7 +246,7 @@ export class CategoryService {
             return {
                 id: -1,
                 state: false,
-                message: `Erreur : ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")} : ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -262,7 +264,7 @@ export class CategoryService {
             returnMessage = {
                 id: 1,
                 state: true,
-                message: 'Categorie supprimée avec succès',
+                message: this.i18nService.t("common.CATEGORY.CATEGORY_SUCCESSFULLY_DELETED"),
                 other: categoryId
             }
         } catch (error: any) {
@@ -270,7 +272,7 @@ export class CategoryService {
             returnMessage = {
                 id: -1,
                 state: false,
-                message: `Erreur : ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")} : ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -289,9 +291,9 @@ export class CategoryService {
                         INSERT INTO Media_Category (categoryId, mediaId)
                         VALUES ${medias.map(() => '(?, ?)').join(', ')}`;
                 await conn.query(query, values);
-                return `${medias.length} media ont été ajouté dans la categorie`;
+                return this.i18nService.t('common.CATEGORY.ADDED_TO_CATEGORY', { args: { count: medias.length } });
             } else {
-                return "Aucun media n'est à ajouter dans la categorie";
+                return this.i18nService.t("common.CATEGORY.NO_MEDIA_TO_ADD_INTO_CATEGORY");
             }
         } catch (error) {
             throw error;

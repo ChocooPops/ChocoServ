@@ -1,3 +1,350 @@
 {
-    "TEST": "Mots de passe incorrectsssssssssss"
+    "ERROR": "Erreur",
+    
+    "AUTH": {
+        "ACCOUNT_SUSPENDED": "Utilisateur suspendu",
+        "INCORRECT_PASSWORD": "Mots de passe incorrect",
+        "ACCOUNT_NOT_ACTIVATED": "Utilisateur non activé",
+        "EMAIL_ADRESS_NOT_FOUND": "Email introuvable",
+
+        "REGISTRATION_REQUEST_PENDING_APPROVAL": "Votre demande d'inscription est en attente de validation",
+        "USERNAME_ALREADY_EXISTS": "Cette identifiant existe déjà",
+        "CODE_ALREADY_SENT": "Un code vous a déjà été envoyé",
+        "CODE_SEND": "Un code de vérification vous a été envoyé",
+        "INVALID_USERNAME": "Pseudo invalide (minimum 5 caractères)",
+        "INVALID_EMAIL_ADDRESS": "Email invalide",
+
+        "REGISTRATION_REQUEST_SENT": "Votre demande d'inscription a été envoyé",
+        "INVALID_VERIFICATION_CODE": "Code de vérification incorrecte",
+        "USER_ALREADY_REGISTERED": "Utilisateur déjà enregistré",
+
+        "CODE_SENT": "Code envoyé",
+        "MISSING_INVALID_TOKEN": "Token manquant ou mal formé",
+        "USER_DISABLED_OR_NOT_EXIST": "Utilisateur désactivé ou inexistant",
+        "INVALID_EXPIRED_TOKEN": "Token invalide ou expiré",
+
+        "UNAUTHENTICATED_USER": "Utilisateur non authentifié",
+        "USER_ACCOUNT_NOT_ADMIN": "Compte utilisateur non admin"
+    },
+
+    "USER": {
+        "MEDIA_REMOVED_FROM_LIST": "Media supprimé de votre liste",
+        "MEDIA_ADDED_FROM_LIST": "Media ajouté à de votre liste",
+
+        "PSEUDO_MODIFIED": "Le pseudo a été modifié - {oldPseudo} -> {newPseudo}",
+        "DATE_BORN_MODIFIED": "La date de naissance a été modifiée - {oldDateBorn} -> {newDateBorn}",
+        "PASSWORD_SUCCESSFULLY_CHANGED": "Mots de passe modifé avec succès",
+        "PASSWORD_NOT_SECURE": "Sécurité du mots de passe insuffisant (au moins 10 caractères)",
+        "PASSWORD_ALREADY_REGISTERED": "Ce mots de passe est déjà enregistré",
+        "DIFFERENT_PASSWORD": "Mots de passe différents",
+        "NO_CHANGES": "Aucune modification",
+
+        "INCORRECT_DATE_BORN": "La date de naissance est incorrecte",
+        "INCORRECT_PSEUDO": "Pseudo invalide (minimum 5 caractères)",
+
+        "ROLE_MODIFIED": "Role modifié",
+        "DEACTIVATED_USER_CANNOT_BE_SUSPENDED": "Un utilisateur non activé ne peut pas être suspendue",
+        "ADMIN_CONNOT_BE_MODIFIED": "Le rôle de l'admin ne peut pas être modifié",
+        "ROLE_ALREADY_REGISTERED": "Role déjà enregistré",
+        "ROLE_NOT_EXISTS": "Role non existant",
+        "USER_NOT_FOUND": "Utilisateur introuvable",
+
+        "ADMIN_CANNOT_BE_EDITED": "Un Admin ne peut pas être modifié",
+        "USER_DELETED": "Utilisateur supprimé",
+        "USER_UNFOUND": "Utilisateur introuvable"
+    },
+
+    "SUPPORT": {
+        "BUG_SUBJECT": "Bug & Dysfonctionnement",
+        "ARCHITECTURE_SUBJECT": "Amélioration de l'architecture / ergonomie",
+        "ADD_CONTENT_SUBJECT": "Demande d'ajout de contenu",
+        "MODIFY_CONTENT_SUBJECT": "Demande de modification du contenu",
+
+        "AREA": {
+            "HOME_PAGE": "Page d'accueil",
+            "MOVIES_PAGE": "Page des films",
+            "SERIES_PAGE": "Page des séries",
+            "SEARCH_PAGE": "Page de recherche",
+            "LICENSES_PAGE": "Page des licenses",
+            "EDITION_PAGE": "Page d'édition",
+            "VIDEO_PLAYER": "Lecture de la vidéo",
+            "VIDEO_PLAYER_PAGE": "Page de lecture de la vidéo",
+
+            "ADD_NEW_MOVIE": "Ajouter un nouveau film sur la plateforme",
+            "ADD_MOVIE_TO_SELECTION": "Ajouter un film dans une sélection",
+            "ADD_NEW_SERIES": "Ajouter une nouvelle série sur la plateforme",
+            "ADD_SERIES_TO_SELECTION": "Ajouter une série dans une sélection",
+            "ADD_NEW_LICENSE": "Ajouter une nouvelle license",
+
+            "EDIT_LICENSE": "Modifier une license (titre, background, logo)",
+            "EDIT_MOVIE": "Modifier un film (titre, catégorie, background, logo, affiche)",
+            "EDIT_SERIES": "Modifier une série (titre, catégorie, background, affiche)"
+        },
+
+        "FORM_SUBMITTED": "Le formulaire a été envoyé",
+        "DESCRIPTION_CANNOT_EMPTY_INSUFFICIENT": "La description ne doit pas être vide ou est insuffisante",
+        "REQUIERED_FIELD": "La zone concernée n'a pas été indiquée",
+        "SUBJECT_CANNOT_EMPTY": "Le sujet ne peut pas être vide"
+    },
+
+    "MAIL": {
+        "COMMON": {
+            "COPYRIGHT": "© 2025 - Tous droits réservés",
+            "REGARDS": "Cordialement,"
+        },
+
+        "VERIFICATION_CODE": {
+            "SUBJECT": "Vérification de l'email",
+            "HELLO": "Bonjour,",
+            "INSTRUCTION": "Saisissez ce code pour confirmer votre adresse email :",
+            "VALIDITY": "Ce code est valable pendant 5 minutes et peut-être utilisé qu'une seule fois.",
+            "EMAIL_CONFIRM": "En saisissant ce code, vous confirmerez également l'adresse email associée à votre compte.",
+            "IGNORE": "Si vous n'avez pas cherché à vous connecter, vous pouvez juste ignorer cet email."
+        },
+
+        "PASSWORD": {
+            "SUBJECT": "Nouveau mot de passe",
+            "WELCOME": "Bienvenue {pseudo} !!! Votre compte a été activé.",
+            "NEW_PASSWORD": "Vous trouverez ci-dessous votre nouveau mot de passe :",
+            "CHANGE_PASSWORD": "Après votre première connexion avec ce mot de passe, nous vous invitons à vous rendre dans les paramètres de votre compte, rubrique « Gérer le profil », afin de le modifier."
+        },
+
+        "SUSPENDED": {
+            "SUBJECT": "Compte suspendu",
+            "HELLO": "Salut {pseudo} 👋",
+            "REASON": "Votre compte a été suspendu pour des raisons purement personnelles.",
+            "COMPLAINT": "Vous pouvez bien sûr envoyer une réclamation qu'on ne lira pas à défaut de se torcher le cul avec 🧻.",
+            "BACK_TO_PAID": "Mais en attendant, pourquoi ne pas retourner à vos forfaits payants ? Les Netflix, les Amazon et Disneyplus qui financent l'Etat d'Israël... Pourquoi ne pas retourner dans votre vie d'esclave à quémander qu'on fasse le travail à votre place ?",
+            "PAY_TO_SUFFER": "Payez pour qu'on vous chie dessus ça vous manque non 💩?",
+            "NO_TEARS": "Si vous pensiez qu'on va pleurer pour vous… nope 😎.",
+            "GO_BACK": "Retournez donc à vos séries, vos jeux, ou vos sites pleins de pubs clignotantes et pop-ups imprévisibles avec vos goûts lamentables.",
+            "ADVICE": "Mais ☝️, Conseil d'ami : profitez-en pour faire une pause ☕. Le monde ne va pas s'effondrer parce que votre compte est suspendu, même si c'est un peu la honte de vous faire hagar comme ça 🤭.",
+            "GOODBYE": "Allez, bisous et au revoir 😘 !"
+        },
+
+        "FORM": {
+            "THEME": "Thème",
+            "DESCRIPTION": "Description"
+        }
+    },
+
+    "POSTER": {
+        "MEDIA_POSTER": "Media Poster",
+        "POSTER": "Poster",
+        "DELETED": "supprimé",
+        "NO_CHANGES": "aucun changement",
+
+        "POSTER_DELETED": "Poster supprimé ({count})",
+        "POSTER_INSERTED": "Poster inséré ({count})",
+
+        "POSTER_LOGO_INSERTED": "Logo inséré",
+        "NO_POSTER_LOGO_INSERTED": "Aucun logo n'est à ajouter",
+
+        "POSTER_BACK_INSERTED": "Arrière plan inséré",
+        "NO_POSTER_BACK_INSERTED": "Aucun arrière plan n'a été inséré",
+
+        "POSTER_VERTICAL_INSERTED": "Posters verticaux insérés",
+        "POSTER_VERTICAL_DELETED": "Poster vertical supprimé",
+        "NO_POSTER_VERTICAL_MODIFIED": "Aucun poster horizontal n'a été modifié",
+        "NO_POSTER_VERTICAL_INSERTED": "Aucun poster vertical n'est à insérer",
+
+        "POSTER_HORIZONTAL_INSERTED": "Posters horizontaux insérés",
+        "NO_POSTER_HORIZONTAL_INSERTED": "Aucun poster horizontal n'est à insérer",
+        "POSTER_HORIZONTAL_DELETED": "Poster horizontal supprimé",
+        "POSTER_HORIZONTAL_MODIFIED": "Aucun poster horizontal n'a été modifié",
+
+        "POSTER_SEASON_INSERTED": "Poster saison inséré",
+        "POSTER_EPISODE_INSERTED": "Poster épisode inséré",
+
+        "POSTER_LICENSE_INSERTED": "{field} inséré",
+        "NO_POSTER_LICENSE_INSERTED": "Aucun {field} n'est à ajouter",
+
+        "POSTER_CREDIT_INSERTED": "Posters credit insérés",
+        "NO_POSTER_CREDIT_INSERTED": "Aucun poster de crédit n'est à ajouter"
+    },
+
+    "STAT_USER": {
+        "RECENTLY_VIEWED": "Vue récemment"
+    },
+
+    "DOCUMENTATION": {
+        "PDF_FILE_CANNOT_FOUND": "Le fichier PDF est introuvable"
+    },
+
+    "SIMILAR_TITLE": {
+        "SIMILAR_TITLE_ADDED": "Titre similaire ajouté",
+        "NO_SIMILAR_TITLES_ADDED": "Aucun titre similaire n'a été ajouté"
+    },
+
+    "CATEGORY": {
+        "CATEGORY_SUCCESSFULLY_ADDED": "Categorie insérée avec succès",
+        "CATEGORY_NAME_CANNOT_EMPTY": "Le nom de la categorie ne doit pas être vide",
+        "CATEGORY_SUCCESSFULLY_UPDATED": "Categorie modifiée avec succès",
+        "CATEGORY_NOT_FOUND": "Categorie introuvable",
+        "CATEGORY_SUCCESSFULLY_DELETED": "Categorie supprimée avec succès",
+        "NO_MEDIA_TO_ADD_INTO_CATEGORY": "Aucun media n'est à ajouter dans la categorie",
+        "ADDED_TO_CATEGORY": "{count} média(s) ont été ajouté(s) dans la catégorie"
+    },
+
+    "CREDIT": {
+        "NO_CREDIT_TO_ADD": "Aucun credit n'est à ajouter",
+        "CREDITS_ADDED": "Les crédits ont été ajoutés",
+        "CREDIT_ADDED": "Le crédit a été inséré",
+        "FAILED_TO_SAVE": "Erreur: Echec de l'enregistrement du crédit",
+        "CREDIT_FULLNAME_CANNOT_EMPTY": "Le nom complet du crédit ne doit pas être vide",
+        "TMDB_ID_UNIQUE": "L'id TMDB est déjà référencé, il doit être unique",
+        "CREDIT_MODIFIED": "Le crédit a été modifié",
+        "CREDIT_NOT_FOUND": "Crédit introuvable",
+
+        "CREDIT_LINK_TO_MEDIA_DELETED": "Credit lié aux médias ({count} supprimé)",
+        "CREDIT_DELETED": "Crédit {fullName} supprimé"
+    },
+
+    "LICENSE": {
+        "LICENSE_INSERTED": "License insérée",
+        "NAME_FIELD_CANNOT_BLANK": "Le nom de doit pas être vide",
+        "LICENSE_UPDATED": "License modifié",
+        "LICENSE_UNFOUND": "License introuvable",
+        "LICENSE_DELETED": "License supprimée avec succès",
+
+        "COUNT_MEDIA_ADDED_INTO_LICENSE": "{count} media ont été ajouté dans la license",
+        "NO_MEDIA_ADDED_INTO_LICENSE": "Aucun media n'est à ajouter dans la license",
+
+        "COUNT_SELECTION_ADDED_INTO_LICENSE": "{count} sélections ont été ajouté dans la license",
+        "NO_SELECTION_ADDED_INTO_LICENSE": "Aucune sélection n'est à ajouter dans la license",
+        "NO_CHANGES": "Aucun changement d'ordre"
+    },
+
+    "SELECTION": {
+        "SELECTION_ADDED": "Sélection insérée avec succès",
+        "SELECTION_NAME_NOT_BLANK": "Le nom de la sélection ne doit pas être vide",
+        "SELECTION_MODIFIED": "Sélection modifée avec succès",
+        "SELECTION_UNFOUND": "Sélection introuvable",
+        "SELECTION_DELETED": "Selection supprimée avec succès",
+
+        "COUNT_MEDIA_ADDED_INTO_SELECTION": "{count} media ont été ajouté dans la sélection",
+        "NO_MEDIA_ADDED_INTO_SELECTION": "Aucun media n'est à ajouter dans la sélection",
+
+        "SELECTION_ADDED_INTO_PAGE": "Sélection insérée dans la page",
+        "NOT_SELECTION_ADDED_INTO_PAGE": "Aucune sélection n'a été ajoutée dans la page"
+    },
+
+    "NEWS": {
+        "NEWS_INSERTED": "News insérées",
+        "NO_NEWS_INSERTED": "Aucune News n'a été insérée",
+        "NEWS": "News",
+        "ADDED": "Insérées",
+        "UPDATED": "Mises à jour",
+        "PROCESSED_VIDEOS": "Vidéos traitées",
+        "REUSED": "Réutilisées",
+        "DELETED": "Supprimées"
+    },
+
+    "LIBRARY": {
+        "LIBRARY_SUCCESSFULLY_LOADED": "Librairie inséré avec succès",
+        "LIBRARY_PATH_NOT_EXIST": "Le chemin de la librairie n'existe pas sur le serveur",
+        "NO_LIBARY_ASSOCIATED_TYPE": "Aucune librarie n'est associé à ce type",
+        "LIBRARY_LOCK": "La librairie est bloqué (un traitement est en cours)",
+        "FILE_ALREADY_IN_DATABASE_RETAINED": "fichier(s) déjà en base conservé(s)",
+        "TMDB_RETRIEVED": "[TMDB RÉCUPÉRÉ]",
+        "TMDB_ERROR": "[TMDB RÉCUPÉRÉ ERREUR]",
+        "DELETED_MOVIE": "[DELETED MOVIE]",
+        "DELETED_MOVIE_ERROR": "[DELETED ERREUR]",
+        "DEL_ML": "[DEL ML]",
+        "ML": "[ML]",
+        "ML_ERROR": "[ML ERREUR]",
+        "MEDIA_LIBRARY_UNFOUND": "Médiathèque introuvable, id incorrect",
+        "LIBRARY_UNFOUND": "Librairie introuvable, id incorrect",
+        "MEDIA_LIBRARY_UNFOUND_OR_NOT_SERIES": "Media_Library introuvable ou non de type SERIES",
+        "NO_CHANGES": "Aucune modification",
+        "TMDB_UPDATED": "Identifiant TMDB du film modifié",
+        "ONLY_SERIES_CAN_MODIFIED": "Seules les lignes de type SERIES peuvent être modifiées",
+        "MEDIA_LIBRARY_DELETED": "Media Librairie supprimé",
+        "LIBRARY_DELETED": "Librairie supprimé",
+
+        "SERIES": "[SERIES]",
+        "RETAINED": "conservé",
+        "SERIES_TMDB": "[SERIES TMDB]",
+        "ERROR": "erreur",
+        "SEASON": "SEASON",
+        "PARENT": "parent",
+        "EP": "EP",
+        "ERROR_METADAT": "ERREUR metadata",
+
+        "DEL_SERIES": "[DEL SERIES]",
+        "DEL_ML_SERIES": "[DEL ML SERIES]",
+        "DEL_SEASONS": "[DEL SEASONS]",
+        "DEL_ML_SEASON": "[DEL ML SEASON]",
+        "DEL_EPISODES": "[DEL EPISODES]",
+        "DEL_ML_EPISODE": "[DEL ML EPISODE]",
+        "TMDB_INSERT": "[TMDB INSERT]",
+        "TMDB_INSERT_ERROR": "[TMDB INSERT ERREUR]",
+
+        "TMDB_NEW_SEASONS": "[TMDB NEW SEASONS]",
+        "TMDB_NEW_EPISODES": "[TMDB NEW EPISODES]",
+        "TMDB_NEW_CONTENT_ERROR": "[TMDB NEW CONTENT ERROR]",
+        
+        "EPISODE": "Épisode"
+    },
+
+    "MEDIA": {
+        "CATEGORY_ADDED_INTO_MOVIE": "Les categories ont été ajoutés au média",
+        "NO_CATEGORY_ADDED_INTO_MOVIE": "Aucune categorie n'est à ajouter",
+
+        "TRANSLATION_ADDED_INTO_MOVIE": "Les traductions du titre ont été ajoutées",
+        "NO_TRANSLATION_ADDED_INTO_MOVIE": "Aucune traduction de titre n'est à ajouter",
+
+        "KEYWORD_ADDED_INTO_MOVIE": "Les most clés ont été insérés",
+        "NO_KEYWORD_ADDED_INTO_MOVIE": "Aucun mots clé n'est à ajouter",
+
+        "DELETED": "{mediaType} ({title}, {mediaId}) supprimé",
+        "TITLE_TRANSLATION": "Traduction de titre ({count})",
+        "ACTORS_DIRECTOR": "Acteurs/Réalisateur ({count})",
+        "CATEGORIES": "Catégories ({count})",
+        "KEYWORDS": "Mots clés ({count})",
+        "SELECTION_MEDIA": "Selection Media ({count})",
+        "LICENSE_MEDIA": "License Media ({count})",
+        "NEWS": "News ({count})",
+        "NEWS_VIDEO_RUNNING": "News Video Running ({count})",
+        "EPISODE": "Episode ({count})",
+        "SEASON": "Saison ({count})",
+        "SIMILAR_TITLE": "Titre Similaire ({count})",
+        "MY_LIST": "MyList ({count})",
+        "STAT_USER": "StatUser ({count})"
+    },
+
+    "MOVIE": {
+        "MOVIE_REGISTERED": "Le film {title} a été enregistré",
+        "MOVIE_MODIFIED": "Le film {title} a été modifié",
+        "FAILED": "Erreur: Echec de l'enregistrement du film",
+        "NOT_TITLE_BLANK": "Erreur: Le titre ne doit pas être vide",
+        "MOVIE_NOT_FOUND": "Erreur: l'id du film introuvable"
+    },
+
+    "SERIES": {
+        "SERIES_REGISTERED": "La série {title} a été enregistré",
+        "SERIES_MODIFIED": "La série {title} a été modifié",
+        "FAILED": "Erreur: Echec de l'enregistrement de la série",
+        "NOT_TITLE_BLANK": "Erreur: Le titre ne doit pas être vide",
+        "SERIES_NOT_FOUND": "Erreur: l'id de la série introuvable",
+
+        "NO_SEASON_INSERTED": "Aucune saison n'a été ajouté",
+        "NO_SEASON_MODIFIED": "Aucune saison n'a été modifiée",
+        "NO_SEASON_DELETED": "Aucune saison n'a été supprimé",
+
+        "SEASON_UPDATED": "Saison {id} modifiée",
+        "SEASON_INSERTED": "Saison {seasonNumber} inséré (ID: {id})",
+        "EPISODE_INSERTED": "Episode {episodeNumber} inséré (ID: {id})",
+        "NO_EPISODE_ADDED": "Aucun épisode n'a été ajouté dans la saison {seasonId}",
+        
+        "NO_EPISODE_UPDATED": "Aucun épisode n'a été modifié dans la saison (ID: {seasonId})",
+        "SEASON_DELETED": "Saison {seasonNumber} (ID: {id}) supprimé",
+        "EPISODE_DELETED": "Episode {episodeNumber} (ID: {id}) supprimé"
+    },
+
+    "VERSION": {
+        "UPDATE_COMPLETED": "Mise à jour effectué",
+        "INCORRECT_VERSION_FORMAT": "Format de la version incorrect",
+        "INCORRECT_OS": "OS incorrecte"
+    }
 }

@@ -11,6 +11,7 @@ import { Node } from "src/common-interface/node.interface";
 import { Job } from "src/credit/dto/job.enum";
 import { MediaService } from "src/media/service/media/media.service";
 import { CreditService } from "src/credit/service/credit.service";
+import { I18nService } from "nestjs-i18n";
 
 interface MediaRow {
   id: number;
@@ -49,7 +50,8 @@ export class SimilarTitleService {
         @Inject(forwardRef(() => MovieService))
         private readonly movieService: MovieService,
         @Inject(forwardRef(() => SeriesService))
-        private readonly seriesService: SeriesService,) { }
+        private readonly seriesService: SeriesService,
+        private readonly i18nService: I18nService) { }
 
     public async getLinksSimilarTitle(): Promise<Link[]> {
         const conn = await this.pool.getConnection();
@@ -156,12 +158,14 @@ export class SimilarTitleService {
                 ) crew ON crew.mediaId = m.id
                 LEFT JOIN Keyword k ON k.mediaId = m.id
                 GROUP BY m.id
+                FOR UPDATE
             `);
 
             const translations: TranslationRow[] = await conn.query(`
                 SELECT mediaId, title, iso_639_1
                 FROM Translation_Title
                 WHERE iso_639_1 IN ('VO', 'US', 'FR')
+                FOR UPDATE
             `);
 
             return {
@@ -242,9 +246,9 @@ export class SimilarTitleService {
                     INSERT INTO Similar_Title (sourceId, targetId, rate)
                     VALUES ${iteration.map(() => '(?, ?, ?)').join(', ')}`
                     const result = await conn.query(query, values);
-                    return `Titre similaire ajouté (${result.affectedRows})`;
+                    return `${this.i18nService.t("common.SIMILAR_TITLE.SIMILAR_TITLE_ADDED")} (${result.affectedRows})`;
             } else {
-                return `Aucun titre similaire n'a été ajouté`
+                return this.i18nService.t("common.SIMILAR_TITLE.NO_SIMILAR_TITLES_ADDED")
             }
         } catch (error) {
             throw error;

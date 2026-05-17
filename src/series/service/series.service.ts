@@ -15,12 +15,12 @@ import { FormatPathService } from 'src/common-service/format-path.service';
 import { Season } from '../dto/season.interface';
 import { SimilarTitleService } from 'src/similar-title/service/similar-title.service';
 import { Node } from 'src/common-interface/node.interface';
-import { promises as fs } from "fs";
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
 import { CreditService } from 'src/credit/service/credit.service';
 import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 import { MediaService } from 'src/media/service/media/media.service';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class SeriesService extends MediaService {
@@ -31,12 +31,13 @@ export class SeriesService extends MediaService {
         verifTimerShowService: VerifTimerShowService,
         formatPathService: FormatPathService,
         posterService: PosterService,
+        i18nService: I18nService,
         @Inject(forwardRef(() => SimilarTitleService))
         private readonly similarTitleService: SimilarTitleService,
         private readonly statUserService: StatUserService,        
         private readonly creditService: CreditService,
     ) {
-        super(pool, verifTimerShowService, formatPathService, posterService);
+        super(pool, verifTimerShowService, formatPathService, posterService, i18nService);
     }
 
     public async getNodesSeries(): Promise<Node[]> {
@@ -434,7 +435,11 @@ export class SeriesService extends MediaService {
                 );
                 const mediaId: number | null = result ? Number(result.insertId) || null : null;
                 if (mediaId) {
-                    let message: string = `La série (${newSeries.title.trim()}) a été enregistrée \n `;
+                    let message: string = this.i18nService.t("common.SERIES.SERIES_REGISTERED", {
+                        args: {
+                            title: newSeries.title.trim()
+                        }
+                    }) + " \n ";
                     const formatedPath: string = mediaId.toString();
                     const messageCategory: string = await this.insertManyMediaCategory(mediaId, newSeries.categories, conn);
                     const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newSeries.otherTitles, conn);
@@ -443,7 +448,7 @@ export class SeriesService extends MediaService {
                     const messagePoster: string = await this.posterService.insertManyPosterByMedia(newSeries, this.currentMediaType, formatedPath, mediaId, conn);
                     const messageSeason: string = await this.insertManySeasons(newSeries.seasons, mediaId, formatedPath, conn);
 
-                    let messageSimilarTitle: string = `Titre similaire ajouté (0)`;
+                    let messageSimilarTitle: string = `${this.i18nService.t("common.SIMILAR_TITLE.SIMILAR_TITLE_ADDED")} (0)`;
                     if (insertSimilarTitle) {
                         messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(mediaId, conn);
                     }
@@ -460,7 +465,7 @@ export class SeriesService extends MediaService {
                     messageReturned = {
                         id: -1,
                         state: false,
-                        message: "Erreur : Echec de l'enregistrement de la série."
+                        message: this.i18nService.t("common.SERIES.FAILED")
                     }
                 }
             } catch (error: any) {
@@ -468,7 +473,7 @@ export class SeriesService extends MediaService {
                 return messageReturned = {
                     id: -1,
                     state: false,
-                    message: error.sqlMessage
+                    message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
                 }
             } finally {
                 await conn.release();
@@ -477,7 +482,7 @@ export class SeriesService extends MediaService {
             messageReturned = {
                 id: -1,
                 state: false,
-                message: 'Erreur : Le titre est vide'
+                message: this.i18nService.t("common.SERIES.NOT_TITLE_BLANK")
             }
         }
         return messageReturned;
@@ -499,12 +504,12 @@ export class SeriesService extends MediaService {
                 const insertedIds: number[] = Array.from({ length: count }, (_, i) => startIdNumber + i);
                 await this.posterService.insertManySeasonPoster(insertedIds, seasons, formatedTitle, conn);
                 for (const [index, id] of insertedIds.entries()) {
-                    message += `Saison ${seasons[index].seasonNumber} inséré (ID: ${id}) \n`;
+                    message += this.i18nService.t('common.SERIES.SEASON_INSERTED', { args: { seasonNumber: seasons[index].seasonNumber, id } }) + '\n';                           
                     message += await this.insertManyEpisodes(seasons[index].episodes, seriesId, id, formatedTitle, conn) + '\n ';
                 }
                 return message;
             } else {
-                return `Aucune saison n'a été ajouté`
+                return this.i18nService.t("common.SERIES.NO_SEASON_INSERTED");
             }
         } catch (error) {
             throw error;
@@ -528,11 +533,11 @@ export class SeriesService extends MediaService {
                 const insertedIds: number[] = Array.from({ length: count }, (_, i) => startIdNumber + i);
                 await this.posterService.insertManyEpisodePoster(insertedIds, episodes, formatedTitle, conn);
                 for (const [index, id] of insertedIds.entries()) {
-                    message += `Episode ${episodes[index].episodeNumber} inséré (ID : ${id}) \n`;
+                    message += this.i18nService.t('common.SERIES.EPISODE_INSERTED', { args: { episodeNumber: episodes[index].episodeNumber, id } }) + '\n';
                 }
                 return message;
             } else {
-                return `Aucun épisode n'a été ajouté dans la saison ${seasonId}`;
+                return this.i18nService.t('common.SERIES.NO_EPISODE_ADDED', { args: { seasonId } });
             }
         } catch (error) {
             throw error;
@@ -555,7 +560,11 @@ export class SeriesService extends MediaService {
                     await conn.query(query,
                         [updateSeries.title.trim(), updateSeries.mediaLibraryId, updateSeries.description, this.getStringFromDate(updateSeries.date), interval.start, interval.end, updateSeries.id]
                     );
-                    let message: string = `La série (${updateSeries.title.trim()}) a été modifié \n `;
+                    let message: string = this.i18nService.t("common.SERIES.SERIES_MODIFIED", {
+                        args: {
+                            title: updateSeries.title.trim()
+                        }
+                    }) + " \n ";
                     const formatedPath: string = oldSeries.id.toString();
                     const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateSeries.id, updateSeries.categories, conn);
                     const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateSeries.id, updateSeries.otherTitles, conn);
@@ -563,8 +572,9 @@ export class SeriesService extends MediaService {
                     const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateSeries.id, updateSeries.keyWords, conn);
                     const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateSeries, oldSeries, this.currentMediaType, formatedPath, conn);
                     const messageSeasons: string = await this.insertUpdateOrDeleteSeasons(updateSeries.seasons, oldSeries.seasons, updateSeries.id, formatedPath, conn);
+                    const messageSimilarTitle: string = await this.similarTitleService.saveSimilarTitlesForMediaById(oldSeries.id, conn);
 
-                    message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeasons}`;
+                    message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeasons} \n ${messageSimilarTitle}`;
                     messageReturned = {
                         id: 0,
                         state: true,
@@ -576,7 +586,7 @@ export class SeriesService extends MediaService {
                     messageReturned = {
                         id: -1,
                         state: false,
-                        message: 'Erreur : id de la série introuvable.'
+                        message: this.i18nService.t("common.SERIES.SERIES_NOT_FOUND")
                     }
                 }
             } catch (error: any) {
@@ -584,7 +594,7 @@ export class SeriesService extends MediaService {
                 messageReturned = {
                     id: -1,
                     state: false,
-                    message: `Erreur : ${error.sqlMessage}`
+                    message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
                 }
             } finally {
                 await conn.release();
@@ -593,7 +603,7 @@ export class SeriesService extends MediaService {
             messageReturned = {
                 id: -1,
                 state: false,
-                message: 'Erreur : Le titre est vide'
+                message: this.i18nService.t("common.SERIES.NOT_TITLE_BLANK")
             }
         }
         return messageReturned;
@@ -634,11 +644,13 @@ export class SeriesService extends MediaService {
                         const messageDeleteEpisodes: string = await this.deleteManyEpisodes(episodeToDelete, formatedTitle, conn);
                         const messageInsertEpisodes: string = await this.insertManyEpisodes(episodeToInsert, seriesId, oldSeason.id, formatedTitle, conn);
                         const messageUpdateEpisodes: string = await this.updateManyEpisodes(episodeToUpdate, oldSeason.episodes, oldSeason.id, formatedTitle, conn);
-                        message += `Saison ${updateSeason.id} modifiée \n ${messageDeleteEpisodes} \n ${messageInsertEpisodes} \n ${messageUpdateEpisodes}`;
+                        const messageUpdateSeason: string = this.i18nService.t('common.SERIES.SEASON_UPDATED', { args: { id: updateSeason.id } });
+
+                        message += `${messageUpdateSeason} \n ${messageDeleteEpisodes} \n ${messageInsertEpisodes} \n ${messageUpdateEpisodes}`;
                     }
                 }
             } else {
-                message = `Aucune saison n'a été modifiée`;
+                message = this.i18nService.t("common.SERIES.NO_SEASON_MODIFIED");
             }
             return message;
         } catch (error) {
@@ -659,7 +671,7 @@ export class SeriesService extends MediaService {
                     await conn.query(query, [episode.mediaLibraryId, episode?.name.trim() ?? '', episode.episodeNumber, episode.description, this.getStringFromDate(episode.date), episode.mediaLibraryId]);
                 }
             } else {
-                message = `Aucun episode n'a été modifié dans la saison (ID : ${seasonId})`;
+                message = this.i18nService.t('common.SERIES.NO_EPISODE_UPDATED', { args: { seasonId } });
             }
             return message;
         } catch (error) {
@@ -681,10 +693,10 @@ export class SeriesService extends MediaService {
                     await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(season.id, null, season.srcPoster, formatedTitle, 'Season', conn);
                     await conn.query(`DELETE FROM Season WHERE id = ?`, [season.id]);
 
-                    message += `Saison ${season.seasonNumber} (ID : ${season.id}) supprimé \n`;
+                    message += this.i18nService.t('common.SERIES.SEASON_DELETED', { args: { seasonNumber: season.seasonNumber, id: season.id } }) + '\n';
                 }
             } else {
-                return `Aucune saison n'a été supprimé`;
+                return this.i18nService.t("common.SERIES.NO_SEASON_DELETED");
             }
             return message;
         } catch (error) {
@@ -699,8 +711,7 @@ export class SeriesService extends MediaService {
                 await this.posterService.deleteOrUpdatePosterFromOneEpisodeOrSeason(episode.id, null, posterEpisode, formatedTitle, 'Episode', conn);
                 await conn.query(`DELETE FROM Stat_User WHERE episodeId = ?`, [episode.id]);
                 await conn.query(`DELETE FROM Episode WHERE id = ?`, [episode.id]);
-                message += `Episode ${episode.episodeNumber}  (ID : ${episode.id}) supprimé \n`;
-            }
+                message += this.i18nService.t('common.SERIES.EPISODE_DELETED', { args: { episodeNumber: episode.episodeNumber, id: episode.id } }) + '\n';            }
             return message;
         } catch (error) {
             throw error;
@@ -720,7 +731,7 @@ export class SeriesService extends MediaService {
                 return {
                     id: -1,
                     state: false,
-                    message: `Film introuvable => id incorrect`
+                    message: this.i18nService.t("common.SERIES.SERIES_NOT_FOUND")
                 }
             }
         } catch (error: any) {
@@ -728,7 +739,7 @@ export class SeriesService extends MediaService {
             return {
                 id: -1,
                 state: false,
-                message: `Erreur : ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
             }
         } finally {
             await conn.release();

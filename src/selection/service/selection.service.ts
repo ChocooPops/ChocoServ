@@ -7,8 +7,6 @@ import * as mariadb from 'mariadb';
 import { SelectionType } from '../dto/selection-type.enum';
 import { MovieService } from 'src/movie/service/movie.service';
 import { SeriesService } from 'src/series/service/series.service';
-import { SearchService } from 'src/common-service/search.service';
-import { SearchItem } from 'src/common-interface/search-item.interface';
 import { Media } from 'src/media/dto/media.interface';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { Graph } from 'src/common-interface/graph.intrface';
@@ -19,6 +17,7 @@ import { CategoryService } from 'src/category/service/category.service';
 import { CategoryEntirely } from 'src/category/dto/categoryEntirely.interface';
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { MediaService } from 'src/media/service/media/media.service';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class SelectionService {
@@ -27,9 +26,9 @@ export class SelectionService {
         private readonly mediaService: MediaService,
         private readonly movieService: MovieService,
         private readonly seriesService: SeriesService,
-        private readonly searchService: SearchService,
         private readonly categoryService: CategoryService,
-        private readonly statUserService: StatUserService) { }
+        private readonly statUserService: StatUserService,
+        private readonly i18nService: I18nService) { }
 
     public async getGraphSelection(): Promise<Graph> {
         const conn = await this.pool.getConnection();
@@ -175,7 +174,7 @@ export class SelectionService {
                 returnedMessage = {
                     id: 1,
                     state: true,
-                    message: `Sélection insérée avec succès \n ${messageMediaSelection}`,
+                    message: `${this.i18nService.t("common.SELECTION.SELECTION_ADDED")} \n ${messageMediaSelection}`,
                     other: { id: selectionId }
                 }
             } catch (error: any) {
@@ -183,7 +182,7 @@ export class SelectionService {
                 returnedMessage = {
                     id: -1,
                     state: false,
-                    message: `Erreur : ${error.sqlMessage}`
+                    message: `${this.i18nService.t("common.ERROR")} : ${error.sqlMessage}`
                 }
             } finally {
                 await conn.release();
@@ -192,7 +191,7 @@ export class SelectionService {
             returnedMessage = {
                 id: -1,
                 state: false,
-                message: `Le nom de la sélection ne doit pas être vide`
+                message: this.i18nService.t("common.SELECTION.SELECTION_NAME_NOT_BLANK")
             }
         }
         return returnedMessage;
@@ -216,14 +215,14 @@ export class SelectionService {
                 return {
                     id: 1,
                     state: true,
-                    message: `Sélection modifée avec succès \n ${messageMediaSelection}`,
+                    message: `${this.i18nService.t("common.SELECTION.SELECTION_MODIFIED")} \n ${messageMediaSelection}`,
                     other: { id: updatedSelection.id }
                 }
             } else {
                 return {
                     id: -1,
                     state: false,
-                    message: "Sélection introuvable"
+                    message: this.i18nService.t("common.SELECTION.SELECTION_UNFOUND")
                 }
             }
         } catch (error: any) {
@@ -231,7 +230,7 @@ export class SelectionService {
             return {
                 id: -1,
                 state: false,
-                message: `Erreur : ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -251,14 +250,14 @@ export class SelectionService {
             returnMessage = {
                 id: -1,
                 state: true,
-                message: 'Selection supprimée avec succès'
+                message: this.i18nService.t("common.SELECTION.SELECTION_DELETED")
             }
         } catch (error: any) {
             await conn.rollback();
             returnMessage = {
                 id: -1,
                 state: false,
-                message: `Erreur : ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -277,9 +276,13 @@ export class SelectionService {
                     INSERT INTO Selection_Media (selectionId, mediaId, orderIndex)
                     VALUES ${medias.map(() => '(?, ?, ?)').join(', ')}`;
                 await conn.query(query, values);
-                return `${medias.length} media ont été ajouté dans la sélection`;
+                return this.i18nService.t("common.SELECTION.COUNT_MEDIA_ADDED_INTO_SELECTION", {
+                    args: {
+                        count: medias.length
+                    }
+                })
             } else {
-                return "Aucun media n'est à ajouter dans la sélection";
+                return this.i18nService.t("common.SELECTION.NO_MEDIA_ADDED_INTO_SELECTION");
             }
         } catch (error) {
             throw error;
@@ -304,14 +307,14 @@ export class SelectionService {
                 return {
                     id: 1,
                     state: true,
-                    message: `Sélection insérée dans la page ${pageType} (${result.affectedRows})`
+                    message: `${this.i18nService.t("common.SELECTION.SELECTION_ADDED_INTO_PAGE")} ${pageType} (${result.affectedRows})`
                 }
             } else {
                 await conn.commit();
                 return {
                     id: 1,
                     state: true,
-                    message: `Aucune sélection n'a été ajoutée dans la page ${pageType}`
+                    message: `${this.i18nService.t("common.SELECTION.NOT_SELECTION_ADDED_INTO_PAGE")} ${pageType}`
                 }
             }
         } catch (error: any) {
@@ -319,7 +322,7 @@ export class SelectionService {
             return {
                 id: -1,
                 state: false,
-                message: `Erreur : ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
             }
         } finally {
             await conn.release();

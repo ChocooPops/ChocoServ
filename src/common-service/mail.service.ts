@@ -5,6 +5,7 @@ import { User } from 'src/user/dto/user.interface';
 import { FormSupport } from 'src/support/dto/form-support.interface';
 import { join } from 'path';
 import * as hbs from 'nodemailer-express-handlebars';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class MailService {
@@ -13,7 +14,9 @@ export class MailService {
     private frame1: string = "https://chocoopops.github.io/portfolio/assets/frame1.png";
     private frame2: string = "https://chocoopops.github.io/portfolio/assets/frame2.png";
 
-    constructor(private configService: ConfigService) {
+    constructor(private readonly configService: ConfigService,
+        private readonly i18nService: I18nService
+    ) {
         this.init();
     }
 
@@ -48,54 +51,75 @@ export class MailService {
         });
     }
 
-    public async sendVerificationCode(to: string, code: number): Promise<any> {
+    public async sendVerificationCode(to: string, code: number, lang: string): Promise<any> {
         const codeString: string = code.toString().split('').join(' ');
         return await this.sendMail({
-            to: to,
-            subject: "Vérification de l'email",
+            to,
+            subject: this.i18nService.t('common.MAIL.VERIFICATION_CODE.SUBJECT', { lang }),
             template: 'verification-code',
             context: {
                 code: codeString,
                 backgroundUrl: this.frame1,
+                hello: this.i18nService.t('common.MAIL.VERIFICATION_CODE.HELLO', { lang }),
+                instruction: this.i18nService.t('common.MAIL.VERIFICATION_CODE.INSTRUCTION', { lang }),
+                validity: this.i18nService.t('common.MAIL.VERIFICATION_CODE.VALIDITY', { lang }),
+                emailConfirm: this.i18nService.t('common.MAIL.VERIFICATION_CODE.EMAIL_CONFIRM', { lang }),
+                ignore: this.i18nService.t('common.MAIL.VERIFICATION_CODE.IGNORE', { lang }),
+                regards: this.i18nService.t('common.MAIL.COMMON.REGARDS', { lang }),
+                copyright: this.i18nService.t('common.MAIL.COMMON.COPYRIGHT', { lang }),
             },
         });
     }
 
-    public async sendMailWhenUserRoleActivated(user: User, mdp: string): Promise<any> {
+    public async sendMailWhenUserRoleActivated(user: User, mdp: string, lang: string): Promise<any> {
         return await this.sendMail({
             to: user.email,
-            subject: "Nouveau mots de passe",
+            subject: this.i18nService.t('common.MAIL.PASSWORD.SUBJECT', { lang }),
             template: 'password',
             context: {
                 pseudo: user.pseudo,
                 password: mdp,
                 backgroundUrl: this.frame2,
+                welcome: this.i18nService.t('common.MAIL.PASSWORD.WELCOME', { lang, args: { pseudo: user.pseudo } }),
+                newPassword: this.i18nService.t('common.MAIL.PASSWORD.NEW_PASSWORD', { lang }),
+                changePassword: this.i18nService.t('common.MAIL.PASSWORD.CHANGE_PASSWORD', { lang }),
+                regards: this.i18nService.t('common.MAIL.COMMON.REGARDS', { lang }),
+                copyright: this.i18nService.t('common.MAIL.COMMON.COPYRIGHT', { lang }),
             },
         });
     }
 
-    public async sendMailSuspendedUser(user: User): Promise<void> {
+    public async sendMailSuspendedUser(user: User, lang: string): Promise<void> {
         return await this.sendMail({
             to: user.email,
-            subject: "Compte suspendue",
+            subject: this.i18nService.t('common.MAIL.SUSPENDED.SUBJECT', { lang }),
             template: 'suspended',
             context: {
-                pseudo: user.pseudo,
                 backgroundUrl: this.frame2,
+                hello: this.i18nService.t('common.MAIL.SUSPENDED.HELLO', { lang, args: { pseudo: user.pseudo } }),
+                reason: this.i18nService.t('common.MAIL.SUSPENDED.REASON', { lang }),
+                complaint: this.i18nService.t('common.MAIL.SUSPENDED.COMPLAINT', { lang }),
+                backToPaid: this.i18nService.t('common.MAIL.SUSPENDED.BACK_TO_PAID', { lang }),
+                payToSuffer: this.i18nService.t('common.MAIL.SUSPENDED.PAY_TO_SUFFER', { lang }),
+                noTears: this.i18nService.t('common.MAIL.SUSPENDED.NO_TEARS', { lang }),
+                goBack: this.i18nService.t('common.MAIL.SUSPENDED.GO_BACK', { lang }),
+                advice: this.i18nService.t('common.MAIL.SUSPENDED.ADVICE', { lang }),
+                goodbye: this.i18nService.t('common.MAIL.SUSPENDED.GOODBYE', { lang }),
+                copyright: this.i18nService.t('common.MAIL.COMMON.COPYRIGHT', { lang }),
             },
         });
     }
 
-    public async sendFormulaire(form: FormSupport): Promise<any> {
-        const html: string = `<p> Thème : ${form.areaConcerned} <br>  Description : ${form.description} </p>`;
-        const mailOptions = {
+    public async sendFormulaire(form: FormSupport, lang: string): Promise<any> {
+        const theme = this.i18nService.t('common.MAIL.FORM.THEME', { lang });
+        const description = this.i18nService.t('common.MAIL.FORM.DESCRIPTION', { lang });
+        const html: string = `<p>${theme} : ${form.areaConcerned}<br>${description} : ${form.description}</p>`;
+        return await this.transporter.sendMail({
             from: this.configService.get<string>('MAIL_FROM'),
             to: this.configService.get('MAIL_USER'),
             subject: form.subject,
-            text: '',
-            html: html,
-        };
-        return await this.transporter.sendMail(mailOptions);
+            html,
+        });
     }
 
 }

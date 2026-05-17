@@ -12,14 +12,17 @@ import { UserService } from 'src/user/service/user.service';
 import { jwtConstants } from 'src/auth/constant';
 import { User } from 'src/user/dto/user.interface';
 import { ConfigService } from '@nestjs/config';
+import { I18nService } from 'nestjs-i18n';
+import { Role } from 'src/user/dto/role.enum';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
     constructor(
-        private jwtService: JwtService,
-        private reflector: Reflector,
-        private userService: UserService,
-        private configService: ConfigService
+        private readonly jwtService: JwtService,
+        private readonly reflector: Reflector,
+        private readonly userService: UserService,
+        private readonly configService: ConfigService,
+        private readonly i18nService: I18nService
     ) { }
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -34,7 +37,7 @@ export class JwtAuthGuard implements CanActivate {
         const request = context.switchToHttp().getRequest();
         const token = this.extractTokenFromHeader(request);
         if (!token) {
-            throw new UnauthorizedException('Token manquant ou mal formé');
+            throw new UnauthorizedException(this.i18nService.t('common.AUTH.MISSING_INVALID_TOKEN'));
         }
         try {
             const payload = await this.jwtService.verifyAsync(token, {
@@ -42,14 +45,14 @@ export class JwtAuthGuard implements CanActivate {
             });
             const user: User = await this.userService.getUserById(payload.sub);
 
-            if (!user || user.role === 'NOT_ACTIVATE') {
-                throw new UnauthorizedException('Utilisateur désactivé ou inexistant');
+            if (!user || user.role === Role.NOT_ACTIVATE || user.role === Role.SUSPENDED) {
+                throw new UnauthorizedException(this.i18nService.t('common.AUTH.INVALID_EXPIRED_TOKEN'));
             }
 
             request['user'] = payload;
 
         } catch (error) {
-            throw new UnauthorizedException('Token invalide ou expiré');
+            throw new UnauthorizedException(this.i18nService.t('common.AUTH.USER_DISABLED_OR_NOT_EXIST'))
         }
 
         return true;

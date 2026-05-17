@@ -11,12 +11,12 @@ import { PosterService } from 'src/poster/service/poster.service';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { SimilarTitleService } from 'src/similar-title/service/similar-title.service';
 import { Node } from 'src/common-interface/node.interface';
-import { promises as fs } from "fs";
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { StatState } from 'src/stat-user/dto/stat-state.enum';
 import { CreditService } from 'src/credit/service/credit.service';
 import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 import { MediaService } from 'src/media/service/media/media.service';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class MovieService extends MediaService {
@@ -27,12 +27,13 @@ export class MovieService extends MediaService {
         verifTimerShowService: VerifTimerShowService,
         formatPathService: FormatPathService,
         posterService: PosterService,
+        i18nService: I18nService,
         @Inject(forwardRef(() => SimilarTitleService))
         private readonly similarTitleService: SimilarTitleService,
         private readonly statUserService: StatUserService,
-        private readonly creditService: CreditService,
+        private readonly creditService: CreditService
     ) {
-        super(pool, verifTimerShowService, formatPathService, posterService);
+        super(pool, verifTimerShowService, formatPathService, posterService, i18nService);
     }
 
     public async getNodesMovie(): Promise<Node[]> {
@@ -208,7 +209,11 @@ export class MovieService extends MediaService {
                 );
                 const mediaId: number | null = result ? Number(result.insertId) || null : null;
                 if (mediaId) {
-                    let message: string = `Le film (${newMovie.title.trim()}) a été enregistré \n`;
+                    let message: string = this.i18nService.t("common.MOVIE.MOVIE_REGISTERED", {
+                        args: {
+                            title: newMovie.title.trim()
+                        }
+                    }) + " \n ";
                     const formatedPath: string = mediaId.toString();
                     const messageCategory: string = await this.insertManyMediaCategory(mediaId, newMovie.categories, conn);
                     const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newMovie.otherTitles, conn);
@@ -216,7 +221,8 @@ export class MovieService extends MediaService {
                     const messageKeyWord: string = await this.insertKeyword(mediaId, newMovie.keyWords, conn);
                     const messagePoster: string = await this.posterService.insertManyPosterByMedia(newMovie, this.currentMediaType, formatedPath, mediaId, conn);
 
-                    let messageSimilarTitle: string = `Titre similaire ajouté (0)`;
+                    let messageSimilarTitle: string = `${this.i18nService.t("common.SIMILAR_TITLE.SIMILAR_TITLE_ADDED")} (0)`;
+                    
                     if (insertSimilarTitle) {
                         messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(mediaId, conn);
                     }
@@ -233,7 +239,7 @@ export class MovieService extends MediaService {
                     messageReturned = {
                         id: -1,
                         state: false,
-                        message: "Erreur : Echec de l'enregistrement du film."
+                        message: this.i18nService.t("common.MOVIE.FAILED")
                     }
                 }
                     
@@ -242,7 +248,7 @@ export class MovieService extends MediaService {
                 messageReturned = {
                     id: -1,
                     state: false,
-                    message: `Erreur : ${error.sqlMessage}`
+                    message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
                 }
             } finally {
                 await conn.release();
@@ -251,7 +257,7 @@ export class MovieService extends MediaService {
             messageReturned = {
                 id: -1,
                 state: false,
-                message: 'Erreur : Le titre est vide'
+                message: this.i18nService.t("common.MOVIE.NOT_TITLE_BLANK")
             }
         }
         return messageReturned;
@@ -274,7 +280,11 @@ export class MovieService extends MediaService {
                     await conn.query(query,
                         [updateMovie.title.trim(), updateMovie.mediaLibraryId, updateMovie.description, this.getStringFromDate(updateMovie.date), interval.start, interval.end, updateMovie.id]
                     );
-                    let message: string = `Le film (${updateMovie.title.trim()}) a été modifié \n`;
+                    let message: string = this.i18nService.t("common.MOVIE.MOVIE_MODIFIED", {
+                        args: {
+                            title: updateMovie.title.trim()
+                        }
+                    }) + " \n ";
                     const formatedPath: string = oldMovie.id.toString();
                     const messageCategory: string = await this.deleteAndUpdateMediaCategory(updateMovie.id, updateMovie.categories, conn);
                     const messageTranslationTitle: string = await this.deleteAndUpdateTranslationTitle(updateMovie.id, updateMovie.otherTitles, conn);
@@ -282,7 +292,9 @@ export class MovieService extends MediaService {
                     const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateMovie.id, updateMovie.keyWords, conn);
                     const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateMovie, oldMovie, this.currentMediaType, formatedPath, conn);
 
-                    message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster}`;
+                    const messageSimilarTitle: string = await this.similarTitleService.saveSimilarTitlesForMediaById(oldMovie.id, conn);
+
+                    message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSimilarTitle}`;
                     messageReturned = {
                         id: 0,
                         state: true,
@@ -294,7 +306,7 @@ export class MovieService extends MediaService {
                     messageReturned = {
                         id: -1,
                         state: false,
-                        message: 'Erreur : id du film introuvable.'
+                        message: this.i18nService.t("common.MOVIE.MOVIE_NOT_FOUND")
                     }
                 }
             } catch (error: any) {
@@ -302,7 +314,7 @@ export class MovieService extends MediaService {
                 messageReturned = {
                     id: -1,
                     state: false,
-                    message: `Erreur : ${error.sqlMessage}`
+                    message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
                 }
             } finally {
                 await conn.release();
@@ -311,7 +323,7 @@ export class MovieService extends MediaService {
             messageReturned = {
                 id: -1,
                 state: false,
-                message: 'Erreur : Le titre est vide'
+                message: this.i18nService.t("common.MOVIE.NOT_TITLE_BLANK")
             }
         }
         return messageReturned;
@@ -330,7 +342,7 @@ export class MovieService extends MediaService {
                 return {
                     id: -1,
                     state: false,
-                    message: `Film introuvable => id incorrect`
+                    message: this.i18nService.t("common.MOVIE.MOVIE_NOT_FOUND")
                 }
             }
         } catch (error: any) {
@@ -338,7 +350,7 @@ export class MovieService extends MediaService {
             return {
                 id: -1,
                 state: false,
-                message: `Erreur : ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
             }
         } finally {
             await conn.release();

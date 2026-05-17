@@ -12,6 +12,7 @@ import { Credit } from '../dto/credit.interface';
 import { UploadImageService } from 'src/common-service/upload-image.service';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { TmdbService } from 'src/tmdb/service/tmdb.service';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class CreditService {
@@ -21,7 +22,8 @@ export class CreditService {
         private readonly posterService: PosterService,
         private readonly uploadImageService: UploadImageService,
         @Inject(forwardRef(() => TmdbService))
-        private readonly tmdbService: TmdbService
+        private readonly tmdbService: TmdbService,
+        private readonly i18nService: I18nService
     ) { }
     
     public getJobToFilters(): Job[] {
@@ -162,7 +164,7 @@ export class CreditService {
 
     public async insertManyCredits(mediaId: number, credits: MediaCredit[], conn: mariadb.PoolConnection): Promise<string> {
         if (!credits.length) {
-            return "Aucun credit n'est à ajouter";
+            return this.i18nService.t("common.CREDIT.NO_CREDIT_TO_ADD");
         }
 
         try {
@@ -295,7 +297,7 @@ export class CreditService {
             });
             if (!mediaCreditValues.length) {
                 await conn.rollback();
-                return "Aucun acteur ou réalisateur n'est à ajouter";
+                return this.i18nService.t("common.CREDIT.NO_CREDIT_TO_ADD");
             }
 
             const rowsMediaCredit = mediaCreditValues.length / 6;
@@ -315,7 +317,7 @@ export class CreditService {
                 mediaCreditValues
             );
 
-            return `Les crédits ont été ajoutés (${result.affectedRows})`;
+            return `${this.i18nService.t("common.CREDIT.CREDITS_ADDED")} (${result.affectedRows})`;
 
         } catch (error) {
             throw error;
@@ -352,28 +354,28 @@ export class CreditService {
                         return {
                             id: 0,
                             state: true,
-                            message: `Le crédit a été inséré \n ${messagePoster}`,
+                            message: `${this.i18nService.t("common.CREDIT.CREDIT_ADDED")} \n ${messagePoster}`,
                             other: { id: creditId }
                         }
                     } else {
                         return {
                             id: -1,
                             state: false,
-                            message: `Erreur: Echec de l'enregistrement du film`
+                            message: this.i18nService.t("common.CREDIT.FAILED_TO_SAVE")
                         }
                     }
                 } else {
                     return {
                         id: -1,
                         state: false,
-                        message: `Le nom complet du crédit ne doit pas être vide`
+                        message: this.i18nService.t("common.CREDIT.CREDIT_FULLNAME_CANNOT_EMPTY")
                     }
                 }
             } else {
                 return {
                     id: -1,
                     state: false,
-                    message: `L'id TMDB est déjà référencé, il doit être unique`
+                    message: this.i18nService.t("common.CREDIT.TMDB_ID_UNIQUE")
                 }
             }
         } catch(error: any) {
@@ -381,7 +383,7 @@ export class CreditService {
             return {
                 id: -1,
                 state: false,
-                message: `Erreur : ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")} : ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -412,28 +414,28 @@ export class CreditService {
                         return {
                             id: 0,
                             state: true,
-                            message: `Le crédit a été modifié \n ${messagePoster}`,
+                            message: `${this.i18nService.t("common.CREDIT.CREDIT_MODIFIED")} \n ${messagePoster}`,
                             other: { id: updateCredit.id }
                         }
                     } else {
                         return {
                             id: -1,
                             state: false,
-                            message: `Le nom du crédit ne doit pas être vide`
+                            message: this.i18nService.t("common.CREDIT.CREDIT_FULLNAME_CANNOT_EMPTY")
                         }
                     }
                 } else {
                     return {
                         id: -1,
                         state: false,
-                        message: `L'id TMDB est déjà référencé, il doit être unique`
+                        message: this.i18nService.t("common.CREDIT.TMDB_ID_UNIQUE")
                     }
                 }
             } else {
                 return {
                     id: -1,
                     state: false,
-                    message: 'Crédit introuvable'
+                    message: this.i18nService.t("common.CREDIT.CREDIT_NOT_FOUND")
                 }
             }
         } catch(error: any) {
@@ -441,7 +443,7 @@ export class CreditService {
             return {
                 id: -1,
                 state: false,
-                message: `Erreur : ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")} : ${error.sqlMessage}`
             }
         } finally {
             await conn.release();
@@ -460,16 +462,20 @@ export class CreditService {
                 const credit = await conn.query(`DELETE FROM Credit WHERE id = ?`, [creditId]);
                 await this.uploadImageService.deleteFileOrDirectoryToCredit(formatedPath);
                 await conn.commit();
+
+                const CREDIT_LINK_TO_MEDIA_DELETED = this.i18nService.t("common.CREDIT.CREDIT_LINK_TO_MEDIA_DELETED", { args: { count: mediaCredits.affectedRows}});
+                const POSTER_DELETED = this.i18nService.t("common.POSTER.POSTER_DELETED", { args : { count: poster.affectedRows}});
+                const CREDIT_DELETED = this.i18nService.t("common.CREDIT.CREDIT_DELETED", { args: { fullName: credits[0].fullName}});
                 return {
                     id: 0,
                     state: true,
-                    message: `Credit lié aux médias (${mediaCredits.affectedRows} supprimé) \n Poster supprimé (${poster.affectedRows}) \n Crédit ${credits[0].fullName} supprimé`
+                    message: `${CREDIT_LINK_TO_MEDIA_DELETED} \n ${POSTER_DELETED} \n ${CREDIT_DELETED}`
                 }
             } else {
                 return {
                     id: -1,
                     state: false,
-                    message: 'Credit introuvable'
+                    message: this.i18nService.t("common.CREDIT.CREDIT_NOT_FOUND")
                 }
             }
         } catch(error: any) {
@@ -477,7 +483,7 @@ export class CreditService {
             return {
                 id: -1,
                 state: false,
-                message: `Erreur : ${error.sqlMessage}`
+                message: `${this.i18nService.t("common.ERROR")} : ${error.sqlMessage}`
             }
         } finally {
             await conn.release();

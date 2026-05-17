@@ -16,6 +16,7 @@ import { MovieService } from 'src/movie/service/movie.service';
 import { SeriesService } from 'src/series/service/series.service';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { MediaService } from 'src/media/service/media/media.service';
+import { I18nService, I18nContext } from 'nestjs-i18n';
 
 @Injectable()
 export class UserService {
@@ -26,7 +27,8 @@ export class UserService {
         private readonly mailService: MailService,
         private readonly mediaService: MediaService,
         private readonly movieService: MovieService,
-        private readonly seriesService: SeriesService) { }
+        private readonly seriesService: SeriesService,
+        private readonly i18nService: I18nService) { }
 
     private getQuerySelectMediaList(WHERE: string): string {
         return `
@@ -169,7 +171,7 @@ export class UserService {
                 return {
                     id: 1,
                     state: false,
-                    message: 'Media supprimé de votre liste'
+                    message: this.i18nService.t("common.USER.MEDIA_REMOVED_FROM_LIST")
                 }
             } else {
                 const query: string = `
@@ -180,7 +182,7 @@ export class UserService {
                 return {
                     id: 1,
                     state: true,
-                    message: 'Media ajouté à de votre liste'
+                    message: this.i18nService.t("common.USER.MEDIA_ADDED_FROM_LIST")
                 }
             }
         } catch (error) {
@@ -226,13 +228,23 @@ export class UserService {
                 let messagePassWord: string | undefined = undefined;
 
                 if (currentUser.pseudo !== updateUser.pseudo) {
-                    messagePseudo = "Le pseudo a été modifié - " + currentUser.pseudo + " -> " + updateUser.pseudo;
+                    messagePseudo = this.i18nService.t("common.USER.PSEUDO_MODIFIED", {
+                        args: {
+                            oldPseudo: currentUser.pseudo,
+                            newPseudo: updateUser.pseudo
+                        }
+                    });
                     currentUser.pseudo = updateUser.pseudo;
                 }
                 const oldDate = new Date(currentUser.dateBorn).toISOString().split("T")[0];;
                 const newDate = new Date(updateUser.date).toISOString().split("T")[0];
                 if (oldDate !== newDate) {
-                    messageDate = "La date de naissance a été modifiée - " + currentUser.dateBorn + " -> " + updateUser.date
+                    messageDate = this.i18nService.t("common.USER.DATE_BORN_MODIFIED", {
+                        args: {
+                            oldDateBorn: currentUser.dateBorn,
+                            newDateBorn: updateUser.date
+                        }
+                    });
                     currentUser.dateBorn = new Date(updateUser.date);
                 }
                 let opPassWord: boolean = true;
@@ -242,27 +254,27 @@ export class UserService {
                             if (!await bcrypt.compare(updateUser.newPassWord, currentUser.password)) {
                                 if (updateUser.newPassWord.length >= 10) {
                                     currentUser.password = await bcrypt.hash(updateUser.newPassWord.trim(), 15);
-                                    messagePassWord = "Mots de passe modifé avec succès";
+                                    messagePassWord = this.i18nService.t("common.USER.PASSWORD_SUCCESSFULLY_CHANGED");
                                 } else {
-                                    messagePassWord = "Sécurité du mots de passe insuffisant (au moins 10 caractères)";
+                                    messagePassWord = this.i18nService.t("common.USER.PASSWORD_NOT_SECURE");
                                     opPassWord = false;
                                 }
                             } else {
-                                messagePassWord = "Ce mots de passe est déjà enregistré";
+                                messagePassWord = this.i18nService.t("common.USER.PASSWORD_ALREADY_REGISTERED");
                                 opPassWord = false;
                             }
                         } else {
-                            messagePassWord = "Mots de passe différents";
+                            messagePassWord = this.i18nService.t("common.USER.DIFFERENT_PASSWORD");
                             opPassWord = false;
                         }
                     } else {
-                        messagePassWord = "Mots de passe incorrect";
+                        messagePassWord = this.i18nService.t("common.AUTH.INCORRECT_PASSWORD");
                         opPassWord = false;
                     }
                 }
 
                 if (!messagePseudo && !messageDate && !messagePassWord) {
-                    message += "Aucune modification \n";
+                    message += `${this.i18nService.t("common.USER.NO_CHANGES")} \n`
                 } else {
                     const conn = await this.pool.getConnection();
                     try {
@@ -305,14 +317,14 @@ export class UserService {
             } else {
                 return {
                     id: -1,
-                    message: "La date de naissance est incorrecte",
+                    message: this.i18nService.t("common.USER.INCORRECT_DATE_BORN"),
                     state: false
                 }
             }
         } else {
             return {
                 id: -1,
-                message: "Pseudo invalide (minimum 5 caractères)",
+                message: this.i18nService.t("common.USER.INCORRECT_PSEUDO"),
                 state: false
             }
         }
@@ -324,6 +336,8 @@ export class UserService {
     }
 
     public async updateUserRoleByAdmin(userId: number, role: Role): Promise<ReturnMessage> {
+        const lang = I18nContext.current()?.lang;
+        
         const user: User | null = await this.getUserById(userId);
         if (user) {
             if (Object.values(Role).includes(role)) {
@@ -359,10 +373,10 @@ export class UserService {
                                         WHERE id = ?`, [user.password, user.id]);
                                 }
                                 if (newPassWord) {
-                                    await this.mailService.sendMailWhenUserRoleActivated(user, newPassWord);
+                                    await this.mailService.sendMailWhenUserRoleActivated(user, newPassWord, lang);
                                 }
                                 if (user.role === Role.SUSPENDED) {
-                                    await this.mailService.sendMailSuspendedUser(user);
+                                    await this.mailService.sendMailSuspendedUser(user, lang);
                                 }
                                 await conn.commit();
                             } catch (error: any) {
@@ -378,41 +392,41 @@ export class UserService {
                             return {
                                 id: -1,
                                 state: true,
-                                message: "Role modifié"
+                                message: this.i18nService.t("common.USER.ROLE_MODIFIED")
                             }
                         } else {
                             return {
                                 id: -1,
                                 state: false,
-                                message: "Un utilisateur non activé ne peut pas être suspendue"
+                                message: this.i18nService.t("common.USER.DEACTIVATED_USER_CANNOT_BE_SUSPENDED")
                             }
                         }
                     } else {
                         return {
                             id: -1,
                             state: false,
-                            message: "Le rôle de l'admin ne peut pas être modifié"
+                            message: this.i18nService.t("common.USER.ADMIN_CONNOT_BE_MODIFIED")
                         }
                     }
                 } else {
                     return {
                         id: -1,
                         state: false,
-                        message: "Role déjà enregistré"
+                        message: this.i18nService.t("common.USER.ROLE_ALREADY_REGISTERED")
                     }
                 }
             } else {
                 return {
                     id: -1,
                     state: false,
-                    message: "Role non existant"
+                    message: this.i18nService.t("common.USER.ROLE_NOT_EXISTS")
                 }
             }
         } else {
             return {
                 id: -1,
                 state: false,
-                message: "Utilisateur introuvable"
+                message: this.i18nService.t("common.USER.USER_NOT_FOUND")
             }
         }
     }
@@ -424,7 +438,7 @@ export class UserService {
                 return {
                     id: -1,
                     state: false,
-                    message: 'Un Admin ne peut pas être modifié'
+                    message: this.i18nService.t("common.USER.ADMIN_CANNOT_BE_EDITED")
                 }
             } else {
                 const conn = await this.pool.getConnection();
@@ -438,7 +452,7 @@ export class UserService {
                     return {
                         id: -1,
                         state: true,
-                        message: "Utilisateur supprimé"
+                        message: this.i18nService.t("common.USER.USER_DELETED")
                     }
                 } catch (error: any) {
                     await conn.rollback();
@@ -455,7 +469,7 @@ export class UserService {
             return {
                 id: -1,
                 state: false,
-                message: "Utilisateur introuvable"
+                message: this.i18nService.t("common.USER.USER_UNFOUND")
             }
         }
     }

@@ -11,9 +11,9 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { EditSeason } from 'src/series/dto/edit-season.interface';
 import { EditEpisode } from 'src/series/dto/edit-episode.interface';
-import { FormatPathService } from 'src/common-service/format-path.service';
 import { Media } from 'src/media/dto/media.interface';
 import { Poster } from 'src/media/dto/poster.interface';
+import { I18nService } from 'nestjs-i18n';
 const execPromise = promisify(exec);
 
 @Injectable()
@@ -25,8 +25,9 @@ export class PosterService {
     private scaleCredit: number[] = [100, 300, 600, 900];
     private notDownload: string = 'notDownload';
 
-    constructor(private uploadImageService: UploadImageService,
-        private formatPathService: FormatPathService) { }
+    constructor(private readonly uploadImageService: UploadImageService,
+        private readonly i18nService: I18nService
+    ) { }
 
     public async insertManyPosterByMedia(media: EditMedia, mediaType: MediaType, formatedTitle: string, mediaId: number, conn: mariadb.PoolConnection): Promise<string> {
         const folder: string = mediaType === MediaType.MOVIE ? this.uploadImageService.getUploadDirToMovie() : this.uploadImageService.getUploadDirToSeries();
@@ -54,13 +55,13 @@ export class PosterService {
                     const queryUpdateMedia: string = `UPDATE Media SET srcLogo = ? WHERE id = ?`;
                     await conn.query(queryUpdateMedia, [posterId, mediaId]);
                     await this.compressedPosterByScale(`${folder}/${formatedTitle}`, [messagePoster.other], this.scaleLogo, 'w');
-                    return 'Logo inséré';
+                    return this.i18nService.t("common.POSTER.POSTER_LOGO_INSERTED");
                 }
             } catch (error) {
                 throw error;
             }
         } else {
-            return "Aucun logo n'est à ajouter";
+            return this.i18nService.t("common.POSTER.NO_POSTER_LOGO_INSERTED");;
         }
     }
     private async insertBackgroundMedia(back: string | ArrayBuffer | null, same: boolean, formatedTitle: string, mediaType: MediaType, mediaId: number, conn: mariadb.PoolConnection, folder: string): Promise<string> {
@@ -76,13 +77,13 @@ export class PosterService {
                         VALUES (?, ?, ?)`, [mediaId, posterId, PosterType.HORIZONTAL]);
                     }
                     await this.compressedPosterByScale(`${folder}/${formatedTitle}`, [messagePoster.other], this.scaleMainPoster, 'w');
-                    return 'Arrière plan inséré';
+                    return this.i18nService.t("common.POSTER.POSTER_BACK_INSERTED");
                 }
             } catch (error) {
                 throw error;
             }
         } else {
-            return "Aucun arrière plan n'a été inséré";
+            return this.i18nService.t("common.POSTER.NO_POSTER_BACK_INSERTED");
         }
     }
     private async insertManyVerticalPosterByMedia(posters: EditPoster[], formatedTitle: string, mediaType: MediaType, mediaId: number, conn: mariadb.PoolConnection, folder: string): Promise<string> {
@@ -118,9 +119,9 @@ export class PosterService {
             VALUES ${iteration.map(() => '(?, ?, ?)').join(', ')}`;
             const resultInsertMediaPoster = await conn.query(queryInsertMediaPoster, values);
             await this.compressedPosterByScale(`${folder}/${formatedTitle}`, iteration, this.scaleMainPoster, 'h');
-            return `Posters verticaux insérés : ${resultInsertMediaPoster.affectedRows}`;
+            return `${this.i18nService.t("common.POSTER.POSTER_VERTICAL_INSERTED")}: ${resultInsertMediaPoster.affectedRows}`;
         } else {
-            return `Aucun poster vertical n'est à insérer`
+            return this.i18nService.t("common.POSTER.NO_POSTER_VERTICAL_INSERTED");
         }
     }
     private async insertManyHorizontalPoster(posters: EditPoster[], formatedTitle: string, mediaType: MediaType, mediaId: number, conn: mariadb.PoolConnection, folder: string): Promise<string> {
@@ -146,9 +147,9 @@ export class PosterService {
             VALUES ${iteration.map(() => '(?, ?, ?)').join(', ')}`;
             const resultInsertMediaPoster = await conn.query(queryInsertMediaPoster, values);
             await this.compressedPosterByScale(`${folder}/${formatedTitle}`, iteration, this.scaleMainPoster, 'w');
-            return `Posters horizontaux insérés : ${resultInsertMediaPoster.affectedRows}`;
+            return `${this.i18nService.t("common.POSTER.POSTER_HORIZONTAL_INSERTED")}: ${resultInsertMediaPoster.affectedRows}`;
         } else {
-            return `Aucun poster horizontal n'est à insérer`;
+            return this.i18nService.t("common.POSTER.NO_POSTER_HORIZONTAL_INSERTED");
         }
     }
 
@@ -177,16 +178,16 @@ export class PosterService {
                             await conn.query(`DELETE FROM Media_Poster WHERE posterId = ?`, [posterId]);
                         }
                     }
-                    return `${field} - (aucun changement)`;
+                    return `${field} - (${this.i18nService.t("common.POSTER.NO_CHANGES")})`;
                 }
             } else if (oldPoster) {
                 const oldPosterId: number = this.getIdByPosterName(oldPoster);
                 await conn.query(`DELETE FROM Media_Poster WHERE posterId = ?`, [oldPosterId]);
                 await conn.query(`DELETE FROM Poster WHERE id = ?`, [oldPosterId]);
                 await this.deletePosterByIdFromMedia(formatedTitle, oldPoster, 'w', mediaType);
-                return `${field} - (supprimé)`;
+                return `${field} - (${this.i18nService.t("common.POSTER.DELETED")})`;
             } else {
-                return `${field} - (aucun changement)`
+                return `${field} - (${this.i18nService.t("common.POSTER.NO_CHANGES")})`
             }
         } catch (error) {
             throw error;
@@ -212,7 +213,7 @@ export class PosterService {
                 await conn.query(`DELETE FROM Media_Poster WHERE posterId = ?`, [oldPosterId]);
                 await conn.query(`DELETE FROM Poster WHERE id = ?`, [oldPosterId]);
                 await this.deletePosterByIdFromMedia(formatedTitle, poster, 'w', mediaType);
-                messageDelete += `Poster ${oldPosterId} supprimé \n`;
+                messageDelete += `${this.i18nService.t("common.POSTER.POSTER_HORIZONTAL_DELETED")} ${oldPosterId} \n`;
             }
             if (posterHorizontalToInsert.length > 0) {
                 messageInsert = await this.insertManyHorizontalPoster(posterHorizontalToInsert, formatedTitle, mediaType, mediaId, conn, folder);
@@ -220,7 +221,7 @@ export class PosterService {
             if (posterHorizontalToInsert.length > 0 || posterHorizontalToDelete.length > 0) {
                 return `${messageInsert} \n ${messageDelete}`;
             } else {
-                return `Aucun poster horizontal n'a été modifié`;
+                return `${this.i18nService.t("common.POSTER.POSTER_HORIZONTAL_MODIFIED")}`;
             }
         } catch (error) {
             throw error;
@@ -252,7 +253,7 @@ export class PosterService {
                 await conn.query(`DELETE FROM Media_Poster WHERE posterId = ?`, [oldPosterId]);
                 await conn.query(`DELETE FROM Poster WHERE id = ?`, [oldPosterId]);
                 await this.deletePosterByIdFromMedia(formatedTitle, poster, 'h', mediaType);
-                messageDelete += `Poster ${oldPosterId} supprimé \n`;
+                messageDelete += `${this.i18nService.t("common.POSTER.POSTER_VERTICAL_DELETED")} ${oldPosterId} \n`;
             }
             for (const poster of posterVerticalToUpdate) {
                 if (typeof poster.srcPoster === 'string') {
@@ -285,7 +286,7 @@ export class PosterService {
             if (posterVerticalToInsert.length > 0 || posterVerticalToDelete.length > 0 || posterVerticalToUpdate.length > 0) {
                 return `${messageInsert} \n ${messageDelete} \n ${messageUpdate}`;
             } else {
-                return `Aucun poster horizontal n'a été modifié`;
+                return this.i18nService.t("common.POSTER.NO_POSTER_VERTICAL_MODIFIED");
             }
         } catch (error) {
             throw error;
@@ -304,7 +305,7 @@ export class PosterService {
                         await this.updateNameOnePoster(posterId, messagePoster.other, conn);
                         const queryUpdateSeason: string = `UPDATE Season SET srcPoster = ? WHERE id = ?`;
                         await conn.query(queryUpdateSeason, [posterId, seasonId]);
-                        message += `Poster ${seasons[index].name} inséré \n`;
+                        message += `${this.i18nService.t("common.POSTER.POSTER_SEASON_INSERTED")} ${seasons[index].name} \n`;
                         iteration.push(messagePoster.other);
                     }
                 } catch (error) {
@@ -329,7 +330,7 @@ export class PosterService {
                         await this.updateNameOnePoster(posterId, messagePoster.other, conn);
                         const queryUpdateSeason: string = `UPDATE Episode SET srcPoster = ? WHERE id = ?`;
                         await conn.query(queryUpdateSeason, [posterId, episodeId]);
-                        message += `Poster ${episodes[index].name} inséré \n`;
+                        message += `${this.i18nService.t("common.POSTER.POSTER_EPISODE_INSERTED")} ${episodes[index].name} \n`;
                         iteration.push(messagePoster.other);
                     }
                 } catch (error) {
@@ -360,19 +361,19 @@ export class PosterService {
                         const queryUpdateSeason: string = `UPDATE ${field} SET srcPoster = ? WHERE id = ?`;
                         await conn.query(queryUpdateSeason, [posterId, rowId]);
                         await this.compressedPosterByScale(`${this.uploadImageService.getUploadDirToSeries()}/${formatedTitle}`, [messagePoster.other], this.scaleSeries, formatPoster);
-                        message = `Poster ${field} ${rowId} inséré \n`;
+                        message = this.i18nService.t("common.POSTER.POSTER_INSERTED", { args: { count: `${field} ${rowId}`}})
                     }
                     return message;
                 } else {
-                    return `${rowId} - (aucun changement)`;
+                    return `${rowId} - (${this.i18nService.t("common.POSTER.NO_CHANGES")})`;
                 }
             } else if (oldPoster) {
                 const oldPosterId: number = this.getIdByPosterName(oldPoster);
                 await conn.query(`DELETE FROM Poster WHERE id = ?`, [oldPosterId]);
                 await this.deletePosterByIdFromMedia(formatedTitle, oldPoster, formatPoster, MediaType.SERIES);
-                return `Poster ${field} ${rowId} - (supprimé)`;
+                return this.i18nService.t("common.POSTER.POSTER_DELETED", { args: { count: `${field} ${rowId}`}});
             } else {
-                return `Poster ${field} ${rowId} - (aucun changement)`
+                return `${this.i18nService.t("common.POSTER.POSTER")} ${field} ${rowId} - (${this.i18nService.t("common.POSTER.NO_CHANGES")})`
             }
         } catch (error) {
             throw error;
@@ -389,13 +390,13 @@ export class PosterService {
                     const queryUpdateMedia: string = `UPDATE License SET ${field} = ? WHERE id = ?`;
                     await conn.query(queryUpdateMedia, [posterId, licenseId]);
                     await this.compressedPosterByScale(`${folder}/${formatedTitle}`, [messagePoster.other], this.scaleMainPoster, 'w');
-                    return `${field} inséré`;
+                    return this.i18nService.t("common.POSTER.POSTER_LICENSE_INSERTED", {args: {field: field}});
                 }
             } catch (error) {
                 throw error;
             }
         } else {
-            return `Aucun ${field} n'est à ajouter`;
+            return this.i18nService.t("common.POSTER.NO_POSTER_LICENSE_INSERTED", {args: {field: field}});
         }
     }
 
@@ -410,15 +411,15 @@ export class PosterService {
                     }
                     return await this.insertPosterLicense(newPoster, formatedTitle, licenseId, field, conn);
                 } else {
-                    return `${field} - (aucun changement)`;
+                    return `${field} - (${this.i18nService.t("common.POSTER.NO_CHANGES")})`;
                 }
             } else if (oldPoster) {
                 const oldPosterId: number = this.getIdByPosterName(oldPoster);
                 await conn.query(`DELETE FROM Poster WHERE id = ?`, [oldPosterId]);
                 await this.deletePosterByIdFromLicense(formatedTitle, oldPoster);
-                return `${field} - (supprimé)`;
+                return `${field} - (${this.i18nService.t("common.POSTER.DELETED")})`;
             } else {
-                return `${field} - (aucun changement)`;
+                return `${field} - (${this.i18nService.t("common.POSTER.NO_CHANGES")})`;
             }
         } catch (error) {
             throw error;
@@ -497,9 +498,10 @@ export class PosterService {
             if (posterIds.length > 0) {
                 const queryDeletePoster: string = `DELETE FROM POSTER WHERE id IN (${posterIds.map(() => '?').join(', ')})`;
                 const resultDeletePoster = await conn.query(queryDeletePoster, posterIds);
-                return `Media Poster (${resultDeleteMediaPoster.affectedRows}) \n Poster (${resultDeletePoster.affectedRows})`;
+                return `${this.i18nService.t("common.POSTER.MEDIA_POSTER")} (${resultDeleteMediaPoster.affectedRows}) \n 
+                        ${this.i18nService.t("common.POSTER.POSTER")} (${resultDeletePoster.affectedRows})`;
             } else {
-                return 'Poster (0)';
+                return `${this.i18nService.t("common.POSTER.POSTER")} (0)`;
             }
         } catch (error) {
             throw error;
@@ -518,9 +520,9 @@ export class PosterService {
             if (posterIds.length > 0) {
                 const queryDeletePoster: string = `DELETE FROM Poster WHERE id IN (${posterIds.map(() => '?').join(', ')})`;
                 const resultDeletePoster = await conn.query(queryDeletePoster, posterIds);
-                return `Poster (${resultDeletePoster.affectedRows})`;
+                return `${this.i18nService.t("common.POSTER.POSTER")} (${resultDeletePoster.affectedRows})`;
             } else {
-                return 'Poster (0)';
+                return `${this.i18nService.t("common.POSTER.POSTER")} (0)`;
             }
         } catch (error) {
             throw error;
@@ -597,13 +599,13 @@ export class PosterService {
                     const queryUpdateMedia: string = `UPDATE Credit SET srcPoster = ? WHERE id = ?`;
                     await conn.query(queryUpdateMedia, [posterId, creditId]);
                     await this.compressedPosterByScale(`${this.uploadImageService.getUploadDirToCredit()}/${formatedTitle}`, [messagePoster.other], this.scaleCredit, 'h');
-                    return `Poster de ${formatedTitle} inséré`;
+                    return `${this.i18nService.t("common.POSTER.POSTER_CREDIT_INSERTED")} (${formatedTitle})`;
                 }
             } catch (error) {
                 throw error;
             }
         } else {
-            return "Aucun poster n'est à ajouter";
+            return this.i18nService.t("common.POSTER.NO_POSTER_CREDIT_INSERTED");
         }
     }
     public async modifyOrDeletePosterFromCredit(creditId: number, newPoster: string | ArrayBuffer | null, oldPoster: string, formatedTitle: string, conn: mariadb.PoolConnection): Promise<string> {
@@ -617,15 +619,15 @@ export class PosterService {
                     }
                     return await this.insertPosterCredit(newPoster, creditId, formatedTitle, conn);
                 } else {
-                    return `(aucun changement du poster)`;
+                    return `(${this.i18nService.t("common.POSTER.NO_CHANGES")})`;
                 }
             } else if (oldPoster) {
                 const oldPosterId: number = this.getIdByPosterName(oldPoster);
                 await conn.query(`DELETE FROM Poster WHERE id = ?`, [oldPosterId]);
                 await this.deletePosterByIdFromCredit(formatedTitle, oldPoster);
-                return `(poster supprimé)`;
+                return `(${this.i18nService.t("common.POSTER.DELETED")})`;
             } else {
-                return `(aucun changement du poster)`;
+                return `(${this.i18nService.t("common.POSTER.NO_CHANGES")})`;
             }
         } catch (error) {
             throw error;

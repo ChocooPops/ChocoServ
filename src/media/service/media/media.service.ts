@@ -11,6 +11,7 @@ import { StatState } from 'src/stat-user/dto/stat-state.enum';
 import { Media } from 'src/media/dto/media.interface';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { TranslationTitle } from 'src/media/dto/translation-title.interface';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class MediaService {
@@ -20,7 +21,8 @@ export class MediaService {
     constructor(@Inject(DATABASE_POOL) protected readonly pool: mariadb.Pool,
         protected readonly verifTimerShowService: VerifTimerShowService,
         protected readonly formatPathService: FormatPathService,
-        protected readonly posterService: PosterService
+        protected readonly posterService: PosterService,
+        protected readonly i18nService: I18nService
     ) { }
 
     protected async getNodesMediaByType(): Promise<Node[]> {
@@ -301,12 +303,12 @@ export class MediaService {
                     INSERT INTO Media_Category (mediaId, categoryId)
                     VALUES ${categories.map(() => ('(?, ?)')).join(', ')}`;
                 const result: any = await conn.query(query, values);
-                return `Les categories ont été ajoutés au média (${result.affectedRows})`;
+                return `${this.i18nService.t("common.MEDIA.CATEGORY_ADDED_INTO_MOVIE")} (${result.affectedRows})`;
             } catch (error) {
                 throw error;
             }
         } else {
-            return "Aucune categorie n'est à ajouter";
+            return this.i18nService.t("common.MEDIA.NO_CATEGORY_ADDED_INTO_MOVIE");
         }
     }
     protected async deleteAndUpdateMediaCategory(mediaId: number, categories: CategorySimple[], conn: mariadb.PoolConnection): Promise<string> {
@@ -331,12 +333,12 @@ export class MediaService {
                     INSERT INTO Translation_Title (title, iso_639_1, mediaId)
                     VALUES ${translationTitles.map(() => '(?, ?, ?)').join(', ')}`;
                 const result: any = await conn.query(query, values);
-                return `Les traductions du titre ont été ajoutées (${result.affectedRows})`;
+                return `${this.i18nService.t("common.MEDIA.TRANSLATION_ADDED_INTO_MOVIE")} (${result.affectedRows})`;
             } catch (error) {
                 throw error;
             }
         } else {
-            return "Aucune traduction de titre n'est à ajouter";
+            return this.i18nService.t("common.MEDIA.NO_TRANSLATION_ADDED_INTO_MOVIE");
         }
     }
     protected async deleteAndUpdateTranslationTitle(mediaId: number, translationTitles: TranslationTitle[], conn: mariadb.PoolConnection): Promise<string> {
@@ -360,12 +362,12 @@ export class MediaService {
                     INSERT INTO Keyword (name, mediaId)
                     VALUES ${keywords.map(() => '(?, ?)').join(', ')}`;
                 const result: any = await conn.query(query, values);
-                return `Les most clés ont été insérés (${result.affectedRows})`;
+                return `${this.i18nService.t("common.MEDIA.KEYWORD_ADDED_INTO_MOVIE")} (${result.affectedRows})`;
             } catch (error) {
                 throw error;
             }
         } else {
-            return "Aucun mots clé n'est à ajouter";
+            return this.i18nService.t("common.MEDIA.NO_KEYWORD_ADDED_INTO_MOVIE");
         }
     }
     protected async deleteAndUpdateKeyword(mediaId: number, keywords: string[], conn: mariadb.PoolConnection): Promise<string> {
@@ -406,10 +408,24 @@ export class MediaService {
 
             const resultPoster = await this.posterService.deteleAllPostersLinkedToMedia(mediaId, posterId, mediaId.toString(), mediaType, conn);
             await conn.query(`DELETE FROM Media WHERE id = ?`, [mediaId]);
-            const message: string = `${this.currentMediaType} (${title}, ${mediaId}) supprimé \n Traduction de titre (${resultTranslationTitle.affectedRows}) \n Acteurs/Réalisateur (${resultMediaSatff.affectedRows}) \n Categories (${resultMediaCategory.affectedRows}) \n Mots clés (${resultKeyword.affectedRows})
-            \n Selection Media (${resultSelectionMedia.affectedRows}) \n License Media (${resultLicenseMedia.affectedRows}) \n News (${resultNews.affectedRows}) \n News Video Running (${resultNewsVideoRunning.affectedRows})
-            \n Episode (${resultEpisode.affectedRows}) \n Saison (${resultSeason.affectedRows}) \n ${resultPoster} \n Titre Similaire (${resultSimilarMedia.affectedRows})
-            \n MyList (${resulMediaUserList.affectedRows}) \n StatUser (${resulMediaStatUser.affectedRows})`;
+            
+            const message: string = [
+                this.i18nService.t('common.MEDIA.DELETED', { args: { mediaType: this.currentMediaType, title, mediaId } }),
+                this.i18nService.t('common.MEDIA.TITLE_TRANSLATION', { args: { count: resultTranslationTitle.affectedRows } }),
+                this.i18nService.t('common.MEDIA.ACTORS_DIRECTOR', { args: { count: resultMediaSatff.affectedRows } }),
+                this.i18nService.t('common.MEDIA.CATEGORIES', { args: { count: resultMediaCategory.affectedRows } }),
+                this.i18nService.t('common.MEDIA.KEYWORDS', { args: { count: resultKeyword.affectedRows } }),
+                this.i18nService.t('common.MEDIA.SELECTION_MEDIA', { args: { count: resultSelectionMedia.affectedRows } }),
+                this.i18nService.t('common.MEDIA.LICENSE_MEDIA', { args: { count: resultLicenseMedia.affectedRows } }),
+                this.i18nService.t('common.MEDIA.NEWS', { args: { count: resultNews.affectedRows } }),
+                this.i18nService.t('common.MEDIA.NEWS_VIDEO_RUNNING', { args: { count: resultNewsVideoRunning.affectedRows } }),
+                this.i18nService.t('common.MEDIA.EPISODE', { args: { count: resultEpisode.affectedRows } }),
+                this.i18nService.t('common.MEDIA.SEASON', { args: { count: resultSeason.affectedRows } }),
+                resultPoster,
+                this.i18nService.t('common.MEDIA.SIMILAR_TITLE', { args: { count: resultSimilarMedia.affectedRows } }),
+                this.i18nService.t('common.MEDIA.MY_LIST', { args: { count: resulMediaUserList.affectedRows } }),
+                this.i18nService.t('common.MEDIA.STAT_USER', { args: { count: resulMediaStatUser.affectedRows } }),
+            ].join('\n');
             return {
                 id: 0,
                 state: true,

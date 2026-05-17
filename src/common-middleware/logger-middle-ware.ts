@@ -28,18 +28,18 @@ export class LoggerMiddleware implements NestMiddleware {
         this.logger.log(`✅ ${statusCode} ${base}`);
 
       } else if (statusCode === 401 || statusCode === 403) {
-        const reason = responseBody?.message || 'Accès refusé';
+        const reason = responseBody?.message || 'Access denied';
         this.logger.warn(`🚫 ${statusCode} ${base} — Raison: ${reason}`);
 
       } else if (statusCode >= 300 && statusCode < 400) {
         this.logger.log(`🔀 ${statusCode} ${base}`);
 
       } else if (statusCode >= 400 && statusCode < 500) {
-        const reason = responseBody?.message || 'Erreur client';
+        const reason = responseBody?.message || 'Client error';
         this.logger.warn(`❌ ${statusCode} ${base} — ${reason}`);
 
       } else if (statusCode >= 500) {
-        const reason = responseBody?.message || 'Erreur serveur';
+        const reason = responseBody?.message || 'Server error';
         this.logger.error(`💥 ${statusCode} ${base} — ${reason}`);
       }
     });
