@@ -13,6 +13,7 @@ API REST complète pour l'application **ChocoPlus**, développée avec NestJS et
 - [Architecture](#-architecture)
 - [Base de données](#-base-de-données)
 - [Authentification et sécurité](#-authentification-et-sécurité)
+- [Internationalisation (i18n)](#-internationalisation-i18n)
 - [API Endpoints](#-api-endpoints)
 - [Intégrations externes](#-intégrations-externes)
 - [Configuration](#-configuration)
@@ -33,6 +34,7 @@ L'API ChocoPlus est une API REST robuste qui sert de backend pour l'application 
 - **Système de support** avec envoi d'emails
 - **Gestion des utilisateurs** avec rôles et permissions
 - **Graphiques et statistiques** pour les dashboards
+- **Internationalisation** avec réponses multilingues via `nestjs-i18n`
 
 ## 🏗️ Architecture
 
@@ -57,7 +59,7 @@ L'API suit l'architecture modulaire de NestJS avec une structure en couches :
                     ↓
 ┌──────────────────────────────────────────────┐
 │          External Services                   │
-│   - Node File System (médiathèqye)           │
+│   - Node File System (médiathèque)           │
 │   - TMDB API                                 │
 │   - Mail Service (SMTP)                      │
 └──────────────────────────────────────────────┘
@@ -223,7 +225,7 @@ Table centrale qui représente un **film** (`MOVIE`) ou une **série** (`SERIES`
 |---------|------|-------------|
 | `id` | INT (début 2 000 000) | Identifiant unique |
 | `title` | VARCHAR(255) UNIQUE | Titre principal (unique) |
-| `mediaLibraryId` | VARCHAR(255) UNIQUE | ID de la médiathèque pour la synchronisation des meta-données du fichiers vidéos|
+| `mediaLibraryId` | VARCHAR(255) UNIQUE | ID de la médiathèque pour la synchronisation des meta-données du fichier vidéo |
 | `description` | VARCHAR(1024) | Synopsis (nullable) |
 | `date` | DATE | Date de sortie |
 | `time` | BIGINT UNSIGNED | Durée en millisecondes (nullable) |
@@ -436,13 +438,7 @@ Toutes les relations respectent une politique cohérente :
 
 ### 📊 Indexation
 
-Tous les champs de jointure (`userId`, `mediaId`, `selectionId`, etc.) sont indexés pour garantir des performances optimales sur les requêtes avec jointures. Exemple de la table `Stat_User` :
-
-```sql
-INDEX IDX_SU_MOVIE    (movieId)
-INDEX IDX_SU_EPISODE  (episodeId)
-INDEX IDX_SU_USER     (userId)
-```
+Tous les champs de jointure (`userId`, `mediaId`, `selectionId`, etc.) sont indexés pour garantir des performances optimales sur les requêtes avec jointures.
 
 ---
 
@@ -498,7 +494,89 @@ enum Role {
 }
 ```
 
+---
+
+## 🌍 Internationalisation (i18n)
+
+L'API supporte plusieurs langues pour ses messages de réponse grâce à **nestjs-i18n**. La langue est déterminée automatiquement à partir du header de chaque requête.
+
+### Langues disponibles
+
+| Drapeau | Langue | Code |
+|---------|--------|------|
+| 🇫🇷 | Français | `fr` |
+| 🇬🇧 | English | `en` |
+| 🇯🇵 | 日本語 | `ja` |
+
+> Si aucun header valide n'est fourni, la langue par défaut est l'**anglais** (`en`).
+
+### Résolution de la langue
+
+La langue est lue depuis le header HTTP `lang` (ou `accept-language` en fallback) via un resolver personnalisé :
+
+```typescript
+// Envoyer le header dans chaque requête
+lang: 'fr'        // Français
+lang: 'en'        // Anglais
+lang: 'ja'        // Japonais
+```
+
+```typescript
+@Injectable()
+export class HeaderLanguageResolver implements I18nResolver {
+  resolve(context: ExecutionContext): string {
+    const request = context.switchToHttp().getRequest();
+    const lang = request.headers['lang'] ?? request.headers['accept-language'];
+
+    if (!lang || !AVAILABLE_LANGS.includes(lang)) {
+      return DEFAULT_LANG; // 'en' par défaut
+    }
+
+    return lang;
+  }
+}
+```
+
+### Structure des fichiers de traduction
+
+Les fichiers de traduction sont organisés par langue dans `src/i18n/` :
+
+```
+src/
+└── i18n/
+    ├── fr/
+    │   └── common.json    # Messages en français
+    ├── en/
+    │   └── common.json    # Messages en anglais
+    └── ja/
+        └── common.json    # Messages en japonais
+```
+
+Chaque fichier `common.json` contient les clés de traduction organisées par domaine fonctionnel (`AUTH`, `USER`, `MEDIA`, `MOVIE`, `SERIES`, `LIBRARY`, `CREDIT`, etc.).
+
+### Utilisation dans les services
+
+Les messages traduits sont injectés via le service `I18nService` de `nestjs-i18n` :
+
+```typescript
+import { I18nService } from 'nestjs-i18n';
+
+@Injectable()
+export class MovieService {
+  constructor(private readonly i18n: I18nService) {}
+
+  async insertNewMovie(...): Promise<ReturnMessage> {
+    // ...
+    return { message: this.i18n.t('common.MOVIE.MOVIE_REGISTERED', { args: { title } }) };
+  }
+}
+```
+
+---
+
 ## 📡 API Endpoints
+
+> **Légende** : ✅ = requis / ✅ Admin = rôle `ADMIN` requis en plus du JWT
 
 ### 🔑 Authentication (`/auth`)
 
@@ -512,9 +590,9 @@ enum Role {
 **Flux d'inscription complet** :
 ```
 1. POST /auth/send-verification-code → Envoie code à l'email
-2. POST /auth/register (avec code) → Crée le compte (NOT_ACTIVATE)
-3. Admin change le rôle → Envoi email avec mot de passe
-4. POST /auth/login → Connexion possible
+2. POST /auth/register (avec code)   → Crée le compte (NOT_ACTIVATE)
+3. Admin change le rôle              → Envoi email avec mot de passe
+4. POST /auth/login                  → Connexion possible
 ```
 
 ---
@@ -533,7 +611,7 @@ enum Role {
 | DELETE | `/user` | Supprimer son propre compte | ✅ | - |
 | DELETE | `/user/delete-user-by-admin/:id` | Supprimer un utilisateur | ✅ | ✅ |
 
-**Note importante** : Lorsqu'un admin change le rôle d'un utilisateur de `NOT_ACTIVATE` à `USER` ou `FAMILY`, un email est automatiquement envoyé avec un nouveau mot de passe.
+**Note** : Lorsqu'un admin change le rôle d'un utilisateur de `NOT_ACTIVATE` à `USER` ou `FAMILY`, un email est automatiquement envoyé avec un nouveau mot de passe.
 
 ---
 
@@ -544,7 +622,7 @@ enum Role {
 | GET | `/movie/nodes` | Liste simplifiée (nodes) de tous les films | ✅ | - |
 | GET | `/movie/research/:keyWord` | Recherche de films par mot-clé | ✅ | - |
 | GET | `/movie/random-movie` | Film aléatoire | ✅ | - |
-| GET | `/movie/watchProgress/:movieId` | Obtenir la dernière progression du film selon l'utilisateur | ✅ | - |
+| GET | `/movie/watchProgress/:movieId` | Progression de visionnage d'un film | ✅ | - |
 | GET | `/movie/:id` | Détails complets d'un film | ✅ | - |
 | POST | `/movie/add` | Ajouter un nouveau film | ✅ | ✅ |
 | PUT | `/movie/modify` | Modifier un film existant | ✅ | ✅ |
@@ -558,11 +636,11 @@ enum Role {
 |---------|-------|-------------|------|-------|
 | GET | `/series/nodes` | Liste simplifiée (nodes) de toutes les séries | ✅ | - |
 | GET | `/series/research/:keyWord` | Recherche de séries par mot-clé | ✅ | - |
-| GET | `/series/episodes/:idSeries/:idSeason` | Obtenir tous les épisodes d'une saison | ✅ | - |
+| GET | `/series/episodes/:idSeries/:idSeason` | Épisodes d'une saison pour l'utilisateur courant | ✅ | - |
 | GET | `/series/random-series` | Série aléatoire | ✅ | - |
-| GET | `/series/first-episode/:seriesId` | Obtenir le premier épisode d'une série | ✅ | - |
-| GET | `/series/last-episode-watched/:seriesId` | Obtenir le dernier épisode visionné selon l'utilisateur | ✅ | - |
-| GET | `/series/watchProgress/:episodeId` | Obtenir la dernière progression d'un épisode selon l'utilisateur | ✅ | - |
+| GET | `/series/first-episode/:seriesId` | Premier épisode d'une série | ✅ | - |
+| GET | `/series/last-episode-watched/:seriesId` | Dernier épisode visionné par l'utilisateur | ✅ | - |
+| GET | `/series/watchProgress/:episodeId` | Progression de visionnage d'un épisode | ✅ | - |
 | GET | `/series/:id` | Détails complets d'une série | ✅ | - |
 | POST | `/series/add` | Ajouter une nouvelle série | ✅ | ✅ |
 | PUT | `/series/modify` | Modifier une série existante | ✅ | ✅ |
@@ -575,9 +653,29 @@ enum Role {
 | Méthode | Route | Description | Auth | Admin |
 |---------|-------|-------------|------|-------|
 | GET | `/media/research/:keyword` | Recherche globale (films + séries) | ✅ | - |
-| GET | `/media/catalog?decadeFilter=&categoryFilter=&mediaTypeFilter=&sortFilter=&orderDirection=&count=&offset=?` | Obtenir un catalogue globale selon les filtres | ✅ | - |
-| GET | `/media/null-poster` | Médias sans poster (pour maintenance) | ✅ | ✅ |
-| GET | `/media/path-dont-exist` | Médias avec répertoire inexistant (pour maintenance) | ✅ | ✅ |
+| GET | `/media/media-info/:mediaId` | Informations complètes d'un média | ✅ | - |
+| GET | `/media/null-poster` | Médias sans poster (maintenance) | ✅ | ✅ |
+| POST | `/media/catalog` | Catalogue filtré et trié (body: filtres, query: sort/pagination) | ✅ | - |
+
+**Paramètres de `/media/catalog`** :
+
+Query params : `sortFilter`, `orderDirection`, `count`, `offset`
+
+Body : tableau de filtres `FILTERS[]`
+
+---
+
+### 🎞️ Credits (`/credit`)
+
+| Méthode | Route | Description | Auth | Admin |
+|---------|-------|-------------|------|-------|
+| GET | `/credit/job-filters` | Liste des métiers disponibles pour le filtrage | ✅ | - |
+| GET | `/credit/research/:keyword` | Recherche de crédits (acteurs, réalisateurs…) | ✅ | - |
+| GET | `/credit/:creditId` | Détails d'un crédit par son ID | ✅ | - |
+| POST | `/credit/save-all-new-credit` | Rafraîchir les crédits de tous les médias | ✅ | ✅ |
+| POST | `/credit/add` | Ajouter un nouveau crédit | ✅ | ✅ |
+| PUT | `/credit/modify` | Modifier un crédit existant | ✅ | ✅ |
+| DELETE | `/credit/delete/:creditId` | Supprimer un crédit | ✅ | ✅ |
 
 ---
 
@@ -596,8 +694,6 @@ enum Role {
 
 ### 🎫 Licenses (`/license`)
 
-Les licences organisent le contenu par thème (ex: Marvel, Star Wars, Disney).
-
 | Méthode | Route | Description | Auth | Admin |
 |---------|-------|-------------|------|-------|
 | GET | `/license/graph` | Données pour graphique des licences | ✅ | - |
@@ -615,13 +711,11 @@ Les licences organisent le contenu par thème (ex: Marvel, Star Wars, Disney).
 
 ### 📑 Selections (`/selection`)
 
-Les sélections sont des collections thématiques de films/séries.
-
 | Méthode | Route | Description | Auth | Admin |
 |---------|-------|-------------|------|-------|
 | GET | `/selection/graph` | Données pour graphique des sélections | ✅ | - |
 | GET | `/selection/selection-home` | Sélections pour la page d'accueil | ✅ | - |
-| GET | `/selection/random-media-selection-by-type/:mediaType` | Sélections aléatoires par type | ✅ | - |
+| GET | `/selection/random-media-selection-by-type/:mediaType` | Sélections aléatoires par type de média | ✅ | - |
 | GET | `/selection/research/:keyWord` | Recherche de sélections | ✅ | - |
 | GET | `/selection/:id` | Détails d'une sélection avec ses médias | ✅ | - |
 | POST | `/selection/add` | Créer une nouvelle sélection | ✅ | ✅ |
@@ -633,8 +727,6 @@ Les sélections sont des collections thématiques de films/séries.
 
 ### 📰 News (`/news`)
 
-Actualités affichées sur la page d'accueil.
-
 | Méthode | Route | Description | Auth | Admin |
 |---------|-------|-------------|------|-------|
 | GET | `/news` | Liste de toutes les actualités | ✅ | - |
@@ -643,8 +735,6 @@ Actualités affichées sur la page d'accueil.
 ---
 
 ### 🎥 News Video Running (`/news-video-running`)
-
-Vidéos tournantes sur les pages Films et Séries.
 
 | Méthode | Route | Description | Auth | Admin |
 |---------|-------|-------------|------|-------|
@@ -658,8 +748,6 @@ Vidéos tournantes sur les pages Films et Séries.
 ---
 
 ### 🔗 Similar Titles (`/similar-title`)
-
-Gestion des suggestions de contenu similaire.
 
 | Méthode | Route | Description | Auth | Admin |
 |---------|-------|-------------|------|-------|
@@ -680,7 +768,7 @@ Routes de streaming vidéo sécurisées avec authentification par token query.
 | GET | `/stream/stream-episode/:seasonId/:episodeId?token=xxx` | Stream d'un épisode | ✅ |
 | GET | `/stream/stream-news/:newsId?token=xxx` | Stream d'une vidéo news | ✅ |
 
-**Note** : Ces routes sont publiques mais nécessitent un token JWT valide en query parameter pour la sécurité.
+**Note** : Ces routes sont publiques mais nécessitent un token JWT valide en query parameter.
 
 ---
 
@@ -695,18 +783,56 @@ Routes de streaming vidéo sécurisées avec authentification par token query.
 
 ### 🎬 TMDB Integration (`/tmdb`)
 
-Recherche de métadonnées depuis l'API The Movie Database.
+Recherche de métadonnées depuis l'API The Movie Database. Supporte la recherche par titre ou par ID TMDB numérique.
 
 | Méthode | Route | Description | Auth |
 |---------|-------|-------------|------|
-| GET | `/tmdb/search-movie-tmdb/:movie` | Chercher un film (par titre ou ID TMDB) | ✅ |
-| GET | `/tmdb/search-series-tmdb/:series` | Chercher une série (par titre ou ID TMDB) | ✅ |
+| GET | `/tmdb/search-movie-tmdb/:movie` | Chercher un film (titre ou ID TMDB) | ✅ |
+| GET | `/tmdb/search-movie-library/:mediaLibraryId` | Chercher un film via son mediaLibraryId | ✅ |
+| GET | `/tmdb/search-series-tmdb/:series` | Chercher une série (titre ou ID TMDB) | ✅ |
+| GET | `/tmdb/search-series-library/:mediaLibraryId` | Chercher une série via son mediaLibraryId | ✅ |
+| GET | `/tmdb/search-credit-by-id/:id` | Chercher un crédit par ID TMDB | ✅ |
+| GET | `/tmdb/search-credit-by-full-name/:name` | Chercher un crédit par nom complet | ✅ |
+
+**Note** : Pour les routes `search-movie-tmdb` et `search-series-tmdb`, si le paramètre est numérique il est traité comme un ID TMDB, sinon comme un titre.
+
+---
+
+### 📚 Library (`/library`)
+
+Gestion des médiathèques et synchronisation des fichiers vidéo.
+
+| Méthode | Route | Description | Auth | Admin |
+|---------|-------|-------------|------|-------|
+| GET | `/library/media-missing-files` | Médias avec des chemins de fichiers invalides | ✅ | ✅ |
+| GET | `/library/orphan-media-library` | Médiathèques orphelines (sans média associé) | ✅ | ✅ |
+| GET | `/library/duplicate-tmdb` | Médias avec des ID TMDB dupliqués | ✅ | ✅ |
+| GET | `/library/libraries` | Liste de toutes les médiathèques | ✅ | ✅ |
+| GET | `/library/media-libraries/:libraryId` | Liste des médias d'une médiathèque | ✅ | ✅ |
+| POST | `/library` | Créer une nouvelle médiathèque | ✅ | ✅ |
+| PUT | `/library/refresh/:id/:mediaType` | Synchroniser une médiathèque (scan + import) | ✅ | ✅ |
+| PUT | `/library/modify-tmbd/:mediaLibraryId` | Modifier l'ID TMDB d'un média de la médiathèque | ✅ | ✅ |
+| PUT | `/library/reload-media-library-metadata/:mediaLibraryId` | Recharger les métadonnées d'un média | ✅ | ✅ |
+| PUT | `/library/reload-media-library-file/:mediaLibraryId` | Recharger le fichier vidéo d'un média | ✅ | ✅ |
+| DELETE | `/library/:id` | Supprimer une médiathèque | ✅ | ✅ |
+
+---
+
+### 🔢 Version (`/version`)
+
+Gestion des versions de l'application par système d'exploitation.
+
+| Méthode | Route | Description | Auth | Admin |
+|---------|-------|-------------|------|-------|
+| GET | `/version/windows` | Dernière version pour Windows | ✅ | - |
+| GET | `/version/linux` | Dernière version pour Linux | ✅ | - |
+| GET | `/version/macos` | Dernière version pour macOS | ✅ | - |
+| GET | `/version/all` | Toutes les dernières versions (tous OS) | ✅ | - |
+| PUT | `/version` | Mettre à jour la version pour un OS | ✅ | ✅ |
 
 ---
 
 ### 💬 Support (`/support`)
-
-Système de tickets de support par email.
 
 | Méthode | Route | Description | Auth |
 |---------|-------|-------------|------|
@@ -722,11 +848,13 @@ Système de tickets de support par email.
 }
 ```
 
+---
+
 ## 🔌 Intégrations externes
 
 ### 📧 Service de Mail (Nodemailer)
 
-Le service de mail utilise **Nodemailer** avec des templates Handlebars (`.hbs`) pour envoyer des emails stylisés :
+Le service de mail utilise **Nodemailer** avec des templates Handlebars (`.hbs`) pour envoyer des emails stylisés.
 
 **Templates disponibles** (dans `/templates`) :
 - `verification-code.hbs` : Code de vérification à 6 chiffres
@@ -748,10 +876,10 @@ MAIL_PASS=xxxxx
 MAIL_FROM="ChocoPlus <noreply@chocoplus.com>"
 ```
 
-### 🎬 Node File System utilisé dans les librairies
+### 🎬 Node File System (médiathèques)
 
-Intégration selon les fichiers vidéos disponibles dans les librairies créées :
-- Synchronisation automatique des bibliothèque
+Intégration selon les fichiers vidéos disponibles dans les médiathèques créées :
+- Synchronisation automatique des bibliothèques
 - Récupération des chemins de fichiers vidéo + des métadonnées avec ffmpeg
 - Gestion des métadonnées (posters, descriptions)
 - Détection des nouveaux contenus
@@ -764,6 +892,8 @@ Récupération des métadonnées depuis TMDB :
 - Cast et équipe technique
 - Traductions multilingues
 - Titres similaires
+
+---
 
 ## ⚙️ Configuration
 
@@ -800,7 +930,7 @@ TMDB_BASE_URL="https://api.themoviedb.org/3"
 PORT=3000
 NODE_ENV=development
 
-#header
+# Header sécurité
 HEADER_SECRET_API="votre-cle-secrete-api"
 HEADER_NAME_FIELD_SECRET_API="nom-du-header"
 ```
@@ -809,16 +939,14 @@ HEADER_NAME_FIELD_SECRET_API="nom-du-header"
 
 Le projet utilise le **driver natif MariaDB** avec un pool de connexions configuré dans `database.module.ts`.
 
-**Configuration du pool** :
 ```typescript
-// database.module.ts
 const pool = mariadb.createPool({
   host: config.get('DB_HOST'),
   port: config.get('DB_PORT'),
   user: config.get('DB_USER'),
   password: config.get('DB_PASS'),
   database: config.get('DB_NAME'),
-  connectionLimit: config.get('DB_CONNECTION_LIMIT'), // Nombre max de connexions
+  connectionLimit: config.get('DB_CONNECTION_LIMIT'),
   decimalAsNumber: true,
   bigIntAsNumber: true
 });
@@ -829,6 +957,8 @@ const pool = mariadb.createPool({
 - Pool global injecté dans tous les services via `@Inject(DATABASE_POOL)`
 - Toujours libérer les connexions avec `conn.release()` dans un bloc `finally`
 
+---
+
 ## 📥 Installation
 
 ### Prérequis
@@ -836,7 +966,7 @@ const pool = mariadb.createPool({
 - **Node.js** : 18.x ou supérieur
 - **npm** : 9.x ou supérieur
 - **MariaDB/MySQL** : 10.x ou supérieur
-- **Ffmpeg** : pour la récupération des métadonnées des fichiers courants (durée, résolution en pixel ...)
+- **Ffmpeg** : pour la récupération des métadonnées des fichiers vidéo (durée, résolution…)
 - **Compte TMDB** : pour les métadonnées des films/séries
 
 ### Étapes d'installation
@@ -854,10 +984,7 @@ cp .env.example .env
 # Éditer .env avec vos configurations
 
 # 4. Configurer la base de données
-# Créer la base de données
 mysql -u root -p -e "CREATE DATABASE chocoplus CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-
-# Importer le schéma SQL (crée toutes les tables + données initiales)
 mysql -u root -p chocoplus < db.sql
 
 # 5. Lancer en mode développement
@@ -878,16 +1005,18 @@ npm run test:e2e       # Tests end-to-end
 npm run lint           # Vérification du code
 ```
 
+---
+
 ## 📁 Structure du projet
 
 ```
 chocoplus-api/
 ├── src/
 │   ├── auth/                       # Module d'authentification
-│   │   ├── auth.controller.ts     # Routes d'authentification
-│   │   ├── auth.service.ts        # Logique JWT
+│   │   ├── auth.controller.ts
+│   │   ├── auth.service.ts
 │   │   ├── auth.module.ts
-│   │   └── dto/                   # Interfaces
+│   │   └── dto/
 │   │
 │   ├── user/                       # Module utilisateurs
 │   │   ├── user.controller.ts
@@ -911,6 +1040,11 @@ chocoplus-api/
 │   │   ├── media.controller.ts
 │   │   ├── media.service.ts
 │   │   └── media.module.ts
+│   │
+│   ├── credit/                     # Module crédits (acteurs, réalisateurs et autres)
+│   │   ├── controller/
+│   │   ├── service/
+│   │   └── dto/
 │   │
 │   ├── category/                   # Module catégories
 │   │   ├── controller/
@@ -965,19 +1099,33 @@ chocoplus-api/
 │   │   ├── service/
 │   │   └── dto/
 │   │
-│   ├── Library/                   # Module Library
+│   ├── library/                    # Module médiathèques
 │   │   ├── controller/
 │   │   ├── service/
 │   │   └── dto/
+│   │
+│   ├── version/                    # Module versions
+│   │   ├── controller/
+│   │   ├── service/
+│   │   └── dto/
+│   │
+│   ├── i18n/                       # Fichiers de traduction (nestjs-i18n)
+│   │   ├── fr/
+│   │   │   └── common.json        # Messages en français
+│   │   ├── en/
+│   │   │   └── common.json        # Messages en anglais
+│   │   └── ja/
+│   │       └── common.json        # Messages en japonais
 │   │
 │   ├── guard/                      # Guards d'authentification
 │   │   ├── jwt-auth.guard.ts
 │   │   ├── admin-user.guard.ts
 │   │   ├── current-user.guard.ts
+│   │   ├── header-language.resolver.ts
 │   │   └── public.decorator.ts
 │   │
 │   ├── common-service/             # Services partagés
-│   │   └── mail.service.ts        # Service d'envoi d'emails
+│   │   └── mail.service.ts
 │   │
 │   ├── common-interface/           # Interfaces partagées
 │   │   ├── return-message.interface.ts
@@ -986,31 +1134,33 @@ chocoplus-api/
 │   │   └── link.interface.ts
 │   │
 │   ├── templates/                  # Templates d'emails (Handlebars)
-│   │   ├── layout.hbs             # Layout principal
-│   │   ├── verification-code.hbs  # Code de vérification
-│   │   ├── password.hbs           # Nouveau mot de passe
-│   │   └── suspended.hbs          # Compte suspendu
+│   │   ├── layout.hbs
+│   │   ├── verification-code.hbs
+│   │   ├── password.hbs
+│   │   └── suspended.hbs
 │   │
 │   ├── database/                   # Module de base de données
-│   │   └── database.module.ts     # Configuration du pool MariaDB
+│   │   └── database.module.ts
 │   │
-│   ├── app.controller.ts           # Contrôleur principal
+│   ├── app.controller.ts
 │   ├── app.service.ts
-│   ├── app.module.ts               # Module racine
-│   └── main.ts                     # Point d'entrée
+│   ├── app.module.ts
+│   └── main.ts
 │
-├── test/                           # Tests
+├── test/
 │   ├── app.e2e-spec.ts
 │   └── jest-e2e.json
 │
-├── db.sql                          # Schéma de base de données SQL
-├── .env                            # Variables d'environnement
-├── .env.example                    # Exemple de configuration
-├── nest-cli.json                   # Configuration NestJS CLI
-├── tsconfig.json                   # Configuration TypeScript
+├── db.sql
+├── .env
+├── .env.example
+├── nest-cli.json
+├── tsconfig.json
 ├── package.json
 └── README.md
 ```
+
+---
 
 ## 🛠️ Technologies utilisées
 
@@ -1037,6 +1187,12 @@ chocoplus-api/
 | bcrypt | Hashage des mots de passe |
 | Passport JWT | Stratégie d'authentification |
 
+### Internationalisation
+
+| Technologie | Usage |
+|------------|-------|
+| nestjs-i18n | Internationalisation des messages de réponse |
+
 ### Envoi d'emails
 
 | Technologie | Usage |
@@ -1059,6 +1215,8 @@ chocoplus-api/
 | Jest | Tests unitaires |
 | Supertest | Tests E2E |
 
+---
+
 ## 🔒 Sécurité
 
 - **HTTPS recommandé** pour la production
@@ -1078,19 +1236,16 @@ chocoplus-api/
 - **Indexation** des champs de recherche dans la base de données
 - **Streaming vidéo optimisé** avec range requests
 
-**Exemple de bonne pratique** :
 ```typescript
 async getMovies(limit: number, offset: number): Promise<Movie[]> {
   const conn = await this.pool.getConnection();
   try {
-    // Requête paramétrée pour éviter les injections SQL
     const rows = await conn.query(
       'SELECT * FROM Media WHERE mediaType = ? LIMIT ? OFFSET ?',
       ['MOVIE', limit, offset]
     );
     return rows;
   } finally {
-    // TOUJOURS libérer la connexion
     conn.release();
   }
 }
@@ -1100,13 +1255,12 @@ async getMovies(limit: number, offset: number): Promise<Movie[]> {
 
 ### Workflow d'inscription utilisateur
 
-1. Utilisateur remplit le formulaire → `POST /auth/send-verification-code`
-2. Email avec code à 6 chiffres envoyé
-3. Utilisateur valide le code → `POST /auth/register`
-4. Compte créé avec rôle `NOT_ACTIVATE`
-5. Admin change le rôle via → `PUT /user/update-role-by-admin/:id`
-6. Email automatique avec nouveau mot de passe
-7. Utilisateur peut se connecter → `POST /auth/login`
+```
+1. POST /auth/send-verification-code → Envoie code à l'email
+2. POST /auth/register (avec code)   → Crée le compte (NOT_ACTIVATE)
+3. Admin change le rôle              → Envoi email avec mot de passe
+4. POST /auth/login                  → Connexion possible
+```
 
 ### Gestion du streaming
 
@@ -1119,10 +1273,12 @@ Le streaming utilise **Range Requests** pour permettre :
 ### Synchronisation des médiathèques
 
 L'API peut :
-- Détecter automatiquement les nouveaux médias dans médiathèques qui ont été créées
+- Détecter automatiquement les nouveaux médias dans les médiathèques créées
 - Importer les métadonnées avec ffmpeg
 - Synchroniser les chemins de fichiers
-- Détecter les incohérences (médias supprimés, IDs invalides)
+- Détecter les incohérences (médias supprimés, IDs invalides, TMDB dupliqués)
+
+---
 
 ## 🤝 Contribution
 
@@ -1136,4 +1292,4 @@ Projet public - Tous droits réservés
 
 **Développé avec ❤️ et 🍫 par l'équipe ChocoPlus**
 
-*API Version 1.0.0 - Janvier 2025*
+*API Version 2.0.0 - Mai 2026*
