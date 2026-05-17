@@ -433,24 +433,29 @@ export class SeriesService extends MediaService {
                 const result: any = await conn.query(query,
                     [newSeries.title.trim(), newSeries.mediaLibraryId, newSeries?.description.trim() ?? '', this.getStringFromDate(newSeries.date), interval.start, interval.end, this.currentMediaType]
                 );
-                const mediaId: number | null = result ? Number(result.insertId) || null : null;
-                if (mediaId) {
+                const seriesId: number | null = result ? Number(result.insertId) || null : null;
+                if (seriesId) {
                     let message: string = this.i18nService.t("common.SERIES.SERIES_REGISTERED", {
                         args: {
                             title: newSeries.title.trim()
                         }
                     }) + " \n ";
-                    const formatedPath: string = mediaId.toString();
-                    const messageCategory: string = await this.insertManyMediaCategory(mediaId, newSeries.categories, conn);
-                    const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newSeries.otherTitles, conn);
-                    const messageCredit: string = await this.creditService.insertManyCredits(mediaId, newSeries.credits, conn);
-                    const messageKeyWord: string = await this.insertKeyword(mediaId, newSeries.keyWords, conn);
-                    const messagePoster: string = await this.posterService.insertManyPosterByMedia(newSeries, this.currentMediaType, formatedPath, mediaId, conn);
-                    const messageSeason: string = await this.insertManySeasons(newSeries.seasons, mediaId, formatedPath, conn);
+                    const formatedPath: string = seriesId.toString();
+                    const messageCategory: string = await this.insertManyMediaCategory(seriesId, newSeries.categories, conn);
+                    const messageTranslationTitle: string = await this.insertManyTranslationTitle(seriesId, newSeries.otherTitles, conn);
+                    const messageCredit: string = await this.creditService.insertManyCredits(seriesId, newSeries.credits, conn);
+                    const messageKeyWord: string = await this.insertKeyword(seriesId, newSeries.keyWords, conn);
+                    const messagePoster: string = await this.posterService.insertManyPosterByMedia(newSeries, this.currentMediaType, formatedPath, seriesId, conn);
+                    const messageSeason: string = await this.insertManySeasons(newSeries.seasons, seriesId, formatedPath, conn);
 
                     let messageSimilarTitle: string = `${this.i18nService.t("common.SIMILAR_TITLE.SIMILAR_TITLE_ADDED")} (0)`;
+                    
                     if (insertSimilarTitle) {
-                        messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(mediaId, conn);
+                        try {
+                            messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(seriesId, conn);
+                        } catch(error: any) {
+                            messageSimilarTitle = `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
+                        }                    
                     }
 
                     message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeason} \n ${messageSimilarTitle}`;
@@ -458,7 +463,7 @@ export class SeriesService extends MediaService {
                         id: 0,
                         state: true,
                         message: message,
-                        other: { id: mediaId }
+                        other: { id: seriesId }
                     }
                     await conn.commit();
                 } else {
@@ -572,7 +577,13 @@ export class SeriesService extends MediaService {
                     const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateSeries.id, updateSeries.keyWords, conn);
                     const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateSeries, oldSeries, this.currentMediaType, formatedPath, conn);
                     const messageSeasons: string = await this.insertUpdateOrDeleteSeasons(updateSeries.seasons, oldSeries.seasons, updateSeries.id, formatedPath, conn);
-                    const messageSimilarTitle: string = await this.similarTitleService.saveSimilarTitlesForMediaById(oldSeries.id, conn);
+                    
+                    let messageSimilarTitle: string = "";
+                    try {
+                        messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(oldSeries.id, conn);
+                    } catch(error: any) {
+                        messageSimilarTitle = `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
+                    } 
 
                     message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSeasons} \n ${messageSimilarTitle}`;
                     messageReturned = {

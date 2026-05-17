@@ -232,6 +232,7 @@ export class SimilarTitleService {
                 medias = rows.medias;
                 translations = rows.translations;
             }
+            await conn.query(`DELETE FROM Similar_Title WHERE sourceId = ?`, [mediaId]);
             const similarMedias = this.getSimilarMedia(mediaId, medias, translations);
             
             if (similarMedias.length > 0) {

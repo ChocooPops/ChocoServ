@@ -207,24 +207,28 @@ export class MovieService extends MediaService {
                 const result: any = await conn.query(query,
                     [newMovie.title.trim(), newMovie.mediaLibraryId, newMovie.description, this.getStringFromDate(newMovie.date), interval.start, interval.end, this.currentMediaType]
                 );
-                const mediaId: number | null = result ? Number(result.insertId) || null : null;
-                if (mediaId) {
+                const movieId: number | null = result ? Number(result.insertId) || null : null;
+                if (movieId) {
                     let message: string = this.i18nService.t("common.MOVIE.MOVIE_REGISTERED", {
                         args: {
                             title: newMovie.title.trim()
                         }
                     }) + " \n ";
-                    const formatedPath: string = mediaId.toString();
-                    const messageCategory: string = await this.insertManyMediaCategory(mediaId, newMovie.categories, conn);
-                    const messageTranslationTitle: string = await this.insertManyTranslationTitle(mediaId, newMovie.otherTitles, conn);
-                    const messageCredit: string = await this.creditService.insertManyCredits(mediaId, newMovie.credits, conn);
-                    const messageKeyWord: string = await this.insertKeyword(mediaId, newMovie.keyWords, conn);
-                    const messagePoster: string = await this.posterService.insertManyPosterByMedia(newMovie, this.currentMediaType, formatedPath, mediaId, conn);
+                    const formatedPath: string = movieId.toString();
+                    const messageCategory: string = await this.insertManyMediaCategory(movieId, newMovie.categories, conn);
+                    const messageTranslationTitle: string = await this.insertManyTranslationTitle(movieId, newMovie.otherTitles, conn);
+                    const messageCredit: string = await this.creditService.insertManyCredits(movieId, newMovie.credits, conn);
+                    const messageKeyWord: string = await this.insertKeyword(movieId, newMovie.keyWords, conn);
+                    const messagePoster: string = await this.posterService.insertManyPosterByMedia(newMovie, this.currentMediaType, formatedPath, movieId, conn);
 
                     let messageSimilarTitle: string = `${this.i18nService.t("common.SIMILAR_TITLE.SIMILAR_TITLE_ADDED")} (0)`;
                     
                     if (insertSimilarTitle) {
-                        messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(mediaId, conn);
+                        try {
+                            messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(movieId, conn);
+                        } catch(error: any) {
+                            messageSimilarTitle = `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
+                        }
                     }
 
                     message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSimilarTitle}`;
@@ -232,7 +236,7 @@ export class MovieService extends MediaService {
                         id: 0,
                         state: true,
                         message: message,
-                        other: { id: mediaId }
+                        other: { id: movieId }
                     }
                     await conn.commit();
                     } else {
@@ -292,7 +296,13 @@ export class MovieService extends MediaService {
                     const messageKeyWord: string = await this.deleteAndUpdateKeyword(updateMovie.id, updateMovie.keyWords, conn);
                     const messagePoster: string = await this.posterService.deleteOrUpdatePosterByMedia(updateMovie, oldMovie, this.currentMediaType, formatedPath, conn);
 
-                    const messageSimilarTitle: string = await this.similarTitleService.saveSimilarTitlesForMediaById(oldMovie.id, conn);
+                    let messageSimilarTitle: string = "";
+                    
+                    try {
+                        messageSimilarTitle = await this.similarTitleService.saveSimilarTitlesForMediaById(oldMovie.id, conn);
+                    } catch(error: any) {
+                        messageSimilarTitle = `${this.i18nService.t("common.ERROR")}: ${error.sqlMessage}`
+                    }
 
                     message += `${messageCategory} \n ${messageTranslationTitle} \n ${messageCredit} \n ${messageKeyWord} \n ${messagePoster} \n ${messageSimilarTitle}`;
                     messageReturned = {
