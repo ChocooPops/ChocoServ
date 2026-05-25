@@ -812,6 +812,7 @@ Gestion des médiathèques et synchronisation des fichiers vidéo.
 | POST | `/library` | Créer une nouvelle médiathèque | ✅ | ✅ |
 | PUT | `/library/refresh/:id/:mediaType` | Synchroniser une médiathèque (scan + import) | ✅ | ✅ |
 | PUT | `/library/modify-tmbd/:mediaLibraryId` | Modifier l'ID TMDB d'un média de la médiathèque | ✅ | ✅ |
+| PUT | `/library/modify-path/:mediaLibraryId` | Modifier le chemin du fichier du média de la médiathèque | ✅ | ✅ |
 | PUT | `/library/reload-media-library-metadata/:mediaLibraryId` | Recharger les métadonnées d'un média | ✅ | ✅ |
 | PUT | `/library/reload-media-library-file/:mediaLibraryId` | Recharger le fichier vidéo d'un média | ✅ | ✅ |
 | DELETE | `/library/:id` | Supprimer une médiathèque | ✅ | ✅ |

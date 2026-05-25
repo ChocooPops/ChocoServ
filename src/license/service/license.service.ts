@@ -186,7 +186,7 @@ export class LicenseService {
     public async getLicenseByResearched(keyWord: string): Promise<License[]> {
         const conn = await this.pool.getConnection();
         try {
-            const WHERE: string = `WHERE l.name = ?`;
+            const WHERE: string = `WHERE l.name like ?`;
             const ORDER: string = `ORDER BY ABS(CHAR_LENGTH(l.name) - CHAR_LENGTH(?)) ASC`;
             const query: string = this.getQuerySelectSimpleLicense(WHERE, ORDER);
             const licenses: License[] = await conn.query(query, [`%${keyWord}%`, keyWord]);

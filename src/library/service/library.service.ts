@@ -480,6 +480,14 @@ export class LibraryService {
                     }
                 }
 
+                if (!await this.checkFileExists(path)) {
+                    return {
+                        id: -1,
+                        state: false,
+                        message: this.i18nService.t("common.LIBRARY.LIBRARY_PATH_NOT_EXIST")
+                    }
+                }
+
                 const libraries: Library[] = await conn.query(`SELECT * FROM Library WHERE id = ?`, [mediaLibrary.libraryId]);
                 const library: Library = libraries[0];
 
@@ -508,11 +516,14 @@ export class LibraryService {
                             const year: number = mediaLibrary.type === MediaType.MOVIE ? parsed.year : 0;
                             const titleFormated: string = mediaLibrary.type === MediaType.MOVIE ? parsed.name : mediaLibrary.titleFormated;
                             const queryUpdate: string = `
-                                INSERT INTO Media_Library (path, duration, frames, bytes, width, height, resolution, year, titleFormated)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-                            await conn.query(queryUpdate, [newPath, metadata.duration, metadata.frames, metadata.bytes, metadata.width, metadata.height, metadata.resolution, year, titleFormated]);
+                                UPDATE Media_Library
+                                SET path = ?, duration = ?, frames = ?, bytes = ?, width = ?, height = ?, resolution = ?, year = ?, titleFormated = ?
+                                WHERE id = ?`;
+                            await conn.query(queryUpdate, [path, metadata.duration, metadata.frames, metadata.bytes, metadata.width, metadata.height, metadata.resolution, year, titleFormated, mediaLibraryId]);
 
                             await conn.commit();
+                            await this.unlockMediaLibrary(mediaLibraryId, conn);
+                            
                             return {
                                 id: 0,
                                 state: true,
@@ -520,10 +531,16 @@ export class LibraryService {
                                 other: {
                                     year,
                                     titleFormated,
-                                    metadata
+                                    duration: Number(metadata.duration),
+                                    frames: Number(metadata.frames),
+                                    bytes: Number(metadata.bytes),
+                                    width: metadata.width,
+                                    height: metadata.height,
+                                    resolution: metadata.resolution
                                 }
                             };
-                        } catch(error) {
+                        } catch(error: any) {
+                            await conn.rollback();
                             throw error;
                         } finally {
                             await this.unlockMediaLibrary(mediaLibraryId, conn);
@@ -546,11 +563,10 @@ export class LibraryService {
                 return {
                     id: -1,
                     state: false,
-                    message: this.i18nService.t("common.LIBRARY.MEDIA_LIBRARY_UNFOUND")
+                    message: this.i18nService.t("common.LIBRARY.MEDIA_LIBRARY_NOT_INCLUDE_INTO_LIBRARY")
                 }
             }
         } catch(error: any) {
-            await conn.rollback();
             return {
                 id: -1,
                 state: false,
@@ -583,6 +599,7 @@ export class LibraryService {
                             await conn.commit();
                             return messageTmdb;
                         } catch(error) {
+                            await conn.rollback();
                             throw error;
                         } finally {
                             await this.unlockMediaLibrary(mediaLibraryId, conn);
@@ -609,7 +626,6 @@ export class LibraryService {
                 }
             }
         } catch(error: any) {
-            await conn.rollback();
             return {
                 id: -1,
                 state: false,
@@ -688,6 +704,7 @@ export class LibraryService {
                             return await this.reloadSeriesLibraryMetadata(mediaLibrary, library, conn);
                         }
                     } catch(error) {
+                        await conn.rollback();
                         throw error;
                     } finally {
                         await this.unlockMediaLibrary(mediaLibraryId, conn);
@@ -1699,4 +1716,13 @@ export class LibraryService {
         }
     }
  
+    private async checkFileExists(filePath: string): Promise<boolean> {
+        try {
+            await fs.access(filePath);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
 }

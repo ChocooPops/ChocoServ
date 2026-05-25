@@ -53,7 +53,7 @@ import { LibraryModule } from './library/library.module';
       {
         name: 'default',
         ttl: 60_000,
-        limit: 50,
+        limit: 1000,
       }
     ]),
 

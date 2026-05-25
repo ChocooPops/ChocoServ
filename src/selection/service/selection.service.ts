@@ -130,7 +130,7 @@ export class SelectionService {
     public async getSelectionByResearched(keyWord: string): Promise<Selection[]> {
         const conn = await this.pool.getConnection();
         try {
-            const WHERE: string = `WHERE name = ?`;
+            const WHERE: string = `WHERE name like ?`;
             const ORDER: string = ` ORDER BY ABS(CHAR_LENGTH(name) - CHAR_LENGTH(?)) ASC`;
             const query: string = this.getQuerySimpleSelections(WHERE, ORDER);
             const selections: Selection[] = await conn.query(query, [`%${keyWord}%`, keyWord]);
