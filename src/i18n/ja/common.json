@@ -215,7 +215,8 @@
         "MEDIA_LIBRARY_UNFOUND_OR_NOT_SERIES": "Media_LibraryがSERIESタイプではないか、見つかりません",
         "NO_CHANGES": "変更なし",
         "TMDB_UPDATED": "映画のTMDB識別子が更新されました",
-        "ONLY_SERIES_CAN_MODIFIED": "SERIESタイプの行のみ変更できます",
+        "ONLY_SERIES_CAN_MODIFIED": "「SERIES」タイプの行のみ変更できます",
+        "ONLY_MOVIE_EPISODE_CAN_MODIFIED": "「Movie」または「Episode」タイプの行のみ編集可能です",
         "MEDIA_LIBRARY_DELETED": "メディアライブラリが削除されました",
         "LIBRARY_DELETED": "ライブラリが削除されました",
         "SERIES": "[SERIES]",
@@ -237,7 +238,8 @@
         "TMDB_NEW_SEASONS": "[TMDB NEW SEASONS]",
         "TMDB_NEW_EPISODES": "[TMDB NEW EPISODES]",
         "TMDB_NEW_CONTENT_ERROR": "[TMDB NEW CONTENT ERROR]",
-        "EPISODE": "エピソード"
+        "EPISODE": "エピソード",
+        "MODIFY_PATH_MEDIA": "パスが変更されました"
     },
     "MEDIA": {
         "CATEGORY_ADDED_INTO_MOVIE": "カテゴリーがメディアに追加されました",

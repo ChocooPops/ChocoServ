@@ -216,6 +216,7 @@
         "NO_CHANGES": "No changes",
         "TMDB_UPDATED": "Movie TMDB identifier updated",
         "ONLY_SERIES_CAN_MODIFIED": "Only rows of type SERIES can be modified",
+        "ONLY_MOVIE_EPISODE_CAN_MODIFIED": "Only rows of type MOVIE or EPISODE can be modified",
         "MEDIA_LIBRARY_DELETED": "Media Library deleted",
         "LIBRARY_DELETED": "Library deleted",
         "SERIES": "[SERIES]",
@@ -237,7 +238,8 @@
         "TMDB_NEW_SEASONS": "[TMDB NEW SEASONS]",
         "TMDB_NEW_EPISODES": "[TMDB NEW EPISODES]",
         "TMDB_NEW_CONTENT_ERROR": "[TMDB NEW CONTENT ERROR]",
-        "EPISODE": "Episode"
+        "EPISODE": "Episode",
+        "MODIFY_PATH_MEDIA": "The path has been changed"
     },
     "MEDIA": {
         "CATEGORY_ADDED_INTO_MOVIE": "Categories have been added to the media",

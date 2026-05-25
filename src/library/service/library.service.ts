@@ -465,6 +465,102 @@ export class LibraryService {
         return await conn.query(`UPDATE Media_Library SET state = ? WHERE id = ?`, [StateLibrary.NOT_WORKED, mediaLibraryId]);
     }
 
+    public async modifyPathFromMediaLibrary(mediaLibraryId: string, path: string): Promise<ReturnMessage> {
+        const conn = await this.pool.getConnection();
+        try {
+            const mediaLibraries: MediaLibrary[] = await conn.query(`SELECT * FROM Media_Library WHERE id = ?`, [mediaLibraryId]);
+            if (mediaLibraries.length > 0) {
+                const mediaLibrary: MediaLibrary = mediaLibraries[0];
+
+                if (mediaLibrary.type !== MediaType.MOVIE && mediaLibrary.type !== MediaType.EPISODE) {
+                    return {
+                        id: -1,
+                        state: false,
+                        message: this.i18nService.t("common.LIBRARY.ONLY_MOVIE_EPISODE_CAN_MODIFIED")
+                    }
+                }
+
+                const libraries: Library[] = await conn.query(`SELECT * FROM Library WHERE id = ?`, [mediaLibrary.libraryId]);
+                const library: Library = libraries[0];
+
+                const libraryPath: string = this.normalizePath(library.path);
+                const newPath: string = this.normalizePath(path);
+                const oldPath: string = this.normalizePath(mediaLibrary.path);
+
+                if (newPath.startsWith(libraryPath)) {
+                    if (newPath === oldPath) {
+                        return {
+                            id: -1,
+                            state: false,
+                            message: this.i18nService.t("common.LIBRARY.NO_CHANGES")
+                        }
+                    }
+
+                    if (mediaLibrary.state === StateLibrary.NOT_WORKED && library.state === StateLibrary.NOT_WORKED) {
+                        await this.lockMediaLibrary(mediaLibraryId, conn);
+                        await conn.beginTransaction();
+                        
+                        try {
+                            const parsed: ParsedName = this.parseFilePathService.getCleanMediaTitle(
+                                basename(newPath)
+                            );
+                            const metadata: MediaMetadata = await this.extractMediaMetadata(newPath);
+                            const year: number = mediaLibrary.type === MediaType.MOVIE ? parsed.year : 0;
+                            const titleFormated: string = mediaLibrary.type === MediaType.MOVIE ? parsed.name : mediaLibrary.titleFormated;
+                            const queryUpdate: string = `
+                                INSERT INTO Media_Library (path, duration, frames, bytes, width, height, resolution, year, titleFormated)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                            await conn.query(queryUpdate, [newPath, metadata.duration, metadata.frames, metadata.bytes, metadata.width, metadata.height, metadata.resolution, year, titleFormated]);
+
+                            await conn.commit();
+                            return {
+                                id: 0,
+                                state: true,
+                                message: this.i18nService.t("common.LIBRARY.MODIFY_PATH_MEDIA"),
+                                other: {
+                                    year,
+                                    titleFormated,
+                                    metadata
+                                }
+                            };
+                        } catch(error) {
+                            throw error;
+                        } finally {
+                            await this.unlockMediaLibrary(mediaLibraryId, conn);
+                        }
+                    } else {
+                        return {
+                            id: -1,
+                            state: false,
+                            message: this.i18nService.t("common.LIBRARY.LIBRARY_LOCK")
+                        }
+                    }
+                } else {
+                    return {
+                        id: -1,
+                        state: false,
+                        message: this.i18nService.t("common.LIBRARY.LIBRARY_PATH_NOT_EXIST")
+                    }
+                }
+            } else {
+                return {
+                    id: -1,
+                    state: false,
+                    message: this.i18nService.t("common.LIBRARY.MEDIA_LIBRARY_UNFOUND")
+                }
+            }
+        } catch(error: any) {
+            await conn.rollback();
+            return {
+                id: -1,
+                state: false,
+                message: `${this.i18nService.t('common.ERROR')}: ${error.sqlMessage}`
+            }
+        } finally {
+            await conn.release();
+        }
+    } 
+
     public async modifyTmdbIdFromMediaLibrary(mediaLibraryId: string, tmdbId: number): Promise<ReturnMessage> {
         const conn = await this.pool.getConnection();
         try {
