@@ -45,16 +45,8 @@ export class SearchService {
     //         .trim(); // Supprime les espaces au début et à la fin
     // }
 
-    public setMaxDistance(keyWord: string): number {
-        let max: number = 0;
-        if (keyWord.length <= 4) {
-            max = 2;
-        } else if (keyWord.length <= 10) {
-            max = 3;
-        } else {
-            max = keyWord.length * 0.2;
-        }
-        return max;
+    public getMaxDistance(): number {
+        return 1;
     }
 
     public deleteUselessCharacterString(titleTab: string[]): string[] {
@@ -114,7 +106,7 @@ export class SearchService {
             for (const keyWordField of keyWordTab) {
                 for (const titleField of titleTab) {
                     const distance = this.levenshteinDistance(keyWordField, titleField);
-                    if (distance <= this.setMaxDistance(titleField)) {
+                    if (distance <= this.getMaxDistance()) {
                         mediaApproximative.push({ data: media, score: distance });
                         found = true;
                         break;

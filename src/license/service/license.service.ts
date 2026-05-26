@@ -188,18 +188,49 @@ export class LicenseService {
     public async getLicenseByResearched(keyWord: string): Promise<License[]> {
         const conn = await this.pool.getConnection();
         try {
-            const DISTANCE_MAX: number = 1;
             const normalizedKeyword = this.searchService.normalizedKeyword(keyWord);
+            const keywords = normalizedKeyword.split(' ').filter(Boolean);
 
-            const WHERE: string = `WHERE NORMALIZE_TITLE(l.name) LIKE ?
-                                        OR LEVENSHTEIN(NORMALIZE_TITLE(l.name), LOWER(?)) <= ${DISTANCE_MAX}`;
-            const ORDER: string = `ORDER BY ABS(CHAR_LENGTH(l.name) - CHAR_LENGTH(?)) ASC`;
-            const query: string = this.getQuerySelectSimpleLicense(WHERE, ORDER);
-            const licenses: License[] = await conn.query(query, [`%${normalizedKeyword}%`, normalizedKeyword, normalizedKeyword]);
-            licenses.forEach((license: License, index) => {
-                licenses[index] = this.getFormatedLicense(license);
-            });
-            return licenses;
+            const likeConditions = keywords
+                .map(() => `l.name LIKE ?`)
+                .join(' AND ');
+
+            const WHERE: string = `WHERE ${likeConditions}`;
+            const ORDER: string = `ORDER BY CHAR_LENGTH(l.name) ASC`;
+            const likeParams = keywords.map(k => `%${k}%`);
+
+            const results: License[] = await conn.query(
+                this.getQuerySelectSimpleLicense(WHERE, ORDER),
+                [...likeParams]
+            );
+
+            let allResults = [...results];
+
+            if (results.length < 10) {
+                const allLicenses: License[] = await conn.query(
+                    this.getQuerySelectSimpleLicense(`WHERE 1=1`, ORDER), []
+                );
+
+                const likeIds = new Set(results.map(r => r.id));
+                const fuzzy = allLicenses.filter(l => {
+                    if (!l.name || likeIds.has(l.id)) return false;
+                    const normalizedName = this.searchService.normalizedKeyword(l.name);
+                    return normalizedName.split(' ').some(word =>
+                        keywords.some(k => {
+                            const distance = this.searchService.levenshteinDistance(word, k);
+                            const maxDistance = this.searchService.getMaxDistance();
+                            return distance <= maxDistance;
+                        })
+                    );
+                });
+
+                allResults = [...results, ...fuzzy];
+            }
+
+            return allResults
+                .slice(0, 10)
+                .map(license => this.getFormatedLicense(license));
+
         } catch (error) {
             return [];
         } finally {

@@ -13,6 +13,7 @@ import { UploadImageService } from 'src/common-service/upload-image.service';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { TmdbService } from 'src/tmdb/service/tmdb.service';
 import { I18nService } from 'nestjs-i18n';
+import { SearchService } from 'src/common-service/search.service';
 
 @Injectable()
 export class CreditService {
@@ -23,7 +24,8 @@ export class CreditService {
         private readonly uploadImageService: UploadImageService,
         @Inject(forwardRef(() => TmdbService))
         private readonly tmdbService: TmdbService,
-        private readonly i18nService: I18nService
+        private readonly i18nService: I18nService,
+        private readonly searchService: SearchService
     ) { }
     
     public getJobToFilters(): Job[] {
@@ -46,22 +48,65 @@ export class CreditService {
     public async getCreditByResearch(keyWord: string): Promise<Credit[]> {
         const conn = await this.pool.getConnection();
         try {
-            const credits: Credit[] = await conn.query(`
-                SELECT c.id, p.name as srcPoster, c.fullName 
+            const normalizedKeyword = this.searchService.normalizedKeyword(keyWord);
+            const keywords = normalizedKeyword.split(' ').filter(Boolean);
+
+            const likeConditions = keywords
+                .map(() => `(c.fullName LIKE ? OR c.originalFullName LIKE ?)`)
+                .join(' AND ');
+
+            const likeParams = keywords.flatMap(k => [`%${k}%`, `%${k}%`]);
+
+            const results: Credit[] = await conn.query(`
+                SELECT c.id, p.name as srcPoster, c.fullName, c.originalFullName
                 FROM CREDIT c
                 LEFT JOIN Poster p ON p.id = c.srcPoster
-                WHERE c.id like '${keyWord}%'
-                OR c.tmdbId like '${keyWord}%'
-                OR c.fullName like '%${keyWord}%' 
-                OR c.originalFullName like '%${keyWord}%
-                ORDER BY ABS(CHAR_LENGTH(c.fullName) - CHAR_LENGTH(${keyWord})), 
-                    ABS(CHAR_LENGTH(c.originalFullName) - CHAR_LENGTH(${keyWord})) ASC'
-                LIMIT 50`);
-            credits.forEach((credit: Credit) => {
-                credit.srcPoster = this.formatPathService.getOneFormatedPosterUrl(credit.id, MediaType.CREDIT, credit.srcPoster as string);
-            });
-            return credits;
-        } catch(error) {
+                WHERE c.id LIKE ?
+                OR c.tmdbId LIKE ?
+                OR (${likeConditions})
+                ORDER BY
+                    ABS(CHAR_LENGTH(c.fullName) - CHAR_LENGTH(?)),
+                    ABS(CHAR_LENGTH(c.originalFullName) - CHAR_LENGTH(?)) ASC
+                LIMIT 500`,
+                [`${keyWord}%`, `${keyWord}%`, ...likeParams, normalizedKeyword, normalizedKeyword]
+            );
+
+            let allResults = [...results];
+
+            if (results.length < 50) {
+                const allCandidates: Credit[] = await conn.query(`
+                    SELECT c.id, p.name as srcPoster, c.fullName, c.originalFullName
+                    FROM CREDIT c
+                    LEFT JOIN Poster p ON p.id = c.srcPoster
+                    WHERE ABS(CHAR_LENGTH(c.fullName) - ${normalizedKeyword.length}) <= ${normalizedKeyword.length}
+                    ORDER BY CHAR_LENGTH(c.fullName) ASC
+                    LIMIT 500`, []
+                );
+
+                const likeIds = new Set(results.map(r => r.id));
+                const fuzzy = allCandidates.filter(c => {
+                    if (!c.fullName || likeIds.has(c.id)) return false;
+                    const normalizedName = this.searchService.normalizedKeyword(c.fullName);
+                    return normalizedName.split(' ').some(word =>
+                        keywords.some(k => {
+                            const distance = this.searchService.levenshteinDistance(word, k);
+                            const maxDistance = this.searchService.getMaxDistance();
+                            return distance <= maxDistance;
+                        })
+                    );
+                });
+
+                allResults = [...results, ...fuzzy];
+            }
+
+            return allResults
+                .slice(0, 50)
+                .map(credit => ({
+                    ...credit,
+                    srcPoster: this.formatPathService.getOneFormatedPosterUrl(credit.id, MediaType.CREDIT, credit.srcPoster as string)
+                }));
+
+        } catch (error) {
             return [];
         } finally {
             await conn.release();

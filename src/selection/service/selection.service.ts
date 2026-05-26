@@ -132,17 +132,48 @@ export class SelectionService {
     public async getSelectionByResearched(keyWord: string): Promise<Selection[]> {
         const conn = await this.pool.getConnection();
         try {
-            const DISTANCE_MAX: number = 1;
             const normalizedKeyword = this.searchService.normalizedKeyword(keyWord);
-            const WHERE: string = `WHERE NORMALIZE_TITLE(name) LIKE ?
-                                        OR LEVENSHTEIN(NORMALIZE_TITLE(name), LOWER(?)) <= ${DISTANCE_MAX}`;
-            const ORDER: string = ` ORDER BY ABS(CHAR_LENGTH(name) - CHAR_LENGTH(?)) ASC`;
+            const keywords = normalizedKeyword.split(' ').filter(Boolean);
+
+            const likeConditions = keywords
+                .map(() => `name LIKE ?`)
+                .join(' AND ');
+
+            const WHERE: string = `WHERE ${likeConditions}`;
+            const ORDER: string = `ORDER BY CHAR_LENGTH(name) ASC`;
+
             const query: string = this.getQuerySimpleSelections(WHERE, ORDER);
-            const selections: Selection[] = await conn.query(query, [`%${normalizedKeyword}%`, normalizedKeyword, normalizedKeyword]);
-            selections.forEach((selection: Selection) => {
-                    selection.mediaList = [];
-            });
-            return selections;
+            const likeParams = keywords.map(k => `%${k}%`);
+
+            const results: Selection[] = await conn.query(query, [...likeParams]);
+
+            if (results.length < 10) {
+                const WHERE_ALL: string = `WHERE 1=1`;
+                const allSelections: Selection[] = await conn.query(
+                    this.getQuerySimpleSelections(WHERE_ALL, ORDER), []
+                );
+
+                const likeIds = new Set(results.map(r => r.id));
+                const fuzzy = allSelections.filter(s => {
+                    if (!s.name || likeIds.has(s.id)) return false;
+                    const normalizedName = this.searchService.normalizedKeyword(s.name);
+                    return normalizedName.split(' ').some(word =>
+                        keywords.some(k => {
+                            const distance = this.searchService.levenshteinDistance(word, k);
+                            const maxDistance = this.searchService.getMaxDistance();
+                            return distance <= maxDistance;
+                        })
+                    );
+                });
+
+                const allResults = [...results, ...fuzzy];
+                allResults.forEach(s => s.mediaList = []);
+                return allResults.slice(0, 10);
+            }
+
+            results.forEach(s => s.mediaList = []);
+            return results.slice(0, 10);
+
         } catch (error) {
             return [];
         } finally {

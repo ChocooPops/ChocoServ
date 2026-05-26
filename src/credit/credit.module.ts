@@ -6,10 +6,11 @@ import { PosterModule } from 'src/poster/poster.module';
 import { UploadImageService } from 'src/common-service/upload-image.service';
 import { UserModule } from 'src/user/user.module';
 import { TmdbModule } from 'src/tmdb/tmdb.module';
+import { SearchService } from 'src/common-service/search.service';
 
 @Module({
   imports: [PosterModule, forwardRef(() => UserModule), forwardRef(() => TmdbModule)],
-  providers: [CreditService, FormatPathService, UploadImageService],
+  providers: [CreditService, FormatPathService, UploadImageService, SearchService],
   controllers: [CreditController],
   exports: [CreditService]
 })

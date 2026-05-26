@@ -13,6 +13,7 @@ import { MediaType } from 'src/media/dto/media-type.enum';
 import { TranslationTitle } from 'src/media/dto/translation-title.interface';
 import { I18nService } from 'nestjs-i18n';
 import { SearchService } from 'src/common-service/search.service';
+import { SearchItem } from 'src/common-interface/search-item.interface';
 
 @Injectable()
 export class MediaService {
@@ -199,43 +200,94 @@ export class MediaService {
     public async getMediaByResearch(userId: number, keyWord: string, types: MediaType[]): Promise<Media[]> {
         const conn = await this.pool.getConnection();
         try {
-            const DISTANCE_MAX: number = 1;
             const normalizedKeyword = this.searchService.normalizedKeyword(keyWord);
-            const JOIN: string = `LEFT JOIN Translation_Title tt ON tt.mediaId = m.id
-                                    AND iso_639_1 IN ('VO', 'US', 'FR')`
-            const WHERE: string = `WHERE m.mediaType IN (?) AND (
-                                        NORMALIZE_TITLE(m.title) LIKE ? 
-                                        OR NORMALIZE_TITLE(tt.title) LIKE ? 
-                                        OR mlib.id = ?
-                                        OR LEVENSHTEIN(NORMALIZE_TITLE(m.title), LOWER(?)) <= ${DISTANCE_MAX}
-                                        OR LEVENSHTEIN(NORMALIZE_TITLE(tt.title), LOWER(?)) <= ${DISTANCE_MAX}
-                                    )
-                                    GROUP BY m.id`;
-            const ORDER: string = `ORDER BY LEAST(
-                                    ABS(CHAR_LENGTH(m.title) - CHAR_LENGTH(?)),
-                                    COALESCE(ABS(CHAR_LENGTH(tt.title) - CHAR_LENGTH(?)), 999999)
-                                    ) ASC`;
-            const LIMIT: string = `LIMIT 50`;
-            const queryFiltered: string = this.getQuerySelectMedia(
-                JOIN,
-                WHERE,
-                ORDER,
-                LIMIT,
+            const keywords = normalizedKeyword.split(' ').filter(Boolean);
+
+            const JOIN: string = `LEFT JOIN (
+                SELECT mediaId, GROUP_CONCAT(title SEPARATOR '||') as translationTitles
+                FROM Translation_Title
+                WHERE iso_639_1 IN ('VO', 'US', 'FR')
+                GROUP BY mediaId
+            ) tt ON tt.mediaId = m.id`;
+            const ORDER: string = `ORDER BY CHAR_LENGTH(m.title) ASC`;
+            const LIMIT: string = `LIMIT 500`;
+
+            const titleLikeConditions = keywords
+                .map(() => `m.title LIKE ?`)
+                .join(' AND ');
+
+            const translationLikeConditions = keywords
+                .map(() => `LOWER(tt.translationTitles) LIKE ?`)
+                .join(' OR ');
+
+            const WHERE_LIKE: string = `WHERE m.mediaType IN (?) AND (
+                                            mlib.id = ?
+                                            OR (${titleLikeConditions})
+                                            OR (${translationLikeConditions})
+                                        )
+                                        GROUP BY m.id`;
+
+            const titleLikeParams = keywords.map(k => `%${k}%`);
+            const translationLikeParams = keywords.map(k => `%${k}%`);
+
+            const likeResults: any[] = await conn.query(
+                this.getQuerySelectMedia(JOIN, WHERE_LIKE, ORDER, LIMIT),
+                [userId, userId, types, normalizedKeyword, ...titleLikeParams, ...translationLikeParams]
+            );
+
+            let fuzzyResults: any[] = [];
+            if (likeResults.length < 50) {
+                const keyLen = normalizedKeyword.length;
+                const WHERE_FUZZY: string = `WHERE m.mediaType IN (?) AND
+                                                ABS(CHAR_LENGTH(m.title) - ${keyLen}) <= ${keyLen}
+                                            GROUP BY m.id`;
+
+                const allCandidates: any[] = await conn.query(
+                    this.getQuerySelectMedia(JOIN, WHERE_FUZZY, ORDER, LIMIT),
+                    [userId, userId, types]
                 );
-            const results: any[] = await conn.query(queryFiltered, [
-                userId,
-                userId,
-                types.join(', '),
-                this.currentMediaType,
-                `%${normalizedKeyword}%`,
-                `%${normalizedKeyword}%`,
-                `%${normalizedKeyword}%`,
-                normalizedKeyword,
-                normalizedKeyword,
-                normalizedKeyword,
-                normalizedKeyword
-                ]);
-            return results;
+
+                const likeIds = new Set(likeResults.map(r => r.media?.id));
+                fuzzyResults = allCandidates.filter(r => {
+                    if (!r.media?.title || likeIds.has(r.media.id)) return false;
+                    const normalizedTitle = this.searchService.normalizedKeyword(r.media.title);
+                    return normalizedTitle.split(' ').some(word =>
+                        keywords.some(k => {
+                            const distance = this.searchService.levenshteinDistance(word, k);
+                            const maxDistance = this.searchService.getMaxDistance();
+                            return distance <= maxDistance;
+                        })
+                    );
+                });
+            }
+
+            const mainTitleResults = likeResults.filter(r => {
+                const normalizedTitle = this.searchService.normalizedKeyword(r.media.title);
+                return keywords.some(k => normalizedTitle.includes(k));
+            });
+
+            const translationOnlyResults = likeResults.filter(r => {
+                const normalizedTitle = this.searchService.normalizedKeyword(r.media.title);
+                return !keywords.some(k => normalizedTitle.includes(k));
+            });
+
+            const scoredResults = [...mainTitleResults, ...fuzzyResults];
+
+            const searchItems: SearchItem[] = scoredResults
+                .filter(r => r.media?.title != null)
+                .map(r => ({
+                    id: r.media.id,
+                    title: r.media.title,
+                }));
+
+            const sortedIds: number[] = this.searchService.getItemByResearch(keyWord, searchItems);
+
+            const sortedResults = sortedIds
+                .map(id => scoredResults.find(r => r.media.id === id))
+                .filter(Boolean);
+
+            return [...sortedResults, ...translationOnlyResults].slice(0, 50);
+
         } catch (error) {
             return [];
         } finally {
