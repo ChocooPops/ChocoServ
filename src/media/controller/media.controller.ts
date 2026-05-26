@@ -23,7 +23,7 @@ export class MediaController {
     @Get('research/:keyword')
     async getMediaByResearch(@CurrentUser('sub') userId: number, @Param('keyword') keyword: string): Promise<Media[]> {
         const medias: Media[] = [];
-        const items: any[] = await this.mediaSubstitutionSerivce.getMoviesAndSeriesByResearch(userId, keyword);
+        const items: any[] = await this.mediaService.getMediaByResearch(userId, keyword, [MediaType.MOVIE, MediaType.SERIES]);
         items.forEach((item: any) => {
             if (item.media.mediaType === MediaType.MOVIE) {
                 medias.push(this.movieService.getFormatedMovie(item));

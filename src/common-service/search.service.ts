@@ -25,15 +25,25 @@ export class SearchService {
         return matrix[a.length][b.length];
     }
 
-    public formatCharacterString(character: string): string {
-        return character
-            .toLowerCase() // Met tout en minuscules
-            .normalize('NFD') // Décompose les accents
-            .replace(/[\u0300-\u036f]/g, '') // Supprime les accents
-            .replace(/[^a-z0-9\s]/g, '') // Supprime les caractères spéciaux
-            .replace(/\s+/g, ' ') // Remplace plusieurs espaces par un seul
-            .trim(); // Supprime les espaces au début et à la fin
+    public normalizedKeyword(keyWord: string): string {
+        return keyWord
+            .normalize('NFD')                   // Décompose "é" → "e" + accent
+            .replace(/[\u0300-\u036f]/g, '')    // Supprime les accents
+            .toLowerCase()
+            .replace(/[^a-z0-9 ]/g, ' ')        // Supprime les caractères spéciaux
+            .replace(/\s+/g, ' ')               // Collapse les espaces multiples
+            .trim();
     }
+
+    // public formatCharacterString(character: string): string {
+    //     return character
+    //         .toLowerCase() // Met tout en minuscules
+    //         .normalize('NFD') // Décompose les accents
+    //         .replace(/[\u0300-\u036f]/g, '') // Supprime les accents
+    //         .replace(/[^a-z0-9\s]/g, '') // Supprime les caractères spéciaux
+    //         .replace(/\s+/g, ' ') // Remplace plusieurs espaces par un seul
+    //         .trim(); // Supprime les espaces au début et à la fin
+    // }
 
     public setMaxDistance(keyWord: string): number {
         let max: number = 0;
@@ -84,11 +94,11 @@ export class SearchService {
         const mediaApproximative: { data: SearchItem, score: number }[] = [];
         const mediaWanted: { data: SearchItem, score: number }[] = [];
         const medias: number[] = [];
-        keyWord = this.formatCharacterString(keyWord);
+        keyWord = this.normalizedKeyword(keyWord);
         const keyWordTab: string[] = keyWord.split(' ');
 
         for (const media of data) {
-            const title = this.formatCharacterString(media.title);
+            const title = this.normalizedKeyword(media.title);
             if (title.startsWith(keyWord.toString())) {
                 const distance = this.levenshteinDistance(title, keyWord.toString());
                 mediaWanted.push({

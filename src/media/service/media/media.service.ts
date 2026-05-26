@@ -12,6 +12,7 @@ import { Media } from 'src/media/dto/media.interface';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { TranslationTitle } from 'src/media/dto/translation-title.interface';
 import { I18nService } from 'nestjs-i18n';
+import { SearchService } from 'src/common-service/search.service';
 
 @Injectable()
 export class MediaService {
@@ -22,7 +23,8 @@ export class MediaService {
         protected readonly verifTimerShowService: VerifTimerShowService,
         protected readonly formatPathService: FormatPathService,
         protected readonly posterService: PosterService,
-        protected readonly i18nService: I18nService
+        protected readonly i18nService: I18nService,
+        protected readonly searchService: SearchService
     ) { }
 
     protected async getNodesMediaByType(): Promise<Node[]> {
@@ -194,12 +196,20 @@ export class MediaService {
         ${LIMIT}`
     }
 
-    protected async getMediaByResearch(keyWord: string): Promise<Media[]> {
+    public async getMediaByResearch(userId: number, keyWord: string, types: MediaType[]): Promise<Media[]> {
         const conn = await this.pool.getConnection();
         try {
+            const DISTANCE_MAX: number = 1;
+            const normalizedKeyword = this.searchService.normalizedKeyword(keyWord);
             const JOIN: string = `LEFT JOIN Translation_Title tt ON tt.mediaId = m.id
                                     AND iso_639_1 IN ('VO', 'US', 'FR')`
-            const WHERE: string = `WHERE m.mediaType = ? AND (m.title like ? OR tt.title like ? OR mlib.id = ?)
+            const WHERE: string = `WHERE m.mediaType IN (?) AND (
+                                        NORMALIZE_TITLE(m.title) LIKE ? 
+                                        OR NORMALIZE_TITLE(tt.title) LIKE ? 
+                                        OR mlib.id = ?
+                                        OR LEVENSHTEIN(NORMALIZE_TITLE(m.title), LOWER(?)) <= ${DISTANCE_MAX}
+                                        OR LEVENSHTEIN(NORMALIZE_TITLE(tt.title), LOWER(?)) <= ${DISTANCE_MAX}
+                                    )
                                     GROUP BY m.id`;
             const ORDER: string = `ORDER BY LEAST(
                                     ABS(CHAR_LENGTH(m.title) - CHAR_LENGTH(?)),
@@ -213,14 +223,17 @@ export class MediaService {
                 LIMIT,
                 );
             const results: any[] = await conn.query(queryFiltered, [
-                -1, 
-                -1,
+                userId,
+                userId,
+                types.join(', '),
                 this.currentMediaType,
-                `%${keyWord}%`,
-                `%${keyWord}%`,
-                `%${keyWord}%`,
-                keyWord,
-                keyWord
+                `%${normalizedKeyword}%`,
+                `%${normalizedKeyword}%`,
+                `%${normalizedKeyword}%`,
+                normalizedKeyword,
+                normalizedKeyword,
+                normalizedKeyword,
+                normalizedKeyword
                 ]);
             return results;
         } catch (error) {

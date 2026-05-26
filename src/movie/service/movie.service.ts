@@ -17,6 +17,7 @@ import { CreditService } from 'src/credit/service/credit.service';
 import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
+import { SearchService } from 'src/common-service/search.service';
 
 @Injectable()
 export class MovieService extends MediaService {
@@ -28,12 +29,13 @@ export class MovieService extends MediaService {
         formatPathService: FormatPathService,
         posterService: PosterService,
         i18nService: I18nService,
+        searchService: SearchService,
         @Inject(forwardRef(() => SimilarTitleService))
         private readonly similarTitleService: SimilarTitleService,
         private readonly statUserService: StatUserService,
         private readonly creditService: CreditService
     ) {
-        super(pool, verifTimerShowService, formatPathService, posterService, i18nService);
+        super(pool, verifTimerShowService, formatPathService, posterService, i18nService, searchService);
     }
 
     public async getNodesMovie(): Promise<Node[]> {
@@ -169,7 +171,7 @@ export class MovieService extends MediaService {
     }
 
     async getMovieByResearch(keyWord: string): Promise<Movie[]> {
-        const medias: any[] = await this.getMediaByResearch(keyWord);
+        const medias: any[] = await this.getMediaByResearch(-1, keyWord, [this.currentMediaType]);
         const movies: Movie[] = [];
         medias.forEach((result: any) => {
             movies.push(this.getFormatedMovie(result));

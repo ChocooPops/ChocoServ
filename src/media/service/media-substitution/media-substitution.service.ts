@@ -26,42 +26,6 @@ export class MediaSubstitutionSerivce {
 
   private readonly LIMIT_CREDIT: number = 12;
 
-  public async getMoviesAndSeriesByResearch(userId: number, keyWord: string): Promise<any[]> {
-    const conn = await this.pool.getConnection();
-    try {
-
-      const JOIN: string = `LEFT JOIN Translation_Title tt ON tt.mediaId = m.id
-                              AND iso_639_1 IN ('VO', 'US', 'FR')`
-      const WHERE: string = `WHERE m.title like ? OR tt.title like ? OR mlib.id = ?
-                            GROUP BY m.id`;
-      const ORDER: string = `ORDER BY LEAST(
-                              ABS(CHAR_LENGTH(m.title) - CHAR_LENGTH(?)),
-                              COALESCE(ABS(CHAR_LENGTH(tt.title) - CHAR_LENGTH(?)), 999999)
-                            ) ASC`;
-      const LIMIT: string = `LIMIT 50`;
-      const queryFiltered: string = this.mediaService.getQuerySelectMedia(
-          JOIN,
-          WHERE,
-          ORDER,
-          LIMIT,
-        );
-      const results: any[] = await conn.query(queryFiltered, [
-          userId,
-          userId,
-          `%${keyWord}%`,
-          `%${keyWord}%`,
-          `%${keyWord}%`,
-          keyWord,
-          keyWord
-        ]);
-      return results;
-    } catch (error) {
-      return [];
-    } finally {
-      await conn.release();
-    }
-  }
-
   public async getMediaByCatalogFilters(
     userId: number,
     sortFilter: SortCatalog,
