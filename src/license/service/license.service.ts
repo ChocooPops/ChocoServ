@@ -17,6 +17,7 @@ import { Node } from 'src/common-interface/node.interface';
 import { Link } from 'src/common-interface/link.interface';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
+import { SearchService } from 'src/common-service/search.service';
 
 @Injectable()
 export class LicenseService {
@@ -28,7 +29,8 @@ export class LicenseService {
         private readonly movieService: MovieService,
         private readonly seriesService: SeriesService,
         private readonly selectionService: SelectionService,
-        private readonly i18nService: I18nService) { }
+        private readonly i18nService: I18nService,
+        private readonly searchService: SearchService) { }
 
     public async getGraphLicense(): Promise<Graph> {
         const conn = await this.pool.getConnection();
@@ -186,10 +188,14 @@ export class LicenseService {
     public async getLicenseByResearched(keyWord: string): Promise<License[]> {
         const conn = await this.pool.getConnection();
         try {
-            const WHERE: string = `WHERE l.name = ?`;
+            const DISTANCE_MAX: number = 1;
+            const normalizedKeyword = this.searchService.normalizedKeyword(keyWord);
+
+            const WHERE: string = `WHERE NORMALIZE_TITLE(l.name) LIKE ?
+                                        OR LEVENSHTEIN(NORMALIZE_TITLE(l.name), LOWER(?)) <= ${DISTANCE_MAX}`;
             const ORDER: string = `ORDER BY ABS(CHAR_LENGTH(l.name) - CHAR_LENGTH(?)) ASC`;
             const query: string = this.getQuerySelectSimpleLicense(WHERE, ORDER);
-            const licenses: License[] = await conn.query(query, [`%${keyWord}%`, keyWord]);
+            const licenses: License[] = await conn.query(query, [`%${normalizedKeyword}%`, normalizedKeyword, normalizedKeyword]);
             licenses.forEach((license: License, index) => {
                 licenses[index] = this.getFormatedLicense(license);
             });

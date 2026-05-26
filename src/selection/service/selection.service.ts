@@ -18,6 +18,7 @@ import { CategoryEntirely } from 'src/category/dto/categoryEntirely.interface';
 import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
+import { SearchService } from 'src/common-service/search.service';
 
 @Injectable()
 export class SelectionService {
@@ -28,7 +29,8 @@ export class SelectionService {
         private readonly seriesService: SeriesService,
         private readonly categoryService: CategoryService,
         private readonly statUserService: StatUserService,
-        private readonly i18nService: I18nService) { }
+        private readonly i18nService: I18nService,
+        private readonly searchService: SearchService) { }
 
     public async getGraphSelection(): Promise<Graph> {
         const conn = await this.pool.getConnection();
@@ -130,10 +132,13 @@ export class SelectionService {
     public async getSelectionByResearched(keyWord: string): Promise<Selection[]> {
         const conn = await this.pool.getConnection();
         try {
-            const WHERE: string = `WHERE name = ?`;
+            const DISTANCE_MAX: number = 1;
+            const normalizedKeyword = this.searchService.normalizedKeyword(keyWord);
+            const WHERE: string = `WHERE NORMALIZE_TITLE(name) LIKE ?
+                                        OR LEVENSHTEIN(NORMALIZE_TITLE(name), LOWER(?)) <= ${DISTANCE_MAX}`;
             const ORDER: string = ` ORDER BY ABS(CHAR_LENGTH(name) - CHAR_LENGTH(?)) ASC`;
             const query: string = this.getQuerySimpleSelections(WHERE, ORDER);
-            const selections: Selection[] = await conn.query(query, [`%${keyWord}%`, keyWord]);
+            const selections: Selection[] = await conn.query(query, [`%${normalizedKeyword}%`, normalizedKeyword, normalizedKeyword]);
             selections.forEach((selection: Selection) => {
                     selection.mediaList = [];
             });

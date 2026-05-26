@@ -9,10 +9,11 @@ import { SelectionModule } from 'src/selection/selection.module';
 import { MediaModule } from 'src/media/media.module';
 import { UploadImageService } from 'src/common-service/upload-image.service';
 import { UserModule } from 'src/user/user.module';
+import { SearchService } from 'src/common-service/search.service';
 
 @Module({
   imports: [UserModule, PosterModule, MediaModule, MovieModule, SeriesModule, SelectionModule],
-  providers: [LicenseService, FormatPathService, UploadImageService],
+  providers: [LicenseService, FormatPathService, UploadImageService, SearchService],
   controllers: [LicenseController]
 })
 export class LicenseModule { }

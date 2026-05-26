@@ -239,7 +239,8 @@
         "TMDB_NEW_EPISODES": "[TMDB NEW EPISODES]",
         "TMDB_NEW_CONTENT_ERROR": "[TMDB NEW CONTENT ERROR]",
         "EPISODE": "エピソード",
-        "MODIFY_PATH_MEDIA": "パスが変更されました"
+        "MODIFY_PATH_MEDIA": "パスが変更されました",
+        "MEDIA_LIBRARY_NOT_INCLUDE_INTO_LIBRARY": "メディアのパスはライブラリに含まれていません"
     },
     "MEDIA": {
         "CATEGORY_ADDED_INTO_MOVIE": "カテゴリーがメディアに追加されました",

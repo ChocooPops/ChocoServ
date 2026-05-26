@@ -1,5 +1,10 @@
 -- SQL corrigé pour MariaDB
 -- Suppression de toutes les tables si elles existent
+
+CREATE DATABASE IF NOT EXISTS `ChocoPlus`;
+
+USE `ChocoPlus`;
+
 DROP TABLE IF EXISTS `Stat_User`;
 
 DROP TABLE IF EXISTS `Selection_Page`;

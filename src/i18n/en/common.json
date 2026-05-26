@@ -239,7 +239,8 @@
         "TMDB_NEW_EPISODES": "[TMDB NEW EPISODES]",
         "TMDB_NEW_CONTENT_ERROR": "[TMDB NEW CONTENT ERROR]",
         "EPISODE": "Episode",
-        "MODIFY_PATH_MEDIA": "The path has been changed"
+        "MODIFY_PATH_MEDIA": "The path has been changed",
+        "MEDIA_LIBRARY_NOT_INCLUDE_INTO_LIBRARY": "The media path is not included in the library"
     },
     "MEDIA": {
         "CATEGORY_ADDED_INTO_MOVIE": "Categories have been added to the media",
