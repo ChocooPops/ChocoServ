@@ -29,7 +29,7 @@ L'API ChocoPlus est une API REST robuste qui sert de backend pour l'application 
 - **Gestion complète des médias** (films, séries, saisons, épisodes)
 - **Système de licences et sélections** pour organiser le contenu
 - **Streaming vidéo sécurisé** avec authentification par token
-- **Intégration et une lecture automatique des fichiers vidéos** pour la gestion de bibliothèque multimédia
+- **Lecture et intégration automatique des fichiers vidéos** pour la gestion de bibliothèque multimédia
 - **Intégration TMDB** pour les métadonnées
 - **Système de support** avec envoi d'emails
 - **Gestion des utilisateurs** avec rôles et permissions
@@ -61,7 +61,8 @@ L'API suit l'architecture modulaire de NestJS avec une structure en couches :
 │          External Services                   │
 │   - Node File System (médiathèque)           │
 │   - TMDB API                                 │
-│   - Mail Service (SMTP)                      │
+│   - Mail Service (SMTP)                      |
+|   - Child Process (execPromise FFmpeg)       │
 └──────────────────────────────────────────────┘
 ```
 
@@ -446,9 +447,11 @@ Tous les champs de jointure (`userId`, `mediaId`, `selectionId`, etc.) sont inde
 
 Lors de l'importation de `db.sql`, les données suivantes sont insérées automatiquement :
 
-**Compte administrateur** : Un utilisateur `ChocoPops` avec le rôle `ADMIN` est créé.
+**Compte administrateur** : Un utilisateur `ChocoPops` avec le rôle `ADMIN` et le mot de passe 'Password1234' est créé.
 
-**16 catégories** : Comédie, Animation, Drame, Fantastique, Science Fiction, Action, Horreur, Guerre/Thriller, Crime, Aventure, Romance, Histoire, Mystère, Musique, Western, Familiale.
+**Function LEVENSHTEIN** : Obtenir la distance entre deux chaînes de caractères pour les requêtes de recherche.
+
+**Function NORMALIZE_TITLE** : Formaté une chaîne de caractère (suppression des accents, des caractères spéciaux, des majuscules ...)
 
 ---
 
@@ -508,6 +511,7 @@ L'API supporte plusieurs langues pour ses messages de réponse grâce à **nestj
 | 🇬🇧 | English | `en` |
 | 🇯🇵 | 日本語 | `ja` |
 
+> Si le header est égale à **none**, alors la clé de traduction est envoyé.
 > Si aucun header valide n'est fourni, la langue par défaut est l'**anglais** (`en`).
 
 ### Résolution de la langue
@@ -966,7 +970,7 @@ const pool = mariadb.createPool({
 
 - **Node.js** : 18.x ou supérieur
 - **npm** : 9.x ou supérieur
-- **MariaDB/MySQL** : 10.x ou supérieur
+- **MariaDB** : 10.x ou supérieur
 - **Ffmpeg** : pour la récupération des métadonnées des fichiers vidéo (durée, résolution…)
 - **Compte TMDB** : pour les métadonnées des films/séries
 
@@ -985,8 +989,8 @@ cp .env.example .env
 # Éditer .env avec vos configurations
 
 # 4. Configurer la base de données
-mysql -u root -p -e "CREATE DATABASE chocoplus CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-mysql -u root -p chocoplus < db.sql
+mariadb -u root -p -e "CREATE DATABASE chocoplus CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mariadb -u root -p chocoplus < db.sql
 
 # 5. Lancer en mode développement
 npm run start:dev
@@ -1141,7 +1145,9 @@ chocoplus-api/
 │   │   └── suspended.hbs
 │   │
 │   ├── database/                   # Module de base de données
-│   │   └── database.module.ts
+│   │   ├── database.module.ts
+|   |   └── sql
+|   |       └── db.sql (shéma entier de la base de donnée avec fonction de recherche)
 │   │
 │   ├── app.controller.ts
 │   ├── app.service.ts
@@ -1172,6 +1178,7 @@ chocoplus-api/
 | NestJS | 10.x | Framework backend Node.js |
 | TypeScript | 5.x | Langage de programmation |
 | Node.js | 18.x+ | Runtime JavaScript |
+| Ffmpeg | 8.x+ | Child Process |
 
 ### Base de données
 
