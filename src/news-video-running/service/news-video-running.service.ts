@@ -19,6 +19,8 @@ import { I18nService } from 'nestjs-i18n';
 
 const execAsync = promisify(exec);
 
+const ORIGINAL_AUDIO_LANGS = ['orig', 'und', 'zxx', 'jpn'];
+
 @Injectable()
 export class NewsVideoRunningService {
     private readonly newsPath: string = 'E:\\NEWS';
@@ -58,13 +60,13 @@ export class NewsVideoRunningService {
                 'startShow', n.startShow,
                 'endShow', n.endShow,
                 'mediaLibraryId', n.mediaLibraryId,
-                ${getPath ? `'path', n.path,` : ''} 
+                ${getPath ? `'path', n.path,` : ''}
                 'media', ${this.mediaService.getQuerySelectOneMedia()}
             ) AS news
-            
+
         FROM News_Video_Running n
         LEFT JOIN media m ON m.id = n.mediaId
-        LEFT JOIN poster pnews ON pnews.id = n.srcBackground	
+        LEFT JOIN poster pnews ON pnews.id = n.srcBackground
         ${this.mediaService.getQueryJoinMedia()}
         ${WHERE}
         ${RANDOM};`
@@ -141,6 +143,77 @@ export class NewsVideoRunningService {
         }
     }
 
+    public async deleteNewsVideoRunning(newsId: number): Promise<ReturnMessage> {
+        const conn = await this.pool.getConnection();
+        try {
+            const news = await this.getSimpleNewsRunningById(newsId);
+            if (!news) {
+                return {
+                    id: -1,
+                    state: false,
+                    message: this.i18nService.t('common.NEWS.NOT_FOUND')
+                };
+            }
+
+            // Suppression du fichier avant la ligne SQL
+            if (news.path) {
+                await this.deleteProcessedVideo(news.path);
+            }
+
+            await conn.query(`DELETE FROM News_Video_Running WHERE id = ?`, [newsId]);
+
+            return {
+                id: newsId,
+                state: true,
+                message: this.i18nService.t('common.NEWS.DELETED_ONE')
+            };
+        } catch (error: any) {
+            return {
+                id: -1,
+                state: false,
+                message: `${this.i18nService.t('common.ERROR')}: ${error.sqlMessage || error.message}`
+            };
+        } finally {
+            await conn.release();
+        }
+    }
+
+    private async getOriginalAudioStreamIndex(inputPath: string): Promise<number> {
+        try {
+            const ffprobeCommand = [
+                'ffprobe',
+                '-v quiet',
+                '-print_format json',
+                '-show_streams',
+                '-select_streams a',
+                `"${inputPath}"`
+            ].join(' ');
+
+            const { stdout } = await execAsync(ffprobeCommand);
+            const probeData = JSON.parse(stdout) as {
+                streams: Array<{ index: number; tags?: { language?: string } }>
+            };
+
+            if (!probeData.streams || probeData.streams.length === 0) {
+                return 0;
+            }
+
+            const originalStream = probeData.streams.find(stream => {
+                const lang = stream.tags?.language?.toLowerCase() ?? '';
+                return ORIGINAL_AUDIO_LANGS.includes(lang);
+            });
+
+            if (originalStream) {
+                const audioPosition = probeData.streams.findIndex(s => s.index === originalStream.index);
+                return audioPosition >= 0 ? audioPosition : 0;
+            }
+
+            return 0;
+        } catch {
+            return 0;
+        }
+    }
+
     private async processVideoWithFFmpeg(
         inputPath: string,
         startShow: string,
@@ -152,17 +225,19 @@ export class NewsVideoRunningService {
         const outputFilename = `news_${mediaLibraryId}.mp4`;
         const outputPath = path.join(this.newsPath, outputFilename);
 
+        const audioStreamIndex = await this.getOriginalAudioStreamIndex(inputPath);
+
         const ffmpegCommand = [
             'ffmpeg',
             '-i', `"${inputPath}"`,
             '-ss', startShow,
             '-to', endShow,
-            '-map 0:v:0',      // Premier stream vidéo
-            '-map 0:a:0',      // Premier stream audio
-            '-c:v copy',       // Copie vidéo (pas de ré-encodage)
-            '-c:a aac',        // Convertit audio en AAC
-            '-b:a 192k',       // Bitrate audio
-            '-y',              // Écrase le fichier existant
+            '-map 0:v:0',                           // Premier stream vidéo
+            `-map 0:a:${audioStreamIndex}`,         // Stream audio original (ou fallback 0)
+            '-c:v copy',                            // Copie vidéo sans ré-encodage
+            '-c:a aac',                             // Encode l'audio en AAC
+            '-b:a 192k',                            // Bitrate audio
+            '-y',                                   // Écrase le fichier existant
             `"${outputPath}"`
         ].join(' ');
 
@@ -184,6 +259,7 @@ export class NewsVideoRunningService {
                 await fs.unlink(filePath);
             }
         } catch (error) {
+            // Fichier déjà supprimé ou inexistant, on ignore silencieusement
         }
     }
 
@@ -271,11 +347,11 @@ export class NewsVideoRunningService {
 
                 if (existingNewsItem) {
                     await conn.query(`
-                        UPDATE News_Video_Running 
-                        SET mediaId = ?, 
-                            srcBackground = ?, 
-                            startShow = ?, 
-                            endShow = ?, 
+                        UPDATE News_Video_Running
+                        SET mediaId = ?,
+                            srcBackground = ?,
+                            startShow = ?,
+                            endShow = ?,
                             path = ?
                         WHERE mediaLibraryId = ?
                     `, [
@@ -289,7 +365,7 @@ export class NewsVideoRunningService {
                     updatedCount++;
                 } else {
                     await conn.query(`
-                        INSERT INTO News_Video_Running 
+                        INSERT INTO News_Video_Running
                         (mediaId, srcBackground, mediaLibraryId, startShow, endShow, path)
                         VALUES (?, ?, ?, ?, ?, ?)
                     `, [
@@ -309,11 +385,11 @@ export class NewsVideoRunningService {
             return {
                 id: 0,
                 state: true,
-                message: `  ${this.i18nService.t("common.NEWS.NEWS")} (${mediaType}) \n 
-                            ${this.i18nService.t("common.NEWS.ADDED")} ${insertedCount} \n 
+                message: `  ${this.i18nService.t("common.NEWS.NEWS")} (${mediaType}) \n
+                            ${this.i18nService.t("common.NEWS.ADDED")} ${insertedCount} \n
                             ${this.i18nService.t("common.NEWS.UPDATED")}: ${updatedCount} \n
-                            ${this.i18nService.t("common.NEWS.PROCESSED_VIDEOS")}: ${processedCount} \n 
-                            ${this.i18nService.t("common.NEWS.REUSED")}: ${skippedCount} \n 
+                            ${this.i18nService.t("common.NEWS.PROCESSED_VIDEOS")}: ${processedCount} \n
+                            ${this.i18nService.t("common.NEWS.REUSED")}: ${skippedCount} \n
                             ${this.i18nService.t("common.NEWS.DELETED")}: ${newsToDelete.length}`
             };
 
