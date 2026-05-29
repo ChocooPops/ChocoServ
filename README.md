@@ -1290,11 +1290,11 @@ L'API peut :
 
 ## 🤝 Contribution
 
-Ce projet est public. Pour toute question, contactez l'équipe de développement.
+Ce projet est public.
 
 ## 📄 License
 
-Projet public - Tous droits réservés
+Projet public - Tout droit réservé
 
 ---
 
