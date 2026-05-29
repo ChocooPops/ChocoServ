@@ -28,13 +28,27 @@ export class MediaService {
         protected readonly searchService: SearchService
     ) { }
 
+    public async getNodesMedia(): Promise<any> {
+        const conn = await this.pool.getConnection();
+        try {
+            const nodes = await conn.query(`
+                SELECT id, title, YEAR(date) as year, mediaType
+                FROM MEDIA`);
+            return nodes;
+        } catch (error) {
+            return [];
+        } finally {
+            await conn.release();
+        }
+    }
+
     protected async getNodesMediaByType(): Promise<Node[]> {
         const conn = await this.pool.getConnection();
         try {
             const nodes: Node[] = await conn.query(`SELECT id, title as name FROM Media WHERE mediaType = ?`, [this.currentMediaType]);
             return nodes;
         } catch (error) {
-            return null;
+            return [];
         } finally {
             await conn.release();
         }

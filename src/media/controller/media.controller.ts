@@ -20,6 +20,11 @@ export class MediaController {
         private readonly mediaSubstitutionSerivce: MediaSubstitutionSerivce
     ) { }
 
+    @Get('nodes')
+    async getNodesMedia(): Promise<any> {
+        return await this.mediaService.getNodesMedia();
+    }
+
     @Get('research/:keyword')
     async getMediaByResearch(@CurrentUser('sub') userId: number, @Param('keyword') keyword: string): Promise<Media[]> {
         const medias: Media[] = [];
