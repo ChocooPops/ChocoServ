@@ -13,6 +13,7 @@ import { Media } from 'src/media/dto/media.interface';
 import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 import { FormatPathService } from '../../../common-service/format-path.service';
 import { MediaService } from '../media/media.service';
+import { LogicalOperator } from 'src/media/dto/catalog/logical-operator';
 
 @Injectable()
 export class MediaSubstitutionSerivce {
@@ -43,12 +44,15 @@ export class MediaSubstitutionSerivce {
     try {
       const joinParams: any[] = [];
       const whereParams: any[] = [userId, userId];
-      const orBlocks: string[] = [];
+
+      const blocks: { sql: string; logic: LogicalOperator.AND | LogicalOperator.OR }[] = [];
+
       let JOIN: string = '';
 
       for (const filter of filters ?? []) {
         const values = filter.value ?? [];
         const andConditions: string[] = [];
+        const valueLogic = filter.valueLogic === LogicalOperator.AND ? LogicalOperator.AND : LogicalOperator.OR;
 
         for (const val of values) {
           const isNumber = typeof val.value === 'number';
@@ -212,13 +216,31 @@ export class MediaSubstitutionSerivce {
         }
 
         if (andConditions.length > 0) {
-          orBlocks.push(`(${andConditions.join(' OR ')})`);
+          blocks.push({
+            sql: `(${andConditions.join(` ${valueLogic} `)})`,
+            logic: filter.logic === LogicalOperator.OR ? LogicalOperator.OR : LogicalOperator.AND,
+          });
         }
       }
 
       const finalParams: any[] = [...joinParams, ...whereParams];
-      const WHERE: string =
-        orBlocks.length > 0 ? `WHERE ${orBlocks.join(' AND ')}` : '';
+      
+      const groups: string[][] = [];
+      blocks.forEach((b, i) => {
+        if (i === 0 || b.logic === LogicalOperator.AND) {
+          groups.push([b.sql]);
+        } else {
+          groups[groups.length - 1].push(b.sql);
+        }
+      });
+
+      const groupSql: string[] = groups.map((g) =>
+        g.length > 1 ? `(${g.join( ' OR ')})` : g[0],
+      );
+
+      const whereClause: string = groupSql.join(' AND ');
+      const WHERE: string = whereClause ? `WHERE ${whereClause}` : '';
+
       const direction: string = orderDirection ? 'ASC' : 'DESC';
       const ORDER: string = `ORDER BY ${this.resolveSortColumn(sortFilter)} ${direction}`;
       const LIMIT: string = `LIMIT ? OFFSET ?`;
