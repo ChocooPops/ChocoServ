@@ -185,7 +185,8 @@
         "COUNT_MEDIA_ADDED_INTO_SELECTION": "{count} media have been added to the selection",
         "NO_MEDIA_ADDED_INTO_SELECTION": "No media to add to the selection",
         "SELECTION_ADDED_INTO_PAGE": "Selection inserted into the page",
-        "NOT_SELECTION_ADDED_INTO_PAGE": "No selection has been added to the page"
+        "NOT_SELECTION_ADDED_INTO_PAGE": "No selection has been added to the page",
+        "SELECTION_LATEST_RELEASE": "Latest release on ChocoPlus"
     },
     "NEWS": {
         "NEWS_INSERTED": "News inserted",

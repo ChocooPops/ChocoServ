@@ -366,8 +366,11 @@ export class SeriesService extends MediaService {
                                        mlib.height,` : ''}
                     e.date,
                     p.name AS srcPoster,
+
+                    e.createdAt >= NOW() - INTERVAL ${this.maxDayToRecent} DAY as isRecent,
                     su.watchProgress,
                     su.state as stateProgress
+
                     FROM episode e
                     LEFT JOIN Media_Library mlib ON mlib.id = e.mediaLibraryId
                     LEFT JOIN poster p ON p.id = e.srcPoster
@@ -390,7 +393,9 @@ export class SeriesService extends MediaService {
                     duration: Number(result.duration),
                     resolution: result.resolution,
                     srcPoster: this.formatPathService.getOneFormatedPosterUrl(result.mediaId, MediaType.SERIES, result.srcPoster),
-                    watchProgress : result.watchProgress ?? 0,
+                    
+                    isRecent: result.isRecent === 1 ? true : false,
+                    watchProgress: result.watchProgress ?? 0,
                     stateProgress: result.stateProgress ?? StatState.NOT_WATCHED,
 
                     path: result.path,

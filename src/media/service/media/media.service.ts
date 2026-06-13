@@ -18,6 +18,7 @@ import { SearchItem } from 'src/common-interface/search-item.interface';
 @Injectable()
 export class MediaService {
 
+    protected maxDayToRecent: number = 7;
     protected currentMediaType !: MediaType;
 
     constructor(@Inject(DATABASE_POOL) protected readonly pool: mariadb.Pool,
@@ -98,6 +99,20 @@ export class MediaService {
 
                 'mediaType', m.mediaType,
                 
+                'isRecent',
+                CASE
+                    WHEN m.mediaType = 'SERIES' THEN (
+                        m.createdAt >= NOW() - INTERVAL ${this.maxDayToRecent} DAY
+                        OR EXISTS (
+                            SELECT 1
+                            FROM Episode e
+                            WHERE e.seriesId = m.id
+                            AND e.createdAt >= NOW() - INTERVAL ${this.maxDayToRecent} DAY
+                        )
+                    )
+                    ELSE m.createdAt >= NOW() - INTERVAL ${this.maxDayToRecent} DAY
+                END,
+
                 'watchProgress', 
                 CASE
                     WHEN m.mediaType = 'MOVIE' THEN IFNULL(su2.watchProgress, 0)
@@ -553,6 +568,34 @@ export class MediaService {
         } catch (error) {
             const formatted = new Date().toISOString().split('T')[0];
             return formatted;
+        }
+    }
+
+    public async getLatestReleaseMedia(userId: number, limit: number, conn: mariadb.Connection): Promise<Media[]> {
+        try {
+            const JOIN: string = `
+                LEFT JOIN (
+                    SELECT e.seriesId AS mediaId, MAX(e.createdAt) AS lastEpisodeCreatedAt
+                    FROM Episode e
+                    GROUP BY e.seriesId
+                ) lastEp ON lastEp.mediaId = m.id`;
+
+            const WHERE: string = ``;
+
+            const ORDER: string = `
+                ORDER BY GREATEST(m.createdAt, COALESCE(lastEp.lastEpisodeCreatedAt, m.createdAt)) DESC,
+                        m.id DESC`;
+
+            const LIMIT: string = `LIMIT ${Number(limit)}`;
+
+            const rows: any[] = await conn.query(
+                this.getQuerySelectMedia(JOIN, WHERE, ORDER, LIMIT),
+                [userId, userId]
+            );
+
+            return rows.map((row) => row.media);
+        } catch (error) {
+            return [];
         }
     }
 

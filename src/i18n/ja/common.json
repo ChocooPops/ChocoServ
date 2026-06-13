@@ -185,7 +185,8 @@
         "COUNT_MEDIA_ADDED_INTO_SELECTION": "{count}件のメディアがセレクションに追加されました",
         "NO_MEDIA_ADDED_INTO_SELECTION": "セレクションに追加するメディアがありません",
         "SELECTION_ADDED_INTO_PAGE": "セレクションがページに追加されました",
-        "NOT_SELECTION_ADDED_INTO_PAGE": "ページに追加されたセレクションはありません"
+        "NOT_SELECTION_ADDED_INTO_PAGE": "ページに追加されたセレクションはありません",
+        "SELECTION_LATEST_RELEASE": "ChocoPlusの最新情報"
     },
     "NEWS": {
         "NEWS_INSERTED": "ニュースが挿入されました",

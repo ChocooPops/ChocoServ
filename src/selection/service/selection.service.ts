@@ -91,9 +91,33 @@ export class SelectionService {
         return selectionFormated;
     }
 
+    private async getLatestReleaseMediaSelection(userId: number, conn: mariadb.Connection): Promise<Selection> {
+        try {
+            const LIMIT: number = 30;
+            const results: any[] = await this.mediaService.getLatestReleaseMedia(userId, LIMIT, conn);
+            results.forEach((media: Media, index) => {
+                if (media.mediaType === MediaType.MOVIE) {
+                    results[index] = this.movieService.getFormatedMovie(media);
+                } else if (media.mediaType === MediaType.SERIES) {
+                    results[index] = this.seriesService.getFormatedSeries(media);
+                }
+            });
+            return {
+                id: userId,
+                name: this.i18nService.t("common.SELECTION.SELECTION_LATEST_RELEASE"),
+                selectionType: SelectionType.NORMAL_POSTER,
+                mediaList: results,
+            };
+        } catch(error) {
+            return null;
+        }
+    }
+
     public async getSelectionsForHomePage(userId: number): Promise<Selection[]> {
         const conn = await this.pool.getConnection();
         try {
+            const finalSelections: Selection[] = [];
+            const selectionLatestRelease: Selection = await this.getLatestReleaseMediaSelection(userId, conn);
             const selectionInProgress: Selection = await this.statUserService.getMediaSelectionInProgess(userId, conn);
             const query: string = this.getQuerySelections(
                 `INNER JOIN Selection_Page selp ON selp.selectionId = sel.id`,
@@ -103,11 +127,16 @@ export class SelectionService {
             selections.forEach((selection: Selection, index) => {
                 selections[index] = this.getFormatedSelection(selection);
             });
-            if(selectionInProgress && selectionInProgress.mediaList.length > 0) {
-                return [selectionInProgress, ...selections];
-            } else {
-                return selections;
+            if (selectionLatestRelease && selectionLatestRelease.mediaList.length > 0) {
+                finalSelections.push(selectionLatestRelease)
             }
+            if (selectionInProgress && selectionInProgress.mediaList.length > 0) {
+                finalSelections.push(selectionInProgress);
+            }
+            if (selections) {
+                finalSelections.push(...selections);
+            }
+            return finalSelections;
         } catch (error) {
             return [];
         } finally {

@@ -12,6 +12,8 @@ export interface Episode {
     duration: number,
     resolution: string,
     srcPoster: string,
+
+    isRecent: boolean,
     watchProgress: number,
     stateProgress: StatState,
 
