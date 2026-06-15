@@ -116,18 +116,17 @@ export class LibraryService {
 
             const mediaLibraries: MediaLibrary[] = await conn.query(query, [StateLibrary.NOT_WORKED, libraryId]);
 
+            const toTime = (d: unknown): number => {
+                const t = new Date(d as string).getTime();
+                return Number.isNaN(t) ? 0 : t;
+            };
+
             const isSeriesLibrary = mediaLibraries.some((ml) => ml.type === MediaType.SERIES);
             if (!isSeriesLibrary) {
-                return mediaLibraries.sort((a, b) =>
-                    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-                );
+                return mediaLibraries.sort((a, b) => toTime(b.updatedAt) - toTime(a.updatedAt));
             }
 
-            const byId = new Map<string, MediaLibrary>(
-                mediaLibraries.map((ml) => [ml.id, ml])
-            );
-
-            const series  = mediaLibraries.filter((ml) => ml.type === MediaType.SERIES);
+            const series = mediaLibraries.filter((ml) => ml.type === MediaType.SERIES);
             const seasons = mediaLibraries.filter((ml) => ml.type === MediaType.SEASON);
             const episodes = mediaLibraries.filter((ml) => ml.type === MediaType.EPISODE);
 
@@ -145,9 +144,26 @@ export class LibraryService {
                 episodesBySeason.get(key)!.push(episode);
             }
 
-            series.sort((a, b) =>
-                (a.titleFormated ?? '').localeCompare(b.titleFormated ?? '', undefined, { sensitivity: 'base' })
-            );
+            const recencyBySeries = new Map<string, number>();
+            for (const serie of series) {
+                let max = toTime(serie.updatedAt);
+
+                for (const season of seasonsBySeries.get(serie.id) ?? []) {
+                    max = Math.max(max, toTime(season.updatedAt));
+
+                    for (const episode of episodesBySeason.get(season.id) ?? []) {
+                        max = Math.max(max, toTime(episode.updatedAt));
+                    }
+                }
+
+                recencyBySeries.set(serie.id, max);
+            }
+
+            series.sort((a, b) => {
+                const diff = (recencyBySeries.get(b.id) ?? 0) - (recencyBySeries.get(a.id) ?? 0);
+                if (diff !== 0) return diff;
+                return (a.titleFormated ?? '').localeCompare(b.titleFormated ?? '', undefined, { sensitivity: 'base' });
+            });
 
             const result: MediaLibrary[] = [];
 
