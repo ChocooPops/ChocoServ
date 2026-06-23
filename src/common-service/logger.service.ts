@@ -19,6 +19,17 @@ export class LoggerService {
       return info.level === 'error' ? info : false;
     });
 
+    // ── Encoding tokens (and other sensitive parameters) in URLs ─
+    const redactSensitive = winston.format((info) => {
+      if (typeof info.message === 'string') {
+        info.message = info.message.replace(
+          /([?&](?:token|apikey|password)=)[^&\s]+/gi,
+          '$1[REDACTED]',
+        );
+      }
+      return info;
+    });
+
     const baseFormat = winston.format.combine(
       winston.format.timestamp(),
       winston.format.printf(({ timestamp, level, message }) => {
@@ -29,8 +40,9 @@ export class LoggerService {
 
     this.winston = winston.createLogger({
       level: 'info',
+      format: redactSensitive(),
       transports: [
-        // ── app.log — info uniquement (✅ succès, 3xx) ───────
+        // ── app.log — info only ───────
         new winston.transports.DailyRotateFile({
           filename: 'logs/%DATE%/app-%DATE%.log',
           datePattern: 'YYYY-MM-DD',
@@ -39,7 +51,7 @@ export class LoggerService {
           format: winston.format.combine(infoOnly(), baseFormat),
         }),
 
-        // ── warn.log — warn uniquement (🚫 403, ❌ 4xx) ──────
+        // ── warn.log — warn only ──────
         new winston.transports.DailyRotateFile({
           filename: 'logs/%DATE%/warn-%DATE%.log',
           datePattern: 'YYYY-MM-DD',
@@ -48,7 +60,7 @@ export class LoggerService {
           format: winston.format.combine(warnOnly(), baseFormat),
         }),
 
-        // ── error.log — error uniquement (💥 5xx) ────────────
+        // ── error.log — error only ────────────
         new winston.transports.DailyRotateFile({
           filename: 'logs/%DATE%/error-%DATE%.log',
           datePattern: 'YYYY-MM-DD',
@@ -65,4 +77,5 @@ export class LoggerService {
   error(message: string, stack?: string) {
     this.winston.error(stack ? `${message}\n${stack}` : message);
   }
+
 }

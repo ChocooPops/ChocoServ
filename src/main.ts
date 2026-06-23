@@ -21,7 +21,7 @@ async function bootstrap() {
 
   if (!secretHeaderValue || !headerName) {
     throw new Error(
-      'HEADER_SECRET_API ou HEADER_NAME_FIELD_SECRET_API manquant dans les variables d\'environnement !'
+      'HEADER_SECRET_API or HEADER_NAME_FIELD_SECRET_API is missing from the environment variables !'
     );
   }
 
@@ -36,27 +36,27 @@ async function bootstrap() {
   }));
 
   // ──────────────────────────────────────────
-  // 2. CORS — adapté pour Electron
+  // 2. CORS — adapted for Electron
   // ──────────────────────────────────────────
-  // Le renderer Electron envoie une origin de type "file://" ou null
-  // selon la config de ta BrowserWindow (avec/sans loadFile vs loadURL).
-  // On whitelist ces deux cas uniquement.
+  // The Electron renderer sends an origin of type "file://" or null
+  // depending on the BrowserWindow config (with/without loadFile vs loadURL).
+  // We whitelist only these two cases.
   app.enableCors({
     origin: (origin, callback) => {
       const allowed = [
-        null,          // main process Node.js ou client REST (Postman, etc.)
-        undefined,     // même chose
-        'file://',     // renderer Electron avec loadFile()
-        'app://',      // renderer Electron avec protocole custom (electron-vite, etc.)
+        null,          // Node.js main process or REST client (Postman, etc.)
+        undefined,     // same thing
+        'file://',     // Electron renderer with loadFile()
+        'app://',      // Electron renderer with custom protocol (electron-vite, etc.)
       ];
 
-      // Si l'origin est null/undefined ou dans la liste : OK
+      // If the origin is null/undefined or in the list: OK
       if (!origin || allowed.includes(origin) || origin.startsWith('file://') || origin.startsWith('app://')) {
         return callback(null, true);
       }
 
-      console.warn(`[CORS BLOCK] Origine refusée : ${origin}`);
-      callback(new Error(`Origine non autorisée : ${origin}`));
+      console.warn(`[CORS BLOCK] Origin rejected: ${origin}`);
+      callback(new Error(`Origin not authorized: ${origin}`));
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', headerName],
@@ -64,14 +64,14 @@ async function bootstrap() {
   });
 
   // ──────────────────────────────────────────
-  // 3. FICHIERS STATIQUES & BODY PARSER
+  // 3. STATIC FILES & BODY PARSER
   // ──────────────────────────────────────────
   app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
   app.use(bodyParser.json({ limit: '150mb' }));
   app.use(bodyParser.urlencoded({ limit: '150mb', extended: true }));
 
   // ──────────────────────────────────────────
-  // 4. AUTHENTIFICATION PAR HEADER SECRET
+  // 4. SECRET HEADER AUTHENTICATION
   // ──────────────────────────────────────────
   const loggerService = app.get(LoggerService);
   app.use((req, res, next) => {
@@ -86,20 +86,20 @@ async function bootstrap() {
     }
 
     const now = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
-    loggerService.warn(`🚫 403 [${now}] ${req.method} ${req.path} — IP: ${req.ip} — Raison: Header invalide`);
+    loggerService.warn(`🚫 403 [${now}] ${req.method} ${req.path} — IP: ${req.ip} — Reason: Invalid header`);
 
     return res.status(403).json({
       statusCode: 403,
-      message: 'Accès refusé : header d\'authentification invalide ou absent',
+      message: 'Access denied: Invalid or missing authentication header',
       error: 'Forbidden',
     });
   });
 
   // ──────────────────────────────────────────
-  // 5. ÉCOUTE SUR LOCALHOST
+  // 5. LISTEN ON LOCALHOST
   // ──────────────────────────────────────────
   await app.listen(port, 'localhost');
-  console.log(`🚀 Serveur démarré sur http://localhost:${port}`);
+  console.log(`🚀 Server started on http://localhost:${port}`);
 }
 
 bootstrap();
