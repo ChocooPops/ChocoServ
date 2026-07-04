@@ -52,7 +52,7 @@ export class NewsService {
     public async getAllNews(userId: number): Promise<News[]> {
         const conn = await this.pool.getConnection();
         try {
-            const news: News[] = await conn.query(this.getQuerySelectNews(''), [userId, userId]);
+            const news: News[] = await conn.query(this.getQuerySelectNews(''), [userId, userId, userId]);
             news.forEach((item: News, index) => {
                 news[index] = this.getFormatedNews(item);
             });

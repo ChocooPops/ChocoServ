@@ -167,6 +167,7 @@ export class MovieService extends MediaService {
             });
         }
         delete (movie as any).seasons;
+        delete (movie as any).lastSeasonWatched;
         return movie;
     }
 

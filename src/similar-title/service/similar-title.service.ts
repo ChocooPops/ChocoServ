@@ -181,7 +181,7 @@ export class SimilarTitleService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectSimilarMedia(`WHERE st.sourceId = ?`);
-            const results: any = await conn.query(query, [userId, userId, sourceId]);
+            const results: any = await conn.query(query, [userId, userId, userId, sourceId]);
             const medias: Media[] = results[0].media;
             medias.forEach((media: Media, index) => {
                 if (media.mediaType === MediaType.MOVIE) {

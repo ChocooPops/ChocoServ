@@ -43,7 +43,7 @@ export class MediaSubstitutionSerivce {
 
     try {
       const joinParams: any[] = [];
-      const whereParams: any[] = [userId, userId];
+      const whereParams: any[] = [userId, userId, userId];
 
       const blocks: { sql: string; logic: LogicalOperator.AND | LogicalOperator.OR }[] = [];
 

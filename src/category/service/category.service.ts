@@ -155,7 +155,7 @@ export class CategoryService {
             const ORDER: string = `ORDER BY RAND()`;
             const LIMIT: string = `LIMIT 6`;
             const query: string = this.getQuerySelectCategory(ORDER_MEDIA, WHERE, HAVING, ORDER, LIMIT);
-            const categories: CategoryEntirely[] = await conn.query(query, [userId, userId, mediaType]);
+            const categories: CategoryEntirely[] = await conn.query(query, [userId, userId, userId, mediaType]);
             categories.forEach((category: CategoryEntirely, index) => {
                 categories[index] = this.getFormatedCategoryWithMedia(category);
             });

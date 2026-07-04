@@ -262,7 +262,8 @@ CREATE TABLE
         CONSTRAINT SEASON_PK PRIMARY KEY (id),
         INDEX IDX_SEASON_SERIES (seriesId),
         INDEX IDX_SEASON_MEDIA_LIBRARY (mediaLibraryId),
-        INDEX IDX_SEASON_SRCPOSTER (srcPoster)
+        INDEX IDX_SEASON_SRCPOSTER (srcPoster),
+        INDEX IDX_SEASON_SERIES_NUMBER (seriesId, seasonNumber)
     ) AUTO_INCREMENT = 5000000;
 
 -- EPISODE
@@ -491,7 +492,9 @@ CREATE TABLE
         CONSTRAINT STAT_USER_PK PRIMARY KEY (id),
         INDEX IDX_SU_MOVIE (movieId),
         INDEX IDX_SU_EPISODE (episodeId),
-        INDEX IDX_SU_USER (userId)
+        INDEX IDX_SU_USER (userId),
+        INDEX IDX_SU_USER_EPISODE_UPDATED (userId, episodeId, updatedAt),
+        INDEX IDX_SU_USER_MOVIE_UPDATED (userId, movieId, updatedAt)
     );
 
 -- VERSION

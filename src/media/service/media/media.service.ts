@@ -119,6 +119,12 @@ export class MediaService {
                     ELSE NULL
                 END,
 
+                'lastSeasonWatched',
+                CASE
+                    WHEN m.mediaType = 'SERIES' THEN lsw.seasonId
+                    ELSE NULL
+                END,
+
                 'stateProgress', 
                 CASE
                     WHEN m.mediaType = 'MOVIE' THEN IFNULL(su2.state, '${StatState.NOT_WATCHED}')
@@ -211,7 +217,24 @@ export class MediaService {
                         AND su.userId = latest.userId 
                         AND su.updatedAt = latest.max_updated
                 WHERE su.userId = ?
-            ) su2 ON su2.movieId = m.id`
+            ) su2 ON su2.movieId = m.id
+             
+            LEFT JOIN (
+                SELECT seriesId, seasonId
+                FROM (
+                    SELECT 
+                        e.seriesId,
+                        e.seasonId,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY e.seriesId 
+                            ORDER BY su.updatedAt DESC, su.id DESC
+                        ) AS rn
+                    FROM Stat_User su
+                    INNER JOIN Episode e ON e.id = su.episodeId
+                    WHERE su.userId = ?
+                ) ranked
+                WHERE rn = 1
+            ) lsw ON lsw.seriesId = m.id`
     }
 
     public getQuerySelectMedia(JOIN: string, WHERE: string, ORDER: string, LIMIT: string): string {
@@ -261,7 +284,7 @@ export class MediaService {
 
             const likeResults: any[] = await conn.query(
                 this.getQuerySelectMedia(JOIN, WHERE_LIKE, ORDER, LIMIT),
-                [userId, userId, types, normalizedKeyword, ...titleLikeParams, ...translationLikeParams]
+                [userId, userId, userId, types, normalizedKeyword, ...titleLikeParams, ...translationLikeParams]
             );
 
             let fuzzyResults: any[] = [];
@@ -273,7 +296,7 @@ export class MediaService {
 
                 const allCandidates: any[] = await conn.query(
                     this.getQuerySelectMedia(JOIN, WHERE_FUZZY, ORDER, LIMIT),
-                    [userId, userId, types]
+                    [userId, userId, userId, types]
                 );
 
                 const likeIds = new Set(likeResults.map(r => r.media?.id));
@@ -590,7 +613,7 @@ export class MediaService {
 
             const rows: any[] = await conn.query(
                 this.getQuerySelectMedia(JOIN, WHERE, ORDER, LIMIT),
-                [userId, userId]
+                [userId, userId, userId]
             );
 
             return rows.map((row) => row.media);

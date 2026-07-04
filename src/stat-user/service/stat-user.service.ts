@@ -114,7 +114,7 @@ export class StatUserService {
   ): Promise<Selection | null> {
     try {
       const query: string = this.getQuerySelectMediaInProgress();
-      const results: any[] = await conn.query(query, [userId, userId, userId]);
+      const results: any[] = await conn.query(query, [userId, userId, userId, userId]);
       if (results.length > 0) {
         const medias: Media[] = results[0].media;
         medias.forEach((media: Media, index) => {
