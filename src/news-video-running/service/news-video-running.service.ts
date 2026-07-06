@@ -115,7 +115,7 @@ export class NewsVideoRunningService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectNewsVideoRunning(`WHERE m.mediaType = ?`, false, getPath);
-            const news: NewsVideoRunning[] = await conn.query(query, [-1, -1, MediaType.MOVIE]);
+            const news: NewsVideoRunning[] = await conn.query(query, [-1, -1, -1, MediaType.MOVIE]);
             news.forEach((item: NewsVideoRunning, index) => {
                 news[index] = this.getFormatedNewsVideoRunning(item);
             });
@@ -131,7 +131,7 @@ export class NewsVideoRunningService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectNewsVideoRunning(`WHERE m.mediaType = ?`, false, getPath);
-            const news: NewsVideoRunning[] = await conn.query(query, [-1, -1, MediaType.SERIES]);
+            const news: NewsVideoRunning[] = await conn.query(query, [-1, -1, -1, MediaType.SERIES]);
             news.forEach((item: NewsVideoRunning, index) => {
                 news[index] = this.getFormatedNewsVideoRunning(item);
             });

@@ -217,7 +217,7 @@ export class SelectionService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelections(``, `WHERE sel.id = ?`, ``);
-            const result = await conn.query(query, [-1, -1, id]);
+            const result = await conn.query(query, [-1, -1, -1, id]);
             return this.getFormatedSelection(result[0]);
         } catch (error) {
             return null;
