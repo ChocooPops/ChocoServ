@@ -77,6 +77,7 @@ export class SelectionService {
 
     public getFormatedSelection(selection: any): Selection {
         const selectionFormated: Selection = selection.selection ? selection.selection : selection;
+        selectionFormated.createFrom = MediaType.SELECTION;
         if (selectionFormated.mediaList) {
             selectionFormated.mediaList.forEach((media: Media, index) => {
                 if (media.mediaType === MediaType.MOVIE) {
@@ -107,6 +108,7 @@ export class SelectionService {
                 name: this.i18nService.t("common.SELECTION.SELECTION_LATEST_RELEASE"),
                 selectionType: SelectionType.NORMAL_POSTER,
                 mediaList: results,
+                createFrom: MediaType.OTHER
             };
         } catch(error) {
             return null;
@@ -152,7 +154,8 @@ export class SelectionService {
                 id: category.id,
                 name: category.nameSelection,
                 selectionType: SelectionType.NORMAL_POSTER,
-                mediaList: category.medias || []
+                mediaList: category.medias || [],
+                createFrom: MediaType.CATEGORY
             })
         });
         return selections;

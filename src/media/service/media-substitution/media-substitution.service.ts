@@ -27,6 +27,12 @@ export class MediaSubstitutionSerivce {
 
   private readonly LIMIT_CREDIT: number = 12;
 
+  private isNumeric(value: any): boolean {
+    if (typeof value === 'number') return !isNaN(value) && isFinite(value);
+    if (typeof value === 'string') return value.trim() !== '' && !isNaN(Number(value.trim()));
+    return false;
+  }
+
   public async getMediaByCatalogFilters(
     userId: number,
     sortFilter: SortCatalog,
@@ -55,7 +61,10 @@ export class MediaSubstitutionSerivce {
         const valueLogic = filter.valueLogic === LogicalOperator.AND ? LogicalOperator.AND : LogicalOperator.OR;
 
         for (const val of values) {
-          const isNumber = typeof val.value === 'number';
+          const isNumber = this.isNumeric(val.value);
+          if (isNumber) {
+            val.value = Number(val.value);
+          }
           switch (filter.typeData) {
             case FilterType.MEDIA: {
               if (val.value != MediaType.ALL.toString()) {
@@ -170,6 +179,86 @@ export class MediaSubstitutionSerivce {
                                             AND c_any.fullName LIKE ?)`,
                 );
                 whereParams.push(isNumber ? val.value : `%${val.value}%`);
+              }
+              break;
+            }
+
+            case FilterType.SELECTION: {
+              if (filter.operation === Operation.CONTAIN) {
+                andConditions.push(
+                  isNumber
+                    ? `EXISTS (SELECT 1 FROM Selection_Media sm_any WHERE sm_any.mediaId = m.id AND sm_any.selectionId = ?)`
+                    : `EXISTS (SELECT 1 FROM Selection_Media sm_any JOIN Selection s ON s.id = sm_any.selectionId WHERE sm_any.mediaId = m.id AND s.name like ?)`,
+                );
+                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+              } else if (filter.operation === Operation.NOT_CONTAIN) {
+                andConditions.push(
+                  isNumber
+                    ? `NOT EXISTS (SELECT 1 FROM Selection_Media sm_any WHERE sm_any.mediaId = m.id AND sm_any.selectionId = ?)`
+                    : `NOT EXISTS (SELECT 1 FROM Selection_Media sm_any JOIN Selection s ON s.id = sm_any.selectionId WHERE sm_any.mediaId = m.id AND s.name like ?)`,
+                );
+                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+              }
+              break;
+            }
+
+            case FilterType.LICENSE: {
+              if (filter.operation === Operation.CONTAIN) {
+                andConditions.push(
+                  isNumber
+                    ? `(EXISTS (
+                          SELECT 1 FROM License_Media lm_any
+                          WHERE lm_any.mediaId = m.id AND lm_any.licenseId = ?
+                        )
+                        OR EXISTS (
+                          SELECT 1 FROM License_Selection ls_any
+                          INNER JOIN Selection_Media sm_any ON sm_any.selectionId = ls_any.selectionId
+                          WHERE sm_any.mediaId = m.id AND ls_any.licenseId = ?
+                        ))`
+                    : `(EXISTS (
+                          SELECT 1 FROM License_Media lm_any
+                          INNER JOIN License l_any ON l_any.id = lm_any.licenseId
+                          WHERE lm_any.mediaId = m.id AND l_any.name LIKE ?
+                        )
+                        OR EXISTS (
+                          SELECT 1 FROM License_Selection ls_any
+                          INNER JOIN License l_any2 ON l_any2.id = ls_any.licenseId
+                          INNER JOIN Selection_Media sm_any ON sm_any.selectionId = ls_any.selectionId
+                          WHERE sm_any.mediaId = m.id AND l_any2.name LIKE ?
+                        ))`,
+                );
+                whereParams.push(
+                  isNumber ? val.value : `%${val.value}%`,
+                  isNumber ? val.value : `%${val.value}%`,
+                );
+              } else if (filter.operation === Operation.NOT_CONTAIN) {
+                andConditions.push(
+                  isNumber
+                    ? `(NOT EXISTS (
+                          SELECT 1 FROM License_Media lm_any
+                          WHERE lm_any.mediaId = m.id AND lm_any.licenseId = ?
+                        )
+                        AND NOT EXISTS (
+                          SELECT 1 FROM License_Selection ls_any
+                          INNER JOIN Selection_Media sm_any ON sm_any.selectionId = ls_any.selectionId
+                          WHERE sm_any.mediaId = m.id AND ls_any.licenseId = ?
+                        ))`
+                    : `(NOT EXISTS (
+                          SELECT 1 FROM License_Media lm_any
+                          INNER JOIN License l_any ON l_any.id = lm_any.licenseId
+                          WHERE lm_any.mediaId = m.id AND l_any.name LIKE ?
+                        )
+                        AND NOT EXISTS (
+                          SELECT 1 FROM License_Selection ls_any
+                          INNER JOIN License l_any2 ON l_any2.id = ls_any.licenseId
+                          INNER JOIN Selection_Media sm_any ON sm_any.selectionId = ls_any.selectionId
+                          WHERE sm_any.mediaId = m.id AND l_any2.name LIKE ?
+                        ))`,
+                );
+                whereParams.push(
+                  isNumber ? val.value : `%${val.value}%`,
+                  isNumber ? val.value : `%${val.value}%`,
+                );
               }
               break;
             }

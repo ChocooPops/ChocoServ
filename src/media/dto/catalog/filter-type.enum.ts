@@ -4,5 +4,7 @@ export enum FilterType {
     MEDIA = "MEDIA",
     DECADE = "DECADE",
     YEAR = "YEAR",
-    CATEGORY = "CATEGORY"
+    CATEGORY = "CATEGORY",
+    SELECTION = "SELECTION",
+    LICENSE = "LICENSE"
 }
