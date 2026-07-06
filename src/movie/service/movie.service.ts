@@ -49,6 +49,7 @@ export class MovieService extends MediaService {
             SELECT = `  'otherTitles', ot.otherTitles,
                         'categories', cat.categories,
                         'keyWords', kw.keywords,
+                        'tmdbId', mlib.tmdbId,
                         'path', mlib.path,
                         'frames', mlib.frames,
                         'bytes', mlib.bytes,

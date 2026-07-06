@@ -53,6 +53,7 @@ export class SeriesService extends MediaService {
             SELECT = `'otherTitles', ot.otherTitles,
                       'categories', cat.categories,
                       'keyWords', kw.keywords,
+                      'tmdbId', mlib.tmdbId,
                       'path', mlib.path,
                       ${this.creditService.getQuerySelectCredits()}`;
 
