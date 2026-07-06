@@ -49,7 +49,7 @@ export class MediaController {
         @Body() filters: FILTERS[]
     ) {
         const medias: Media[] = [];
-        const items: any[] = await this.mediaSubstitutionSerivce.getMediaByCatalogFilters(
+        const items: { medias: any[]; total: number } = await this.mediaSubstitutionSerivce.getMediaByCatalogFilters(
             userId,
             sortFilter ?? SortCatalog.SHUFFLE,
             orderDirection !== 'false',
@@ -57,14 +57,17 @@ export class MediaController {
             offset ? Number(offset) : 0,
             filters ?? []
         );
-        items.forEach((item: any) => {
+        items.medias.forEach((item: any) => {
             if (item.media.mediaType === MediaType.MOVIE) {
                 medias.push(this.movieService.getFormatedMovie(item));
             } else if (item.media.mediaType === MediaType.SERIES) {
                 medias.push(this.seriesService.getFormatedSeries(item));
             }
         });
-        return medias;
+        return {
+            medias: medias,
+            total: items.total
+        };
     }
 
     @Get('media-info/:mediaId')

@@ -40,7 +40,7 @@ export class MediaSubstitutionSerivce {
     count: number,
     offset: number,
     filters: FILTERS[],
-  ): Promise<any[]> {
+  ): Promise<{ medias: any[]; total: number }> {
     const conn = await this.pool.getConnection();
     const jobFilters: string = `${this.creditService
       .getJobToFilters()
@@ -49,7 +49,7 @@ export class MediaSubstitutionSerivce {
 
     try {
       const joinParams: any[] = [];
-      const whereParams: any[] = [userId, userId, userId];
+      const filterParams: any[] = [];
 
       const blocks: { sql: string; logic: LogicalOperator.AND | LogicalOperator.OR }[] = [];
 
@@ -69,15 +69,11 @@ export class MediaSubstitutionSerivce {
             case FilterType.MEDIA: {
               if (val.value != MediaType.ALL.toString()) {
                 if (filter.operation === Operation.CONTAIN) {
-                  andConditions.push(
-                    isNumber ? `m.id = ?` : `m.mediaType LIKE ?`,
-                  );
-                  whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                  andConditions.push(isNumber ? `m.id = ?` : `m.mediaType LIKE ?`);
+                  filterParams.push(isNumber ? val.value : `%${val.value}%`);
                 } else if (filter.operation === Operation.NOT_CONTAIN) {
-                  andConditions.push(
-                    isNumber ? `m.id != ?` : `m.mediaType NOT LIKE ?`,
-                  );
-                  whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                  andConditions.push(isNumber ? `m.id != ?` : `m.mediaType NOT LIKE ?`);
+                  filterParams.push(isNumber ? val.value : `%${val.value}%`);
                 }
               }
               break;
@@ -86,10 +82,10 @@ export class MediaSubstitutionSerivce {
             case FilterType.YEAR: {
               if (filter.operation === Operation.CONTAIN) {
                 andConditions.push(`(YEAR(m.date) = ?)`);
-                whereParams.push(val.value);
+                filterParams.push(val.value);
               } else if (filter.operation === Operation.NOT_CONTAIN) {
                 andConditions.push(`(YEAR(m.date) != ?)`);
-                whereParams.push(val.value);
+                filterParams.push(val.value);
               }
               break;
             }
@@ -98,13 +94,11 @@ export class MediaSubstitutionSerivce {
               if (isNumber) {
                 const d = Number(val.value);
                 if (filter.operation === Operation.CONTAIN) {
-                  andConditions.push(
-                    `(YEAR(m.date) >= ? AND YEAR(m.date) < ?)`,
-                  );
-                  whereParams.push(d, d + 10);
+                  andConditions.push(`(YEAR(m.date) >= ? AND YEAR(m.date) < ?)`);
+                  filterParams.push(d, d + 10);
                 } else if (filter.operation === Operation.NOT_CONTAIN) {
                   andConditions.push(`(YEAR(m.date) < ? OR YEAR(m.date) >= ?)`);
-                  whereParams.push(d, d + 10);
+                  filterParams.push(d, d + 10);
                 }
               }
               break;
@@ -117,14 +111,14 @@ export class MediaSubstitutionSerivce {
                     ? `EXISTS (SELECT 1 FROM media_category mc WHERE mc.mediaId = m.id AND mc.categoryId = ?)`
                     : `EXISTS (SELECT 1 FROM media_category mc JOIN category c ON c.id = mc.categoryId WHERE mc.mediaId = m.id AND c.translationKey LIKE ?)`,
                 );
-                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                filterParams.push(isNumber ? val.value : `%${val.value}%`);
               } else if (filter.operation === Operation.NOT_CONTAIN) {
                 andConditions.push(
                   isNumber
                     ? `NOT EXISTS (SELECT 1 FROM media_category mc WHERE mc.mediaId = m.id AND mc.categoryId = ?)`
                     : `NOT EXISTS (SELECT 1 FROM media_category mc JOIN category c ON c.id = mc.categoryId WHERE mc.mediaId = m.id AND c.translationKey LIKE ?)`,
                 );
-                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                filterParams.push(isNumber ? val.value : `%${val.value}%`);
               }
               break;
             }
@@ -136,14 +130,14 @@ export class MediaSubstitutionSerivce {
                     ? `EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id AND k.id = ?)`
                     : `EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id AND k.name LIKE ?)`,
                 );
-                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                filterParams.push(isNumber ? val.value : `%${val.value}%`);
               } else if (filter.operation === Operation.NOT_CONTAIN) {
                 andConditions.push(
                   isNumber
                     ? `NOT EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id AND k.id = ?)`
                     : `NOT EXISTS (SELECT 1 FROM keyword k WHERE k.mediaId = m.id AND k.name LIKE ?)`,
                 );
-                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                filterParams.push(isNumber ? val.value : `%${val.value}%`);
               }
               break;
             }
@@ -153,32 +147,32 @@ export class MediaSubstitutionSerivce {
                 andConditions.push(
                   isNumber
                     ? `EXISTS (
-                                            SELECT 1 FROM Media_Credit mc_any
-                                            WHERE mc_any.mediaId = m.id
-                                            AND mc_any.creditId = ?
-                                            AND mc_any.job IN (${jobFilters}) )`
+                        SELECT 1 FROM Media_Credit mc_any
+                        WHERE mc_any.mediaId = m.id
+                        AND mc_any.creditId = ?
+                        AND mc_any.job IN (${jobFilters}))`
                     : `EXISTS (
-                                            SELECT 1 FROM Media_Credit mc_any
-                                            INNER JOIN Credit c_any ON c_any.id = mc_any.creditId
-                                            WHERE mc_any.mediaId = m.id
-                                            AND c_any.fullName LIKE ?
-                                            AND mc_any.job IN (${jobFilters}))`,
+                        SELECT 1 FROM Media_Credit mc_any
+                        INNER JOIN Credit c_any ON c_any.id = mc_any.creditId
+                        WHERE mc_any.mediaId = m.id
+                        AND c_any.fullName LIKE ?
+                        AND mc_any.job IN (${jobFilters}))`,
                 );
-                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                filterParams.push(isNumber ? val.value : `%${val.value}%`);
               } else if (filter.operation === Operation.NOT_CONTAIN) {
                 andConditions.push(
                   isNumber
                     ? `NOT EXISTS (
-                                            SELECT 1 FROM Media_Credit mc_any
-                                            WHERE mc_any.mediaId = m.id
-                                            AND mc_any.creditId = ?)`
+                        SELECT 1 FROM Media_Credit mc_any
+                        WHERE mc_any.mediaId = m.id
+                        AND mc_any.creditId = ?)`
                     : `NOT EXISTS (
-                                            SELECT 1 FROM Media_Credit mc_any
-                                            INNER JOIN Credit c_any ON c_any.id = mc_any.creditId
-                                            WHERE mc_any.mediaId = m.id
-                                            AND c_any.fullName LIKE ?)`,
+                        SELECT 1 FROM Media_Credit mc_any
+                        INNER JOIN Credit c_any ON c_any.id = mc_any.creditId
+                        WHERE mc_any.mediaId = m.id
+                        AND c_any.fullName LIKE ?)`,
                 );
-                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                filterParams.push(isNumber ? val.value : `%${val.value}%`);
               }
               break;
             }
@@ -190,14 +184,14 @@ export class MediaSubstitutionSerivce {
                     ? `EXISTS (SELECT 1 FROM Selection_Media sm_any WHERE sm_any.mediaId = m.id AND sm_any.selectionId = ?)`
                     : `EXISTS (SELECT 1 FROM Selection_Media sm_any JOIN Selection s ON s.id = sm_any.selectionId WHERE sm_any.mediaId = m.id AND s.name like ?)`,
                 );
-                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                filterParams.push(isNumber ? val.value : `%${val.value}%`);
               } else if (filter.operation === Operation.NOT_CONTAIN) {
                 andConditions.push(
                   isNumber
                     ? `NOT EXISTS (SELECT 1 FROM Selection_Media sm_any WHERE sm_any.mediaId = m.id AND sm_any.selectionId = ?)`
                     : `NOT EXISTS (SELECT 1 FROM Selection_Media sm_any JOIN Selection s ON s.id = sm_any.selectionId WHERE sm_any.mediaId = m.id AND s.name like ?)`,
                 );
-                whereParams.push(isNumber ? val.value : `%${val.value}%`);
+                filterParams.push(isNumber ? val.value : `%${val.value}%`);
               }
               break;
             }
@@ -227,7 +221,7 @@ export class MediaSubstitutionSerivce {
                           WHERE sm_any.mediaId = m.id AND l_any2.name LIKE ?
                         ))`,
                 );
-                whereParams.push(
+                filterParams.push(
                   isNumber ? val.value : `%${val.value}%`,
                   isNumber ? val.value : `%${val.value}%`,
                 );
@@ -255,7 +249,7 @@ export class MediaSubstitutionSerivce {
                           WHERE sm_any.mediaId = m.id AND l_any2.name LIKE ?
                         ))`,
                 );
-                whereParams.push(
+                filterParams.push(
                   isNumber ? val.value : `%${val.value}%`,
                   isNumber ? val.value : `%${val.value}%`,
                 );
@@ -270,34 +264,34 @@ export class MediaSubstitutionSerivce {
                 andConditions.push(
                   isNumber
                     ? `EXISTS (
-                                            SELECT 1 FROM Media_Credit mc_sub
-                                            WHERE mc_sub.mediaId = m.id
-                                            AND mc_sub.job = ?
-                                            AND mc_sub.creditId = ?)`
+                        SELECT 1 FROM Media_Credit mc_sub
+                        WHERE mc_sub.mediaId = m.id
+                        AND mc_sub.job = ?
+                        AND mc_sub.creditId = ?)`
                     : `EXISTS (
-                                            SELECT 1 FROM Media_Credit mc_sub
-                                            INNER JOIN Credit c ON c.id = mc_sub.creditId
-                                            WHERE mc_sub.mediaId = m.id
-                                            AND mc_sub.job = ?
-                                            AND c.fullName LIKE ?)`,
+                        SELECT 1 FROM Media_Credit mc_sub
+                        INNER JOIN Credit c ON c.id = mc_sub.creditId
+                        WHERE mc_sub.mediaId = m.id
+                        AND mc_sub.job = ?
+                        AND c.fullName LIKE ?)`,
                 );
-                whereParams.push(job, isNumber ? val.value : `%${val.value}%`);
+                filterParams.push(job, isNumber ? val.value : `%${val.value}%`);
               } else if (filter.operation === Operation.NOT_CONTAIN) {
                 andConditions.push(
                   isNumber
                     ? `NOT EXISTS (
-                                            SELECT 1 FROM Media_Credit mc_sub
-                                            WHERE mc_sub.mediaId = m.id
-                                            AND mc_sub.job = ?
-                                            AND mc_sub.creditId = ?)`
+                        SELECT 1 FROM Media_Credit mc_sub
+                        WHERE mc_sub.mediaId = m.id
+                        AND mc_sub.job = ?
+                        AND mc_sub.creditId = ?)`
                     : `NOT EXISTS (
-                                            SELECT 1 FROM Media_Credit mc_sub
-                                            INNER JOIN Credit c ON c.id = mc_sub.creditId
-                                            WHERE mc_sub.mediaId = m.id
-                                            AND mc_sub.job = ?
-                                            AND c.fullName LIKE ?)`,
+                        SELECT 1 FROM Media_Credit mc_sub
+                        INNER JOIN Credit c ON c.id = mc_sub.creditId
+                        WHERE mc_sub.mediaId = m.id
+                        AND mc_sub.job = ?
+                        AND c.fullName LIKE ?)`,
                 );
-                whereParams.push(job, isNumber ? val.value : `%${val.value}%`);
+                filterParams.push(job, isNumber ? val.value : `%${val.value}%`);
               }
               break;
             }
@@ -312,8 +306,6 @@ export class MediaSubstitutionSerivce {
         }
       }
 
-      const finalParams: any[] = [...joinParams, ...whereParams];
-      
       const groups: string[][] = [];
       blocks.forEach((b, i) => {
         if (i === 0 || b.logic === LogicalOperator.AND) {
@@ -323,9 +315,7 @@ export class MediaSubstitutionSerivce {
         }
       });
 
-      const groupSql: string[] = groups.map((g) =>
-        g.length > 1 ? `(${g.join( ' OR ')})` : g[0],
-      );
+      const groupSql: string[] = groups.map((g) => (g.length > 1 ? `(${g.join(' OR ')})` : g[0]));
 
       const whereClause: string = groupSql.join(' AND ');
       const WHERE: string = whereClause ? `WHERE ${whereClause}` : '';
@@ -333,19 +323,23 @@ export class MediaSubstitutionSerivce {
       const direction: string = orderDirection ? 'ASC' : 'DESC';
       const ORDER: string = `ORDER BY ${this.resolveSortColumn(sortFilter)} ${direction}`;
       const LIMIT: string = `LIMIT ? OFFSET ?`;
-      finalParams.push(count, offset);
 
-      const query: string = this.mediaService.getQuerySelectMedia(
-        JOIN,
-        WHERE,
-        ORDER,
-        LIMIT,
-      );
-      const results: any[] = await conn.query(query, finalParams);
+      // --- Requête paginée (SELECT complet avec JSON_OBJECT, kw, posters, seas, su2...) ---
+      const query: string = this.mediaService.getQuerySelectMedia(JOIN, WHERE, ORDER, LIMIT);
+      const mainParams: any[] = [...joinParams, userId, userId, userId, ...filterParams, count, offset];
 
-      return results;
+      // --- Requête de comptage (légère : pas de JSON, pas de jointures de stats) ---
+      const countQuery: string = `SELECT COUNT(DISTINCT m.id) AS total FROM Media m ${JOIN} ${WHERE}`;
+      const countParams: any[] = [...joinParams, ...filterParams];
+
+      const results: any[] = await conn.query(query, mainParams);
+      const countRows: any[] = await conn.query(countQuery, countParams);
+
+      const total: number = Number(countRows?.[0]?.total ?? 0);
+
+      return { medias: results, total };
     } catch (error) {
-      return [];
+      return { medias: [], total: 0 };
     } finally {
       await conn.release();
     }
