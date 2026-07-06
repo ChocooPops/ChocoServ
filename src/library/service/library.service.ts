@@ -1595,8 +1595,8 @@ export class LibraryService {
         const conn = await this.pool.getConnection();
         try {
             const rows: OrphanMediaLibrary[] = await conn.query(
-                `SELECT ml.id, ml.titleFormated, ml.type, ml.path, ml.tmdbId, ml.libraryId,
-                        ml.parentId, ml.titleFormated
+                `SELECT ml.id, ml.titleFormated as name, ml.type, ml.path, ml.tmdbId, ml.libraryId,
+                        ml.parentId
                 FROM Media_Library ml
                 WHERE
                     (ml.type = 'MOVIE'
@@ -1646,6 +1646,14 @@ export class LibraryService {
                 seasons:  rows.filter((r) => r.type === MediaType.SEASON),
                 episodes: rows.filter((r) => r.type === MediaType.EPISODE),
             };
+        
+        } catch (error) {
+            return {
+                movies: [],
+                series: [],
+                seasons: [],
+                episodes: []
+            }
         } finally {
             await conn.release();
         }
