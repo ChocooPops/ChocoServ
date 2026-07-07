@@ -23,7 +23,8 @@ const ORIGINAL_AUDIO_LANGS = ['orig', 'und', 'zxx', 'jpn'];
 
 @Injectable()
 export class NewsVideoRunningService {
-    private readonly newsPath: string = 'E:\\NEWS';
+    
+    private readonly newsPath: string = path.join(process.cwd(), 'videos');
 
     constructor(@Inject(DATABASE_POOL) private readonly pool: mariadb.Pool,
         private readonly formatPathService: FormatPathService,
