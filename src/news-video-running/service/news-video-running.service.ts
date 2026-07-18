@@ -19,7 +19,7 @@ import { I18nService } from 'nestjs-i18n';
 
 const execAsync = promisify(exec);
 
-const ORIGINAL_AUDIO_LANGS = ['orig', 'und', 'zxx', 'jpn'];
+const ORIGINAL_AUDIO_LANGS = ['orig', 'und', 'zxx', 'jpn', 'chi'];
 
 @Injectable()
 export class NewsVideoRunningService {
