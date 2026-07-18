@@ -192,7 +192,7 @@ export class NewsVideoRunningService {
 
             const { stdout } = await execAsync(ffprobeCommand);
             const probeData = JSON.parse(stdout) as {
-                streams: Array<{ index: number; tags?: { language?: string } }>
+                streams: Array<{ index: number; tags?: { language?: string, title?: string } }>
             };
 
             if (!probeData.streams || probeData.streams.length === 0) {
@@ -201,7 +201,9 @@ export class NewsVideoRunningService {
 
             const originalStream = probeData.streams.find(stream => {
                 const lang = stream.tags?.language?.toLowerCase() ?? '';
-                return ORIGINAL_AUDIO_LANGS.includes(lang);
+                const title = stream.tags?.title?.toLowerCase() ?? '';
+
+                return ORIGINAL_AUDIO_LANGS.includes(lang) || /\bvo\b/.test(title);
             });
 
             if (originalStream) {
