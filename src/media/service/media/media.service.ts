@@ -194,7 +194,7 @@ export class MediaService {
                                     FROM Episode e
                                     WHERE e.seasonId = s.id
                                     AND e.createdAt >= NOW() - INTERVAL ${this.maxDayToRecent} DAY
-                                )
+                                ) + 0
                         )
                         ORDER BY s.seasonNumber
                     ) AS seasons

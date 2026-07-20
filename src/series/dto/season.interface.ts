@@ -7,5 +7,6 @@ export interface Season {
     name: string,
     seasonNumber: number,
     srcPoster: string,
+    isRecent: boolean,
     episodes: Episode[]
 }
