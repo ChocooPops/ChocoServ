@@ -188,7 +188,13 @@ export class MediaService {
                             'seriesId', s.seriesId,
                             'name', s.name,
                             'seasonNumber', s.seasonNumber,
-                            'srcPoster', sp.name
+                            'srcPoster', sp.name,
+                            'isRecent', EXISTS (
+                                    SELECT 1
+                                    FROM Episode e
+                                    WHERE e.seasonId = s.id
+                                    AND e.createdAt >= NOW() - INTERVAL ${this.maxDayToRecent} DAY
+                                )
                         )
                         ORDER BY s.seasonNumber
                     ) AS seasons
