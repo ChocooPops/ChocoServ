@@ -363,6 +363,7 @@ CREATE TABLE
         srcBackground INT NULL,
         startShow VARCHAR(10) NOT NULL,
         endShow VARCHAR(10) NOT NULL,
+        activated BOOLEAN NOT NULL DEFAULT 0,
         mediaLibraryId CHAR(36) NOT NULL,
         path VARCHAR(555) NOT NULL,
         mediaId INT NOT NULL,
