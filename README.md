@@ -1295,7 +1295,7 @@ Ce projet est public.
 
 ## 📄 License
 
-Projet public - Tout droit réservé
+Projet public - Aucun droit réservé
 
 ---
 
