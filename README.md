@@ -422,6 +422,7 @@ Vidéos promotionnelles défilantes sur les pages Films et Séries. L'AUTO_INCRE
 | `srcBackground` | INT (FK) | Image de fond (nullable) |
 | `startShow` / `endShow` | VARCHAR(10) | Période d'affichage |
 | `mediaLibraryId` | CHAR(36) | ID mediaLibraryId de la vidéo |
+| `activated` | BOOLEAN | activer la news pour la diffuser sur la page principal |
 | `path` | VARCHAR(555) | Chemin vers le fichier vidéo |
 | `mediaId` | INT (FK) | Média lié |
 
