@@ -189,47 +189,103 @@ export class LicenseService {
         const conn = await this.pool.getConnection();
         try {
             const normalizedKeyword = this.searchService.normalizedKeyword(keyWord);
-            const keywords = normalizedKeyword.split(' ').filter(Boolean);
+            const normalizedKeywordNoSpace = normalizedKeyword.replace(/\s+/g, '');
 
-            const likeConditions = keywords
-                .map(() => `l.name LIKE ?`)
-                .join(' AND ');
+            // Variantes "préfixe" (distance 1)
+            const prefixKeywords: string[] = [
+                normalizedKeyword,
+                ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeyword, 1),
+                ...this.searchService.replaceWithUnderscores(normalizedKeyword, 1)
+            ];
 
-            const WHERE: string = `WHERE ${likeConditions}`;
+            // Variantes "contient" à distance 1 (avec espaces)
+            const containsKeywords: string[] = [
+                normalizedKeyword,
+                ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeyword, 1),
+                ...this.searchService.replaceWithUnderscores(normalizedKeyword, 1)
+            ];
+
+            // Variantes "contient" à distance 0, sans espaces
+            const containsKeywordsNoSpace: string[] = [
+                normalizedKeywordNoSpace,
+                ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeywordNoSpace, 0),
+                ...this.searchService.replaceWithUnderscores(normalizedKeywordNoSpace, 0)
+            ];
+
+            const prefixConditions = prefixKeywords.map(() => `l.name LIKE ?`).join(' OR ');
+            const containsConditions = containsKeywords.map(() => `l.name LIKE ?`).join(' OR ');
+            const noSpaceConditions = containsKeywordsNoSpace.map(() => `REPLACE(l.name, ' ', '') LIKE ?`).join(' OR ');
+
+            const WHERE: string = `
+                WHERE (
+                    (${prefixConditions})
+                    OR (${containsConditions})
+                    OR (${noSpaceConditions})
+                )
+            `;
             const ORDER: string = `ORDER BY CHAR_LENGTH(l.name) ASC`;
-            const likeParams = keywords.map(k => `%${k}%`);
 
-            const results: License[] = await conn.query(
+            const params = [
+                ...prefixKeywords.map((key) => `${key}%`),
+                ...containsKeywords.map((key) => `%${key}%`),
+                ...containsKeywordsNoSpace.map((key) => `%${key}%`)
+            ];
+
+            const candidates: License[] = await conn.query(
                 this.getQuerySelectSimpleLicense(WHERE, ORDER),
-                [...likeParams]
+                params
             );
 
-            let allResults = [...results];
-
-            if (results.length < 10) {
-                const allLicenses: License[] = await conn.query(
-                    this.getQuerySelectSimpleLicense(`WHERE 1=1`, ORDER), []
-                );
-
-                const likeIds = new Set(results.map(r => r.id));
-                const fuzzy = allLicenses.filter(l => {
-                    if (!l.name || likeIds.has(l.id)) return false;
-                    const normalizedName = this.searchService.normalizedKeyword(l.name);
-                    return normalizedName.split(' ').some(word =>
-                        keywords.some(k => {
-                            const distance = this.searchService.levenshteinDistance(word, k);
-                            const maxDistance = this.searchService.getMaxDistance();
-                            return distance <= maxDistance;
-                        })
-                    );
-                });
-
-                allResults = [...results, ...fuzzy];
+            if (candidates.length === 0) {
+                return [];
             }
 
-            return allResults
+            // Calcul de la pertinence (avec et sans espaces)
+            const scored = candidates.map((license) => {
+                const normalizedName = this.searchService.normalizedKeyword(license.name);
+                const normalizedNameNoSpace = normalizedName.replace(/\s+/g, '');
+
+                const comparisons = [
+                    { name: normalizedName, key: normalizedKeyword },
+                    { name: normalizedNameNoSpace, key: normalizedKeywordNoSpace }
+                ];
+
+                let best: { matchType: 0 | 1 | 2; distance: number; nameLength: number } | null = null;
+
+                for (const { name, key } of comparisons) {
+                    let matchType: 0 | 1 | 2;
+                    if (name.startsWith(key)) {
+                        matchType = 0;
+                    } else if (name.includes(key)) {
+                        matchType = 1;
+                    } else {
+                        matchType = 2;
+                    }
+
+                    const distance = this.searchService.levenshtein(key, name);
+
+                    if (
+                        !best ||
+                        matchType < best.matchType ||
+                        (matchType === best.matchType && distance < best.distance) ||
+                        (matchType === best.matchType && distance === best.distance && name.length < best.nameLength)
+                    ) {
+                        best = { matchType, distance, nameLength: name.length };
+                    }
+                }
+
+                return { license, ...best! };
+            });
+
+            scored.sort((a, b) => {
+                if (a.matchType !== b.matchType) return a.matchType - b.matchType;
+                if (a.distance !== b.distance) return a.distance - b.distance;
+                return a.nameLength - b.nameLength;
+            });
+
+            return scored
                 .slice(0, 10)
-                .map(license => this.getFormatedLicense(license));
+                .map(({ license }) => this.getFormatedLicense(license));
 
         } catch (error) {
             return [];

@@ -49,59 +49,111 @@ export class CreditService {
         const conn = await this.pool.getConnection();
         try {
             const normalizedKeyword = this.searchService.normalizedKeyword(keyWord);
-            const keywords = normalizedKeyword.split(' ').filter(Boolean);
+            const normalizedKeywordNoSpace = normalizedKeyword.replace(/\s+/g, '');
 
-            const likeConditions = keywords
+            // Variantes "préfixe" (distance 1)
+            const prefixKeywords: string[] = [
+                normalizedKeyword,
+                ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeyword, 1),
+                ...this.searchService.replaceWithUnderscores(normalizedKeyword, 1)
+            ];
+
+            // Variantes "contient" à distance 1 (avec espaces)
+            const containsKeywords: string[] = [
+                normalizedKeyword,
+                ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeyword, 1),
+                ...this.searchService.replaceWithUnderscores(normalizedKeyword, 1)
+            ];
+
+            // Variantes "contient" à distance 0, sans espaces
+            const containsKeywordsNoSpace: string[] = [
+                normalizedKeywordNoSpace,
+                ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeywordNoSpace, 0),
+                ...this.searchService.replaceWithUnderscores(normalizedKeywordNoSpace, 0)
+            ];
+
+            // Conditions dupliquées pour fullName ET originalFullName
+            const prefixConditions = prefixKeywords
                 .map(() => `(c.fullName LIKE ? OR c.originalFullName LIKE ?)`)
-                .join(' AND ');
+                .join(' OR ');
+            const containsConditions = containsKeywords
+                .map(() => `(c.fullName LIKE ? OR c.originalFullName LIKE ?)`)
+                .join(' OR ');
+            const noSpaceConditions = containsKeywordsNoSpace
+                .map(() => `(REPLACE(c.fullName, ' ', '') LIKE ? OR REPLACE(c.originalFullName, ' ', '') LIKE ?)`)
+                .join(' OR ');
 
-            const likeParams = keywords.flatMap(k => [`%${k}%`, `%${k}%`]);
+            const prefixParams = prefixKeywords.flatMap((key) => [`${key}%`, `${key}%`]);
+            const containsParams = containsKeywords.flatMap((key) => [`%${key}%`, `%${key}%`]);
+            const noSpaceParams = containsKeywordsNoSpace.flatMap((key) => [`%${key}%`, `%${key}%`]);
 
-            const results: Credit[] = await conn.query(`
+            const candidates: Credit[] = await conn.query(`
                 SELECT c.id, p.name as srcPoster, c.fullName, c.originalFullName
                 FROM CREDIT c
                 LEFT JOIN Poster p ON p.id = c.srcPoster
                 WHERE c.id LIKE ?
                 OR c.tmdbId LIKE ?
-                OR (${likeConditions})
-                ORDER BY
-                    ABS(CHAR_LENGTH(c.fullName) - CHAR_LENGTH(?)),
-                    ABS(CHAR_LENGTH(c.originalFullName) - CHAR_LENGTH(?)) ASC
+                OR (${prefixConditions})
+                OR (${containsConditions})
+                OR (${noSpaceConditions})
                 LIMIT 500`,
-                [`${keyWord}%`, `${keyWord}%`, ...likeParams, normalizedKeyword, normalizedKeyword]
+                [`${keyWord}%`, `${keyWord}%`, ...prefixParams, ...containsParams, ...noSpaceParams]
             );
 
-            let allResults = [...results];
-
-            if (results.length < 50) {
-                const allCandidates: Credit[] = await conn.query(`
-                    SELECT c.id, p.name as srcPoster, c.fullName, c.originalFullName
-                    FROM CREDIT c
-                    LEFT JOIN Poster p ON p.id = c.srcPoster
-                    WHERE ABS(CHAR_LENGTH(c.fullName) - ${normalizedKeyword.length}) <= ${normalizedKeyword.length}
-                    ORDER BY CHAR_LENGTH(c.fullName) ASC
-                    LIMIT 500`, []
-                );
-
-                const likeIds = new Set(results.map(r => r.id));
-                const fuzzy = allCandidates.filter(c => {
-                    if (!c.fullName || likeIds.has(c.id)) return false;
-                    const normalizedName = this.searchService.normalizedKeyword(c.fullName);
-                    return normalizedName.split(' ').some(word =>
-                        keywords.some(k => {
-                            const distance = this.searchService.levenshteinDistance(word, k);
-                            const maxDistance = this.searchService.getMaxDistance();
-                            return distance <= maxDistance;
-                        })
-                    );
-                });
-
-                allResults = [...results, ...fuzzy];
+            if (candidates.length === 0) {
+                return [];
             }
 
-            return allResults
+            // Calcul de la pertinence sur fullName ET originalFullName, avec/sans espaces
+            const scored = candidates.map((credit) => {
+                const namesToCheck = [credit.fullName, credit.originalFullName].filter(Boolean) as string[];
+
+                let best: { matchType: 0 | 1 | 2; distance: number; nameLength: number } | null = null;
+
+                for (const rawName of namesToCheck) {
+                    const normalizedName = this.searchService.normalizedKeyword(rawName);
+                    const normalizedNameNoSpace = normalizedName.replace(/\s+/g, '');
+
+                    const comparisons = [
+                        { name: normalizedName, key: normalizedKeyword },
+                        { name: normalizedNameNoSpace, key: normalizedKeywordNoSpace }
+                    ];
+
+                    for (const { name, key } of comparisons) {
+                        let matchType: 0 | 1 | 2;
+                        if (name.startsWith(key)) {
+                            matchType = 0;
+                        } else if (name.includes(key)) {
+                            matchType = 1;
+                        } else {
+                            matchType = 2;
+                        }
+
+                        const distance = this.searchService.levenshtein(key, name);
+
+                        if (
+                            !best ||
+                            matchType < best.matchType ||
+                            (matchType === best.matchType && distance < best.distance) ||
+                            (matchType === best.matchType && distance === best.distance && name.length < best.nameLength)
+                        ) {
+                            best = { matchType, distance, nameLength: name.length };
+                        }
+                    }
+                }
+
+                return { credit, ...best! };
+            });
+
+            scored.sort((a, b) => {
+                if (a.matchType !== b.matchType) return a.matchType - b.matchType;
+                if (a.distance !== b.distance) return a.distance - b.distance;
+                return a.nameLength - b.nameLength;
+            });
+
+            return scored
                 .slice(0, 50)
-                .map(credit => ({
+                .map(({ credit }) => ({
                     ...credit,
                     srcPoster: this.formatPathService.getOneFormatedPosterUrl(credit.id, MediaType.CREDIT, credit.srcPoster as string)
                 }));
