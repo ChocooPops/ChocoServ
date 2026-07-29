@@ -109,7 +109,8 @@ CREATE TABLE
         updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
         CONSTRAINT CREDIT_PK PRIMARY KEY (id),
         CONSTRAINT UQ_TMDB_ID_CREDIT UNIQUE (tmdbId),
-        INDEX IDX_CREDIT_SRCPOSTER (srcPoster)
+        INDEX IDX_CREDIT_SRCPOSTER (srcPoster),
+        INDEX FT_CREDIT_FULLNAME (fullName)
     ) AUTO_INCREMENT = 1000;
 
 -- MEDIA CREDIT
@@ -173,7 +174,9 @@ CREATE TABLE
         updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
         CONSTRAINT MEDIA_CREDIT_PK PRIMARY KEY (id),
         INDEX IDX_MS_MEDIA (mediaId),
-        INDEX IDX_MS_CREDIT (creditId)
+        INDEX IDX_MS_CREDIT (creditId),
+        INDEX IDX_MC_MEDIA_JOB_CREDIT (mediaId, job, creditId),
+        INDEX IDX_MEDIACREDIT_MEDIA_JOB_ORDER (mediaId, job, `order`)
     );
 
 -- CATEGORY
@@ -218,7 +221,10 @@ CREATE TABLE
         CONSTRAINT MEDIA_MEDIA_LIBRARY_UNIQ UNIQUE (mediaLibraryId),
         INDEX IDX_MEDIA_MEDIA_LIBRARY (mediaLibraryId),
         INDEX IDX_MEDIA_SRCLOGO (srcLogo),
-        INDEX IDX_MEDIA_SRCBACKGROUND (srcBackground)
+        INDEX IDX_MEDIA_SRCBACKGROUND (srcBackground),
+        INDEX IDX_MEDIA_TITLE (title),
+        INDEX IDX_MEDIA_CREATED_AT (createdAt),
+        INDEX IDX_MEDIA_TYPE (mediaType)
     ) AUTO_INCREMENT = 2000000;
 
 -- TRANSLATION TITLE
@@ -285,7 +291,9 @@ CREATE TABLE
         INDEX IDX_EPISODE_MEDIA_LIBRARY (mediaLibraryId),
         INDEX IDX_EPISODE_SERIES (seriesId),
         INDEX IDX_EPISODE_SEASON (seasonId),
-        INDEX IDX_EPISODE_SRCPOSTER (srcPoster)
+        INDEX IDX_EPISODE_SRCPOSTER (srcPoster),
+        INDEX IDX_EPISODE_SEASON_CREATED (seasonId, createdAt),
+        INDEX IDX_EPISODE_SERIES_CREATED (seriesId, createdAt)
     ) AUTO_INCREMENT = 8000000;
 
 -- SIMILAR TITLE
@@ -355,6 +363,7 @@ CREATE TABLE
         srcBackground INT NULL,
         startShow VARCHAR(10) NOT NULL,
         endShow VARCHAR(10) NOT NULL,
+        activated BOOLEAN NOT NULL DEFAULT 0,
         mediaLibraryId CHAR(36) NOT NULL,
         path VARCHAR(555) NOT NULL,
         mediaId INT NOT NULL,
@@ -405,7 +414,9 @@ CREATE TABLE
         CONSTRAINT MEDIA_CATEGORY_PK PRIMARY KEY (id),
         CONSTRAINT UQ_MEDIA_CATEGORY UNIQUE (mediaId, categoryId),
         INDEX IDX_MC_MEDIA (mediaId),
-        INDEX IDX_MC_CATEGORY (categoryId)
+        INDEX IDX_MC_CATEGORY (categoryId),
+        INDEX IDX_MC_MEDIA_CATEGORY (mediaId, categoryId),
+        INDEX IDX_MC_CATEGORY_MEDIA (categoryId, mediaId)
     );
 
 -- KEYWORD
@@ -417,7 +428,8 @@ CREATE TABLE
         createdAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
         updatedAt DATETIME (3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
         CONSTRAINT KEYWORD_PK PRIMARY KEY (id),
-        INDEX IDX_KW_MEDIA (mediaId)
+        INDEX IDX_KW_MEDIA (mediaId),
+        INDEX IDX_KEYWORD_MEDIA_ID (mediaId, id)
     );
 
 -- SELECTION MEDIA
@@ -432,7 +444,10 @@ CREATE TABLE
         CONSTRAINT SELECTION_MEDIA_PK PRIMARY KEY (id),
         CONSTRAINT UQ_SELECTION_MEDIA UNIQUE (selectionId, mediaId),
         INDEX IDX_SM_SELECTION (selectionId),
-        INDEX IDX_SM_MEDIA (mediaId)
+        INDEX IDX_SM_MEDIA (mediaId),
+        INDEX IDX_SM_MEDIA_SELECTION (mediaId, selectionId),
+        INDEX IDX_SM_SELECTION_MEDIA (selectionId, mediaId),
+        INDEX IDX_SM_SELECTION_ORDER (selectionId, orderIndex, mediaId)
     );
 
 -- SELECTION PAGE
@@ -460,7 +475,9 @@ CREATE TABLE
         CONSTRAINT LICENSE_MEDIA_PK PRIMARY KEY (id),
         CONSTRAINT UQ_LICENSE_MEDIA UNIQUE (licenseId, mediaId),
         INDEX IDX_LM_LICENSE (licenseId),
-        INDEX IDX_LM_MEDIA (mediaId)
+        INDEX IDX_LM_MEDIA (mediaId),
+        INDEX IDX_LM_MEDIA_LICENSE (mediaId, licenseId),
+        INDEX IDX_LM_LICENSE_ORDER (licenseId, orderIndex, mediaId)
     );
 
 -- LICENSE SELECTION
@@ -475,7 +492,9 @@ CREATE TABLE
         CONSTRAINT LICENSE_SELECTION_PK PRIMARY KEY (id),
         CONSTRAINT UQ_LICENSE_SELECTION UNIQUE (licenseId, selectionId),
         INDEX IDX_LS_LICENSE (licenseId),
-        INDEX IDX_LS_SELECTION (selectionId)
+        INDEX IDX_LS_SELECTION (selectionId),
+        INDEX IDX_LS_SELECTION_LICENSE (selectionId, licenseId),
+        INDEX IDX_LS_LICENSE_ORDER (licenseId, orderIndex, selectionId)
     );
 
 -- STAT USER

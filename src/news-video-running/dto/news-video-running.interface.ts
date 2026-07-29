@@ -6,6 +6,7 @@ export interface NewsVideoRunning {
     srcBackground: string | null,
     startShow: string | null,
     endShow: string | null,
+    activated?: boolean,
     path?: string,
     media: Media,
 }

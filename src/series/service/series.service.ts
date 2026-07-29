@@ -184,8 +184,9 @@ export class SeriesService extends MediaService {
 
     private getFormatedSeasons(seasons: Season[], seriesId: number): Season[] {
         if (seasons) {
-            seasons.forEach((season: Season, index) => {
-                seasons[index].srcPoster = this.formatPathService.getOneFormatedPosterUrl(seriesId, this.currentMediaType, season.srcPoster);
+            seasons.forEach((season: Season) => {
+                season.srcPoster = this.formatPathService.getOneFormatedPosterUrl(seriesId, this.currentMediaType, season.srcPoster);
+                season.isRecent = (season.isRecent as any) === 1 ? true : false;
             })
             return seasons;
         } else {

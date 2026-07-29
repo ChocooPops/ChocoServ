@@ -16,6 +16,8 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
+import { Movie } from 'src/movie/dto/movie.interface';
+import { Series } from 'src/series/dto/series.interface';
 
 const execAsync = promisify(exec);
 
@@ -48,7 +50,7 @@ export class NewsVideoRunningService {
         }
     }
 
-    private getQuerySelectNewsVideoRunning(WHERE: string, isRandom: boolean, getPath: boolean): string {
+    private getQuerySelectNewsVideoRunning(WHERE: string, isRandom: boolean, otherInfo: boolean): string {
         const RANDOM: string = isRandom ? `
             ORDER BY RAND()
             LIMIT 1;
@@ -61,7 +63,8 @@ export class NewsVideoRunningService {
                 'startShow', n.startShow,
                 'endShow', n.endShow,
                 'mediaLibraryId', n.mediaLibraryId,
-                ${getPath ? `'path', n.path,` : ''}
+                'activated', n.activated,
+                ${otherInfo ? `'path', n.path,` : ''}
                 'media', ${this.mediaService.getQuerySelectOneMedia()}
             ) AS news
 
@@ -81,16 +84,31 @@ export class NewsVideoRunningService {
         } else if (formatedNews.media.mediaType === MediaType.SERIES) {
             formatedNews.media = this.seriesService.getFormatedSeries(formatedNews.media);
         }
+        formatedNews.activated = formatedNews.activated ? true : false;
         return formatedNews;
     }
 
     public async getRandomNewsMovieRunning(userId: number): Promise<NewsVideoRunning> {
         const conn = await this.pool.getConnection();
         try {
-            const query: string = this.getQuerySelectNewsVideoRunning(`WHERE m.mediaType = ?`, true, false);
+            const query: string = this.getQuerySelectNewsVideoRunning(`WHERE m.mediaType = ? AND activated = 1`, true, false);
             const news: NewsVideoRunning[] = await conn.query(query, [userId, userId, userId, MediaType.MOVIE]);
-            news[0] = this.getFormatedNewsVideoRunning(news[0]);
-            return news[0];
+            if (news.length > 0) {
+                news[0] = this.getFormatedNewsVideoRunning(news[0]);
+                return news[0];
+            } else {
+                const movie: Movie = await this.movieService.getRandomMovie();
+                return {
+                    id: movie.id,
+                    mediaLibraryId: movie.mediaLibraryId,
+                    srcBackground: movie.srcBackgroundImage,
+                    startShow: '00:00:00',
+                    endShow: '00:00:00',
+                    activated: false,
+                    path: '',
+                    media: movie
+                }
+            }
         } catch (error) {
             return null;
         } finally {
@@ -101,10 +119,24 @@ export class NewsVideoRunningService {
     public async getRandomSeriesRunning(userId: number): Promise<NewsVideoRunning> {
         const conn = await this.pool.getConnection();
         try {
-            const query: string = this.getQuerySelectNewsVideoRunning(`WHERE m.mediaType = ?`, true, false);
+            const query: string = this.getQuerySelectNewsVideoRunning(`WHERE m.mediaType = ? AND activated = 1`, true, false);
             const news: NewsVideoRunning[] = await conn.query(query, [userId, userId, userId, MediaType.SERIES]);
-            news[0] = this.getFormatedNewsVideoRunning(news[0]);
-            return news[0];
+            if (news.length > 0) {
+                news[0] = this.getFormatedNewsVideoRunning(news[0]);
+                return news[0];
+            } else {
+                const series: Series = await this.seriesService.getRandomSeries();
+                return {
+                    id: series.id,
+                    mediaLibraryId: series.mediaLibraryId,
+                    srcBackground: series.srcBackgroundImage,
+                    startShow: '00:00:00',
+                    endShow: '00:00:00',
+                    activated: false,
+                    path: '',
+                    media: series
+                }
+            }
         } catch (error) {
             return null;
         } finally {
@@ -355,6 +387,7 @@ export class NewsVideoRunningService {
                             srcBackground = ?,
                             startShow = ?,
                             endShow = ?,
+                            activated = ?,
                             path = ?
                         WHERE mediaLibraryId = ?
                     `, [
@@ -362,6 +395,7 @@ export class NewsVideoRunningService {
                         this.formatPathService.getPotserIdByUrl(news.srcBackground),
                         interval.start,
                         interval.end,
+                        news.activated ?? 0,
                         processedPath,
                         news.mediaLibraryId
                     ]);
@@ -369,14 +403,15 @@ export class NewsVideoRunningService {
                 } else {
                     await conn.query(`
                         INSERT INTO News_Video_Running
-                        (mediaId, srcBackground, mediaLibraryId, startShow, endShow, path)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        (mediaId, srcBackground, mediaLibraryId, startShow, endShow, activated, path)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                     `, [
                         news.mediaId,
                         this.formatPathService.getPotserIdByUrl(news.srcBackground),
                         news.mediaLibraryId,
                         interval.start,
                         interval.end,
+                        news.activated ?? 0,
                         processedPath
                     ]);
                     insertedCount++;

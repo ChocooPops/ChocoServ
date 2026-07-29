@@ -5,4 +5,5 @@ export interface EditNewsVideoRunning {
     srcBackground: string,
     startShow: string | null,
     endShow: string | null,
+    activated: boolean
 }

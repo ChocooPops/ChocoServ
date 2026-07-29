@@ -10,12 +10,16 @@ export class VerifTimerShowService {
       if (time.length >= 3) {
         const [hour, minute, second] = time;
         const totalSeconds = parseInt(hour) * 3600 + parseInt(minute) * 60 + parseInt(second);
-        return totalSeconds;
+        if (totalSeconds > 0) {
+          return totalSeconds;
+        } else {
+          return 90;
+        }
       } else {
-        return 0;
+        return 90;
       }
     } else {
-      return 0;
+      return 90;
     }
   }
 
@@ -44,34 +48,31 @@ export class VerifTimerShowService {
   }
 
   public getGoodIntervalWhenMovieShowed(start: string, end: string): IntervalShowed {
-    const defautlStart: string = this.convertSecondInGoodFormatTimer(1200);
+    const defaultStart: string = this.convertSecondInGoodFormatTimer(1200);
     const defaultEnd: string = this.convertSecondInGoodFormatTimer(1290);
-    let finalStart !: string;
-    let finalEnd !: string;
-    if (end == null || end == undefined || start == null || start == undefined) {
-      finalStart = defautlStart;
-      finalEnd = defaultEnd;
-    } else {
-      start = this.getGoodFormat(start);
-      end = this.getGoodFormat(end);
-      const secondStart: number = this.convertTimerInSecond(start);
-      const secondEnd: number = this.convertTimerInSecond(end);
-      if (secondStart >= secondEnd) {
-        finalStart = start;
-        finalEnd = this.convertSecondInGoodFormatTimer(secondStart + 90);
-      } else if (end === this.convertSecondInGoodFormatTimer(0)) {
-        finalStart = defautlStart;
-        finalEnd = defaultEnd;
-      } else {
-        finalStart = start;
-        finalEnd = end;
-      }
+
+    if (start == null || end == null) {
+      return { start: defaultStart, end: defaultEnd };
     }
-    const interval: IntervalShowed = {
-      start: finalStart,
-      end: finalEnd
+
+    start = this.getGoodFormat(start);
+    end = this.getGoodFormat(end);
+
+    let secondStart: number = this.convertTimerInSecond(start);
+    let secondEnd: number = this.convertTimerInSecond(end);
+
+    if (secondStart <= 0) {
+      secondStart = 90;
     }
-    return interval;
+
+    if (secondStart >= secondEnd) {
+      secondEnd = secondStart + 90;
+    }
+
+    return {
+      start: this.convertSecondInGoodFormatTimer(secondStart),
+      end: this.convertSecondInGoodFormatTimer(secondEnd)
+    };
   }
 
 }
