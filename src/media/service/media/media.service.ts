@@ -260,29 +260,26 @@ export class MediaService {
         try {
             const normalizedKeyword = this.searchService.normalizedKeyword(keyword);
             const normalizedKeywordNoSpace = normalizedKeyword.replace(/\s+/g, '');
+            const languages: ISO_3166_1[] = [ISO_3166_1.VO, ISO_3166_1.FR, ISO_3166_1.US, ISO_3166_1.GB, ISO_3166_1.IT, ISO_3166_1.ES, ISO_3166_1.DE];
 
-            // Variantes "préfixe" (distance 2) pour le titre principal
             const mainPrefixKeywords: string[] = [
                 normalizedKeyword,
                 ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeyword, 2),
                 ...this.searchService.replaceWithUnderscores(normalizedKeyword, 2)
             ];
 
-            // Variantes "préfixe" pour les traductions (distance 1)
             const translationPrefixKeywords: string[] = [
                 normalizedKeyword,
                 ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeyword, 1),
                 ...this.searchService.replaceWithUnderscores(normalizedKeyword, 1)
             ];
 
-            // Variantes "contient" à distance 1 (mot-clé normal, avec espaces)
             const containsKeywords: string[] = [
                 normalizedKeyword,
                 ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeyword, 1),
                 ...this.searchService.replaceWithUnderscores(normalizedKeyword, 1)
             ];
 
-            // Variantes "contient" à distance 1, mot-clé SANS espaces (pour matcher un titre collé)
             const containsKeywordsNoSpace: string[] = [
                 normalizedKeywordNoSpace,
                 ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeywordNoSpace, 1),
@@ -296,10 +293,12 @@ export class MediaService {
             const mainNoSpaceConditions = containsKeywordsNoSpace.map(() => `REPLACE(m.title, ' ', '') LIKE ?`).join(' OR ');
             const translationNoSpaceConditions = containsKeywordsNoSpace.map(() => `REPLACE(t.title, ' ', '') LIKE ?`).join(' OR ');
 
+            const languageList = languages.map((lg) => `'${lg}'`).join(', ');
+
             const query = `
-                SELECT DISTINCT m.id, m.title, t.title AS translatedTitle
+                SELECT m.id, m.title, GROUP_CONCAT(t.title SEPARATOR '||') AS translatedTitles
                 FROM MEDIA m
-                LEFT JOIN Translation_Title t ON t.mediaId = m.id
+                LEFT JOIN Translation_Title t ON t.mediaId = m.id AND t.iso_639_1 IN (${languageList})
                 WHERE m.mediaType IN (${types.map(() => '?').join(',')})
                 AND (
                     (${mainLikeConditions})
@@ -309,6 +308,9 @@ export class MediaService {
                     OR (${translationContainsConditions})
                     OR (${translationNoSpaceConditions})
                 )
+                GROUP BY m.id
+                ORDER BY m.id
+                LIMIT 100
             `;
 
             const params = [
@@ -321,7 +323,7 @@ export class MediaService {
                 ...containsKeywordsNoSpace.map((key) => `%${key}%`)
             ];
 
-            const candidates: { id: number; title: string; translatedTitle: string | null }[] =
+            const candidates: { id: number; title: string; translatedTitles: string | null }[] =
                 await conn.query(query, params);
 
             if (candidates.length === 0) {
@@ -331,13 +333,13 @@ export class MediaService {
             const bestScoreByMedia = new Map<number, { matchType: 0 | 1 | 2; distance: number; titleLength: number }>();
 
             for (const candidate of candidates) {
-                const titlesToCheck = [candidate.title, candidate.translatedTitle].filter(Boolean) as string[];
+                const translatedTitles = candidate.translatedTitles ? candidate.translatedTitles.split('||') : [];
+                const titlesToCheck = [candidate.title, ...translatedTitles].filter(Boolean) as string[];
 
                 for (const rawTitle of titlesToCheck) {
                     const normalizedTitle = this.searchService.normalizedKeyword(rawTitle);
                     const normalizedTitleNoSpace = normalizedTitle.replace(/\s+/g, '');
 
-                    // On compare à la fois avec et sans espaces, et on garde le meilleur résultat
                     const comparisons = [
                         { title: normalizedTitle, key: normalizedKeyword },
                         { title: normalizedTitleNoSpace, key: normalizedKeywordNoSpace }

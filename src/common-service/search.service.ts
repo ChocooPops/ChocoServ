@@ -21,9 +21,10 @@ export class SearchService {
             if (chosen.length === count) {
                 const chars = str.split("");
                 for (const idx of chosen) {
-                    chars[idx] = "_";
+                    chars[idx] = "%";
                 }
-                result.push(chars.join(""));
+                const generated = chars.join("");
+                result.push(generated);
                 return;
             }
 
@@ -36,11 +37,6 @@ export class SearchService {
 
         for (let count = 1; count <= iterations; count++) {
             combine(count, 0, []);
-        }
-
-        for (let count = 1; count <= iterations; count++) {
-            result.push(str.slice(count));
-            result.push(str.slice(0, -count));
         }
         
         return result;
@@ -55,9 +51,10 @@ export class SearchService {
             if (chosen.length === count) {
                 const chars = str.split("");
                 for (let k = chosen.length - 1; k >= 0; k--) {
-                    chars.splice(chosen[k], 0, "_");
+                    chars.splice(chosen[k], 0, "%");
                 }
-                result.push(chars.join(""));
+                const generated = chars.join("");
+                result.push(generated);
                 return;
             }
 
