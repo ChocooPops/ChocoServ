@@ -223,7 +223,7 @@ export class LicenseService {
                     OR (${noSpaceConditions})
                 )
             `;
-            const ORDER: string = `ORDER BY CHAR_LENGTH(l.name) ASC`;
+            const ORDER: string = `ORDER BY CHAR_LENGTH(l.name) ASC LIMIT 100`;
 
             const params = [
                 ...prefixKeywords.map((key) => `${key}%`),

@@ -199,7 +199,7 @@ export class SelectionService {
                     OR (${noSpaceConditions})
                 )
             `;
-            const ORDER: string = `ORDER BY CHAR_LENGTH(name) ASC`;
+            const ORDER: string = `ORDER BY CHAR_LENGTH(name) ASC LIMIT 100`;
 
             const params = [
                 ...prefixKeywords.map((key) => `${key}%`),

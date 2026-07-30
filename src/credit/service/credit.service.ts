@@ -96,7 +96,7 @@ export class CreditService {
                 OR (${prefixConditions})
                 OR (${containsConditions})
                 OR (${noSpaceConditions})
-                LIMIT 500`,
+                LIMIT 100`,
                 [`${keyWord}%`, `${keyWord}%`, ...prefixParams, ...containsParams, ...noSpaceParams]
             );
 
