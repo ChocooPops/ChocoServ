@@ -10,7 +10,7 @@ import { VerifTimerShowService } from 'src/common-service/verif-timer-show.servi
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { MovieService } from 'src/movie/service/movie.service';
 import { SeriesService } from 'src/series/service/series.service';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs/promises';
@@ -20,6 +20,7 @@ import { Movie } from 'src/movie/dto/movie.interface';
 import { Series } from 'src/series/dto/series.interface';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const ORIGINAL_AUDIO_LANGS = ['orig', 'und', 'zxx', 'jpn', 'chi'];
 
@@ -262,22 +263,24 @@ export class NewsVideoRunningService {
 
         const audioStreamIndex = await this.getOriginalAudioStreamIndex(inputPath);
 
-        const ffmpegCommand = [
-            'ffmpeg',
-            '-i', `"${inputPath}"`,
-            '-ss', startShow,
-            '-to', endShow,
-            '-map 0:v:0',                           // Premier stream vidéo
-            `-map 0:a:${audioStreamIndex}`,         // Stream audio original (ou fallback 0)
-            '-c:v copy',                            // Copie vidéo sans ré-encodage
-            '-c:a aac',                             // Encode l'audio en AAC
-            '-b:a 192k',                            // Bitrate audio
-            '-y',                                   // Écrase le fichier existant
-            `"${outputPath}"`
-        ].join(' ');
+        const durationSeconds = this.timecodeToSeconds(endShow) - this.timecodeToSeconds(startShow);
+
+        const args = [
+            '-ss', startShow,              // AVANT -i : seek rapide + précis sur la keyframe
+            '-i', inputPath,
+            '-t', durationSeconds.toString(), // durée plutôt que -to (plus fiable avec -ss en input)
+            '-map', '0:v:0',
+            '-map', `0:a:${audioStreamIndex}`,
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-avoid_negative_ts', 'make_zero', // évite le décalage de timestamps au début
+            '-y',
+            outputPath
+        ];
 
         try {
-            const { stderr } = await execAsync(ffmpegCommand);
+            const { stderr } = await execFileAsync('ffmpeg', args);
 
             if (stderr && stderr.includes('Error')) {
                 throw new Error(stderr);
@@ -286,6 +289,11 @@ export class NewsVideoRunningService {
         } catch (error) {
             throw error;
         }
+    }
+
+    private timecodeToSeconds(timecode: string): number {
+        const [h, m, s] = timecode.split(':').map(Number);
+        return h * 3600 + m * 60 + s;
     }
 
     private async deleteProcessedVideo(filePath: string): Promise<void> {
