@@ -3,17 +3,20 @@ import { Injectable } from "@nestjs/common";
 @Injectable()
 export class SearchService {
 
+    private readonly MAX_LENGTH: number = 60;
+
     public normalizedKeyword(keyWord: string): string {
         return keyWord
             .normalize('NFD')                   // Décompose "é" → "e" + accent
             .replace(/[\u0300-\u036f]/g, '')    // Supprime les accents
             .toLowerCase()
-            .replace(/[^a-z0-9 ]/g, ' ')        // Supprime les caractères spéciaux
+            .replace(/[%_]/g, '')               // Supprime les wildcards SQL (% et _)
             .replace(/\s+/g, ' ')               // Collapse les espaces multiples
             .trim();
     }
 
     public replaceWithUnderscores(str: string, iterations: number): string[] {
+        str = str.slice(0, this.MAX_LENGTH);
         const result: string[] = [];
         const n = str.length;
 
@@ -43,6 +46,7 @@ export class SearchService {
     }
 
     public addUnderscoresAfterEachLetterVariants(str: string, iterations: number): string[] {
+        str = str.slice(0, this.MAX_LENGTH);
         const result: string[] = [];
         const n = str.length;
         const totalGaps = n + 1;

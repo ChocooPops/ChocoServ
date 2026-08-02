@@ -260,7 +260,7 @@ export class MediaService {
         try {
             const normalizedKeyword = this.searchService.normalizedKeyword(keyword);
             const normalizedKeywordNoSpace = normalizedKeyword.replace(/\s+/g, '');
-            const languages: ISO_3166_1[] = [ISO_3166_1.VO, ISO_3166_1.FR, ISO_3166_1.US, ISO_3166_1.GB, ISO_3166_1.IT, ISO_3166_1.ES, ISO_3166_1.DE];
+            const languages: ISO_3166_1[] = [ISO_3166_1.VO, ISO_3166_1.FR, ISO_3166_1.US, ISO_3166_1.GB, ISO_3166_1.IT, ISO_3166_1.ES, ISO_3166_1.DE, ISO_3166_1.JP];
 
             const mainPrefixKeywords: string[] = [
                 normalizedKeyword,
