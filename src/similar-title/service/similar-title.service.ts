@@ -41,7 +41,7 @@ export interface SimilarMediaResult {
 @Injectable()
 export class SimilarTitleService {
 
-    private maxSimilarTitles: number = 20;
+    private maxSimilarTitles: number = 21;
     private readonly LIMIT_CREDIT: number = 15;
 
     constructor(@Inject(DATABASE_POOL) protected readonly pool: mariadb.Pool,

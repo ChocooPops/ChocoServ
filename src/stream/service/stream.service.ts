@@ -1,4 +1,4 @@
-import { Injectable, NotAcceptableException, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Response, Request } from 'express';
@@ -65,12 +65,14 @@ export class StreamService {
 
             const stat = fs.statSync(path);
             const fileSize = stat.size;
-            const range = req.headers.range;
+            // react-native-video/ExoPlayer omits the Range header on its very
+            // first request (position 0, unbounded length) — a plain GET
+            // already means "from the start", so it's valid HTTP even though
+            // VLC and manual curl -H "Range: ..." tests always send one.
+            // Defaulting instead of rejecting keeps this endpoint working for
+            // every real player, not just ones that happen to send Range.
+            const range = req.headers.range || 'bytes=0-';
             videoDuration = videoDuration / 1000;
-
-            if (!range) {
-                throw new NotAcceptableException('Range header required');
-            }
 
             const parts = range.replace(/bytes=/, '').split('-');
             const start = parseInt(parts[0], 10);
@@ -149,6 +151,7 @@ export class StreamService {
             stream.pipe(res);
 
         } catch (error) {
+            console.error(`[streamVideo]`, error); 
             stream?.destroy();
             if (!res.headersSent) {
                 res.status(500).send('Internal server error');
