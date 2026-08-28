@@ -152,7 +152,7 @@ export class SelectionService {
         categories.forEach((category: CategoryEntirely) => {
             selections.push({
                 id: category.id,
-                name: category.nameSelection,
+                name: this.i18nService.t(category.translationKey ? `common.OTHER.${category.translationKey.trim()}` : ''),
                 selectionType: SelectionType.NORMAL_POSTER,
                 mediaList: category.medias || [],
                 createFrom: MediaType.CATEGORY
