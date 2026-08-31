@@ -9,5 +9,7 @@ export enum MediaType {
     LICENSE = "LICENSE",
     CATEGORY = "CATEGORY",
     OTHER = "OTHER",
-    ALL = "ALL"
+    ALL = "ALL",
+    HISTORIC_USER = "HISTORIC_USER",
+    LAST_RELEASE = "LAST_RELEASE"
 }

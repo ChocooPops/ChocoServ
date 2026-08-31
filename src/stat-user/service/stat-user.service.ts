@@ -129,7 +129,7 @@ export class StatUserService {
           name: this.i18nService.t("common.STAT_USER.RECENTLY_VIEWED"),
           selectionType: SelectionType.NORMAL_POSTER,
           mediaList: medias,
-          createFrom: MediaType.OTHER
+          createFrom: MediaType.HISTORIC_USER
         };
       } else {
         return null;

@@ -55,6 +55,28 @@ export class MediaSubstitutionSerivce {
 
       let JOIN: string = '';
 
+      if (sortFilter === SortCatalog.ALREADY_WATCHED) {
+        JOIN = `INNER JOIN (
+                  SELECT
+                    combined.mediaId,
+                    MAX(GREATEST(combined.createdAt, combined.updatedAt)) AS updatedAt
+                    FROM (
+                      SELECT su.movieId AS mediaId, su.createdAt, su.updatedAt
+                        FROM Stat_User su
+                        WHERE su.userId = ? AND su.movieId IS NOT NULL
+
+                      UNION ALL
+
+                      SELECT e.seriesId AS mediaId, su.createdAt, su.updatedAt
+                        FROM Stat_User su
+                        INNER JOIN Episode e ON e.id = su.episodeId
+                        WHERE su.userId = ? AND su.episodeId IS NOT NULL
+                    ) combined
+                    GROUP BY combined.mediaId
+                ) historicCatalog ON historicCatalog.mediaId = m.id`;
+        joinParams.push(userId, userId);
+      }
+      
       for (const filter of filters ?? []) {
         const values = filter.value ?? [];
         const andConditions: string[] = [];
@@ -326,7 +348,7 @@ export class MediaSubstitutionSerivce {
 
       // --- Requête paginée (SELECT complet avec JSON_OBJECT, kw, posters, seas, su2...) ---
       const query: string = this.mediaService.getQuerySelectMedia(JOIN, WHERE, ORDER, LIMIT);
-      const mainParams: any[] = [...joinParams, userId, userId, userId, ...filterParams, count, offset];
+      const mainParams: any[] = [userId, userId, userId, ...joinParams, ...filterParams, count, offset];
 
       // --- Requête de comptage (légère : pas de JSON, pas de jointures de stats) ---
       const countQuery: string = `SELECT COUNT(DISTINCT m.id) AS total FROM Media m ${JOIN} ${WHERE}`;
@@ -357,6 +379,8 @@ export class MediaSubstitutionSerivce {
         return 'mlib.duration';
       case SortCatalog.SHUFFLE:
         return 'RAND()';
+      case SortCatalog.ALREADY_WATCHED:
+        return 'historicCatalog.updatedAt'
       default:
         return 'RAND()';
     }

@@ -108,7 +108,7 @@ export class SelectionService {
                 name: this.i18nService.t("common.SELECTION.SELECTION_LATEST_RELEASE"),
                 selectionType: SelectionType.NORMAL_POSTER,
                 mediaList: results,
-                createFrom: MediaType.OTHER
+                createFrom: MediaType.LAST_RELEASE
             };
         } catch(error) {
             return null;
