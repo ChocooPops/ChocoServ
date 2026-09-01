@@ -27,7 +27,7 @@ export class MediaSubstitutionSerivce {
 
   private readonly LIMIT_CREDIT: number = 12;
 
-  private isNumeric(value: any): boolean {
+  public isNumeric(value: any): boolean {
     if (typeof value === 'number') return !isNaN(value) && isFinite(value);
     if (typeof value === 'string') return value.trim() !== '' && !isNaN(Number(value.trim()));
     return false;

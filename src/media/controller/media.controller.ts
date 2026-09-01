@@ -41,16 +41,22 @@ export class MediaController {
 
     @Post('catalog')
     async getMediaByCatalogFilters(
-        @CurrentUser('sub') userId: number,
+        @CurrentUser('sub') currentUserId: number,
         @Query('sortFilter') sortFilter: SortCatalog,
         @Query('orderDirection') orderDirection: string,
         @Query('count') count: string,
         @Query('offset') offset: string,
+        @Query('userId') userId: string,
         @Body() filters: FILTERS[]
     ) {
+
+        if (userId && this.mediaSubstitutionSerivce.isNumeric(userId) && Number(userId) > 0) {
+           currentUserId = Number(userId); 
+        }
+
         const medias: Media[] = [];
         const items: { medias: any[]; total: number } = await this.mediaSubstitutionSerivce.getMediaByCatalogFilters(
-            userId,
+            currentUserId,
             sortFilter ?? SortCatalog.SHUFFLE,
             orderDirection !== 'false',
             count ? Number(count) : 50,
