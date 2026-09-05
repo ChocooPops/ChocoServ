@@ -68,6 +68,8 @@ export class LicenseService {
                     'name', lic.name,
                     'orderIndex', lic.orderIndex,
                     'position', lic.position,
+                    'isMediaOrderRandom', lic.isMediaOrderRandom,
+                    'isSelectionOrderRandom', lic.isSelectionOrderRandom,
                     'srcIcon', pli.name,
                     'srcLogo', pll.name,
                     'srcBackground', plb.name,
@@ -301,6 +303,7 @@ export class LicenseService {
             const result = await conn.query(query, [userId, userId, userId, id, userId, userId, userId, id, id, id]);
             return this.getFormatedLicense(result[0]);
         } catch (error) {
+            console.log(error)
             return null;
         } finally {
             await conn.release();
@@ -315,10 +318,22 @@ export class LicenseService {
                 await conn.beginTransaction();
                 const maxLicense = await conn.query('Select count(id) as orderIndex FROM License');
                 const newOrderIndex = maxLicense[0]?.orderIndex !== null ? Number(maxLicense[0].orderIndex) + 1 : 1000;
-                const queryInsertLicense: string = `INSERT INTO License (name, position, orderIndex) VALUES (?, ?, ?)`;
-                const resultInsertLicense = await conn.query(queryInsertLicense, [newLicense.name.trim(), newLicense.position ? 1 : 0, newOrderIndex]);
+                const queryInsertLicense: string = `INSERT INTO License (
+                                                        name, 
+                                                        position, 
+                                                        isSelectionOrderRandom, 
+                                                        isMediaOrderRandom, 
+                                                        orderIndex
+                                                    )
+                                                    VALUES (?, ?, ?, ?, ?)`;
+                const resultInsertLicense = await conn.query(queryInsertLicense, [
+                                                                newLicense.name.trim(),
+                                                                newLicense.position ? 1 : 0,
+                                                                newLicense.isSelectionOrderRandom ? 1 : 0,
+                                                                newLicense.isMediaOrderRandom ? 1 : 0,
+                                                                newOrderIndex
+                                                            ]);
                 const licenseId: number = Number(resultInsertLicense.insertId);
-                    
                 const formatedPath: string = licenseId.toString();
 
                 const messageMediaLicense: string = await this.insertManyMediasIntoLicense(newLicense.mediaList, licenseId, conn);
@@ -365,9 +380,17 @@ export class LicenseService {
                     const formatedPath: string = oldLicense.id.toString();
                     const queryUpdate: string = `UPDATE LICENSE 
                         SET name = ?,
-                        position = ?
+                        position = ?,
+                        isSelectionOrderRandom = ?,
+                        isMediaOrderRandom = ?
                         WHERE id = ?`
-                    await conn.query(queryUpdate, [updateLicense.name.trim(), updateLicense.position ? 1 : 0, updateLicense.id]);
+                    await conn.query(queryUpdate, [
+                            updateLicense.name.trim(),
+                            updateLicense.position ? 1 : 0, 
+                            updateLicense.isSelectionOrderRandom ? 1 : 0,
+                            updateLicense.isMediaOrderRandom ? 1 : 0,
+                            updateLicense.id
+                        ]);
                     const messageSrcIcon: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcIcon, oldLicense.srcIcon, formatedPath, 'srcIcon', conn);
                     const messageSrcLogo: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcLogo, oldLicense.srcLogo, formatedPath, 'srcLogo', conn);
                     const messageSrcBackground: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcBackground, oldLicense.srcBackground, formatedPath, 'srcBackground', conn);

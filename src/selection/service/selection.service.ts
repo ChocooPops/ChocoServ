@@ -62,6 +62,7 @@ export class SelectionService {
             JSON_OBJECT(
                 'id', sel.id,
                 'name', sel.name,
+                'isOrderRandom', sel.isOrderRandom,
                 'selectionType', sel.selectionType,
                 'mediaList', ${this.mediaService.getQuerySelectManyMedia(`ORDER BY sm.orderIndex asc`)}
             ) AS selection
@@ -289,9 +290,9 @@ export class SelectionService {
             try {
                 await conn.beginTransaction();
                 const queryInsertSelection: string = `
-                    INSERT INTO Selection (name, selectionType)
-                    VALUES (?, ?);`;
-                const resultInsertSelection = await conn.query(queryInsertSelection, [newSelection.name.trim(), newSelection.selectionType || SelectionType.NORMAL_POSTER]);
+                    INSERT INTO Selection (name, selectionType, isOrderRandom)
+                    VALUES (?, ?, ?);`;
+                const resultInsertSelection = await conn.query(queryInsertSelection, [newSelection.name.trim(), newSelection.selectionType || SelectionType.NORMAL_POSTER, newSelection.isOrderRandom ? 1 : 0]);
                 const selectionId: number = Number(resultInsertSelection.insertId);
                 const messageMediaSelection: string = await this.insertManyMediasIntoSelection(newSelection.mediaList, selectionId, conn);
                 await conn.commit();
@@ -330,9 +331,16 @@ export class SelectionService {
                 const name: string = updatedSelection.name && updatedSelection.name.trim() !== '' ? updatedSelection.name : selection.name;
                 const queryUpdateSelection: string = `
                     UPDATE Selection
-                    SET name = ?, selectionType = ?
+                    SET name = ?, 
+                    selectionType = ?, 
+                    isOrderRandom = ?
                     WHERE id = ?`
-                await conn.query(queryUpdateSelection, [name.trim(), updatedSelection.selectionType, updatedSelection.id]);
+                await conn.query(queryUpdateSelection, [
+                    name.trim(), 
+                    updatedSelection.selectionType, 
+                    updatedSelection.isOrderRandom ? 1 : 0, 
+                    updatedSelection.id
+                ]);
                 await conn.query('DELETE FROM Selection_Media WHERE selectionId = ?', [updatedSelection.id]);
                 const messageMediaSelection: string = await this.insertManyMediasIntoSelection(updatedSelection.mediaList, updatedSelection.id, conn);
                 await conn.commit();
