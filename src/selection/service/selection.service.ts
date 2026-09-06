@@ -56,7 +56,7 @@ export class SelectionService {
         ${ORDER};`
     }
 
-    private getQuerySelections(JOIN: string, WHERE: string, ORDER: string): string {
+    private getQuerySelections(SELECT: string, JOIN: string, WHERE: string, ORDER: string, setOrder: any = null): string {
         return `
         SELECT 
             JSON_OBJECT(
@@ -64,7 +64,10 @@ export class SelectionService {
                 'name', sel.name,
                 'isOrderRandom', sel.isOrderRandom,
                 'selectionType', sel.selectionType,
-                'mediaList', ${this.mediaService.getQuerySelectManyMedia(`ORDER BY sm.orderIndex asc`)}
+                ${SELECT}
+                'mediaList', ${this.mediaService.getQuerySelectManyMedia(
+                    `${setOrder ? 'ORDER BY sm.orderIndex asc' : 'ORDER BY IF(sel.isOrderRandom, RAND(), sm.orderIndex) ASC'}`
+                )}
             ) AS selection
         FROM selection sel
         ${JOIN}
@@ -116,17 +119,35 @@ export class SelectionService {
         }
     }
 
-    public async getSelectionsForHomePage(userId: number): Promise<Selection[]> {
+    public async getSelectionsByPage(userId: number, page: PageType, setOrder: any): Promise<Selection[]> {
         const conn = await this.pool.getConnection();
         try {
+            let setOrderRandom: boolean = false;
+            if (!setOrder) {
+                const isOrderRandom: any[] = await conn.query(`SELECT isOrderRandom FROM Selection_Page WHERE pageType = ? LIMIT 1`, [page]);
+                if (isOrderRandom && isOrderRandom.length > 0) {
+                    setOrderRandom = isOrderRandom[0].isOrderRandom ? true : false;
+                }
+            }
+
+            let ORDER: string = '';
+            if (setOrderRandom) {
+                ORDER = 'ORDER BY RAND()'
+            } else {
+                ORDER = 'ORDER BY selp.orderIndex ASC'
+            }
+
             const finalSelections: Selection[] = [];
             const selectionLatestRelease: Selection = await this.getLatestReleaseMediaSelection(userId, conn);
             const selectionInProgress: Selection = await this.statUserService.getMediaSelectionInProgess(userId, conn);
             const query: string = this.getQuerySelections(
+                `'isOrderRandom', selp.isOrderRandom,`,
                 `INNER JOIN Selection_Page selp ON selp.selectionId = sel.id`,
                 `WHERE selp.pageType = ?`,
-                `ORDER BY selp.orderIndex asc`);
-            const selections: any[] | null = await conn.query(query, [userId, userId, userId, PageType.HOME]);
+                ORDER,
+                setOrderRandom
+            );
+            const selections: any[] | null = await conn.query(query, [userId, userId, userId, page]);
             selections.forEach((selection: Selection, index) => {
                 selections[index] = this.getFormatedSelection(selection);
             });
@@ -141,6 +162,7 @@ export class SelectionService {
             }
             return finalSelections;
         } catch (error) {
+            console.log(error)
             return [];
         } finally {
             await conn.release();
@@ -270,10 +292,10 @@ export class SelectionService {
         }
     }
 
-    public async getSelectionById(id: number): Promise<Selection> {
+    public async getSelectionById(id: number, setOrder: any): Promise<Selection> {
         const conn = await this.pool.getConnection();
         try {
-            const query: string = this.getQuerySelections(``, `WHERE sel.id = ?`, ``);
+            const query: string = this.getQuerySelections(``, ``, `WHERE sel.id = ?`, ``, setOrder);
             const result = await conn.query(query, [-1, -1, -1, id]);
             return this.getFormatedSelection(result[0]);
         } catch (error) {
@@ -326,7 +348,7 @@ export class SelectionService {
         const conn = await this.pool.getConnection();
         try {
             await conn.beginTransaction();
-            const selection: Selection = await this.getSelectionById(updatedSelection.id);
+            const selection: Selection = await this.getSelectionById(updatedSelection.id, 1);
             if (selection && selection.id) {
                 const name: string = updatedSelection.name && updatedSelection.name.trim() !== '' ? updatedSelection.name : selection.name;
                 const queryUpdateSelection: string = `
@@ -421,7 +443,7 @@ export class SelectionService {
         }
     }
 
-    public async updateSelectionByPageType(selectionIds: number[], pageType: PageType): Promise<ReturnMessage> {
+    public async updateSelectionByPageType(selectionIds: number[], pageType: PageType, isOrderRandom: boolean): Promise<ReturnMessage> {
         const conn = await this.pool.getConnection();
         try {
             await conn.beginTransaction();
@@ -429,11 +451,11 @@ export class SelectionService {
             await conn.query(`DELETE FROM Selection_Page WHERE pageType = ?`, [pageType]);
             if (selectionIds.length > 0) {
                 selectionIds.forEach((selectionId: number, index) => {
-                    values.push(selectionId, pageType, index);
+                    values.push(selectionId, pageType, index, isOrderRandom ? 1 : 0);
                 });
                 const query: string = `INSERT INTO Selection_Page
-                    (selectionId, pageType, orderIndex)
-                    VALUES ${selectionIds.map(() => '(?, ?, ?)').join(', ')}`;
+                    (selectionId, pageType, orderIndex, isOrderRandom)
+                    VALUES ${selectionIds.map(() => '(?, ?, ?, ?)').join(', ')}`;
                 const result = await conn.query(query, values);
                 await conn.commit();
                 return {

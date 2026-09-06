@@ -21,13 +21,14 @@ export class NewsService {
         private readonly seriesService: SeriesService,
         private readonly i18nService: I18nService) { }
 
-    private getQuerySelectNews(WHERE: string): string {
+    private getQuerySelectNews(WHERE: string, isOrderRandom: any): string {
         return `
         SELECT 
             JSON_OBJECT(
                 'id', n.id,
                 'srcBackground', pnews.name,
                 'orientation', n.orientation,
+                'isOrderRandom', n.isOrderRandom,
                 'media', ${this.mediaService.getQuerySelectOneMedia()}
             ) AS news
         FROM news n
@@ -35,7 +36,7 @@ export class NewsService {
         LEFT JOIN poster pnews ON pnews.id = n.srcBackground	
         ${this.mediaService.getQueryJoinMedia()}
         ${WHERE}
-        ORDER BY n.orderIndex asc`;
+        ORDER BY ${isOrderRandom ? 'RAND()' : 'n.orderIndex'} asc`;
     }
 
     private getFormatedNews(news: any): News {
@@ -49,10 +50,17 @@ export class NewsService {
         return formatedNews;
     }
 
-    public async getAllNews(userId: number): Promise<News[]> {
+    public async getAllNews(userId: number, setOrder: any): Promise<News[]> {
         const conn = await this.pool.getConnection();
         try {
-            const news: News[] = await conn.query(this.getQuerySelectNews(''), [userId, userId, userId]);
+            let setOrderRandom: boolean = false;
+            if (!setOrder) {
+                const isOrderRandom: any[] = await conn.query(`SELECT isOrderRandom FROM news LIMIT 1`);
+                if (isOrderRandom && isOrderRandom.length > 0) {
+                    setOrderRandom = isOrderRandom[0].isOrderRandom ? true : false;
+                }   
+            }
+            const news: News[] = await conn.query(this.getQuerySelectNews('', setOrderRandom), [userId, userId, userId]);
             news.forEach((item: News, index) => {
                 news[index] = this.getFormatedNews(item);
             });
@@ -64,7 +72,7 @@ export class NewsService {
         }
     }
 
-    public async updateNews(updatedNews: EditNews[]): Promise<ReturnMessage> {
+    public async updateNews(updatedNews: EditNews[], isOrderRandom: boolean): Promise<ReturnMessage> {
         const conn = await this.pool.getConnection();
         try {
             await conn.beginTransaction();
@@ -72,10 +80,22 @@ export class NewsService {
             const values: any[] = [];
             if (updatedNews.length > 0) {
                 updatedNews.forEach((news: EditNews, index) => {
-                    values.push(news.mediaId, this.formatPathService.getPotserIdByUrl(news.srcBackground), news.orientation, index);
+                    values.push(
+                        news.mediaId, 
+                        this.formatPathService.getPotserIdByUrl(news.srcBackground), 
+                        news.orientation, 
+                        index,
+                        isOrderRandom ? 1 : 0
+                    );
                 });
-                const query = `INSERT INTO News (mediaId, srcBackground, orientation, orderIndex)
-                VALUES ${updatedNews.map(() => '(?, ?, ?, ?)')}`
+                const query = `INSERT INTO News (
+                                                    mediaId, 
+                                                    srcBackground, 
+                                                    orientation, 
+                                                    orderIndex, 
+                                                    isOrderRandom
+                                                )
+                                VALUES ${updatedNews.map(() => '(?, ?, ?, ?, ?)')}`
                 const result = await conn.query(query, values);
                 await conn.commit();
                 return {

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, UseGuards, Put, Delete, ParseIntPipe, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards, Put, Delete, ParseIntPipe, Body, Param, Query } from '@nestjs/common';
 import { LicenseService } from '../service/license.service';
 import { AdminUserGuard } from 'src/guard/admin-user.guard';
 import { License } from '../dto/license.interface';
@@ -33,8 +33,12 @@ export class LicenseController {
     }
 
     @Get(':id')
-    async getLicenseById(@CurrentUser('sub') userId: number, @Param('id', ParseIntPipe) id: number): Promise<License> {
-        return await this.licenseService.getEntirelyLicenseById(userId, id);
+    async getLicenseById(
+        @CurrentUser('sub') userId: number, 
+        @Param('id', ParseIntPipe) id: number, 
+        @Query('setOrder') setOrder: any
+    ): Promise<License> {
+        return await this.licenseService.getEntirelyLicenseById(userId, id, setOrder);
     }
 
     @UseGuards(AdminUserGuard)

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, ParseIntPipe, Param, UseGuards, Body } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, ParseIntPipe, Param, UseGuards, Body, Query } from '@nestjs/common';
 import { SelectionService } from '../service/selection.service';
 import { Selection } from '../dto/selection.interface';
 import { EditSelection } from '../dto/edit-selection.interface';
@@ -20,8 +20,11 @@ export class SelectionController {
     }
 
     @Get('selection-home')
-    async getRandomSelectionsForHome(@CurrentUser('sub') userId: number): Promise<Selection[]> {
-        return await this.selectionService.getSelectionsForHomePage(userId);
+    async getRandomSelectionsForHome(
+        @CurrentUser('sub') userId: number, 
+        @Query('setOrder') setOrder : boolean
+    ): Promise<Selection[]> {
+        return await this.selectionService.getSelectionsByPage(userId, PageType.HOME, setOrder);
     }
 
     @Get('random-media-selection-by-type/:mediaType')
@@ -35,8 +38,11 @@ export class SelectionController {
     }
 
     @Get(':id')
-    async getSelectionById(@Param('id', ParseIntPipe) id: number): Promise<Selection> {
-        return await this.selectionService.getSelectionById(id);
+    async getSelectionById(
+        @Param('id', ParseIntPipe) id: number, 
+        @Query('setOrder') setOrder: any
+    ): Promise<Selection> {
+        return await this.selectionService.getSelectionById(id, setOrder);
     }
 
     @UseGuards(AdminUserGuard)
@@ -53,8 +59,11 @@ export class SelectionController {
 
     @UseGuards(AdminUserGuard)
     @Put('update-selection-page-home')
-    async updateSelectionIntoHomePage(@Body() selectionIds: number[]): Promise<ReturnMessage> {
-        return await this.selectionService.updateSelectionByPageType(selectionIds, PageType.HOME);
+    async updateSelectionIntoHomePage(
+        @Body('selectionIds') selectionIds: number[], 
+        @Body('isOrderRandom') isOrderRandom: boolean
+    ): Promise<ReturnMessage> {
+        return await this.selectionService.updateSelectionByPageType(selectionIds, PageType.HOME, isOrderRandom);
     }
 
     @UseGuards(AdminUserGuard)
