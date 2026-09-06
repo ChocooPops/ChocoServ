@@ -60,7 +60,21 @@ export class LicenseService {
             ${ORDER}`;
     }
 
-    private getQuerySelectLicense(WHERE: string): string {
+    private getQuerySelectLicense(WHERE: string, setOrder: any): string {
+        let mediaLicenseOrder: string = '';
+        let selectionLicenseOrder: string = '';
+        let mediaSelectionOrder: string = '';
+
+        if (setOrder) {
+            mediaLicenseOrder = 'ORDER BY lm.orderIndex ASC';
+            selectionLicenseOrder = 'ORDER BY ls.orderIndex ASC';
+            mediaSelectionOrder = 'ORDER BY sm.orderIndex ASC'
+        } else {
+            mediaLicenseOrder = 'ORDER BY IF (l1.isMediaOrderRandom, RAND(), lm.orderIndex) ASC';
+            selectionLicenseOrder = 'ORDER BY IF(l1.isSelectionOrderRandom, RAND(), ls.orderIndex) ASC';
+            mediaSelectionOrder = 'ORDER BY IF(sel2.isOrderRandom, RAND(), sm.orderIndex) ASC'
+        }
+
         return `
             SELECT
                 JSON_OBJECT(
@@ -68,6 +82,8 @@ export class LicenseService {
                     'name', lic.name,
                     'orderIndex', lic.orderIndex,
                     'position', lic.position,
+                    'isMediaOrderRandom', lic.isMediaOrderRandom,
+                    'isSelectionOrderRandom', lic.isSelectionOrderRandom,
                     'srcIcon', pli.name,
                     'srcLogo', pll.name,
                     'srcBackground', plb.name,
@@ -81,8 +97,9 @@ export class LicenseService {
 
             LEFT JOIN (
                 SELECT lm.licenseId,
-                    ${this.mediaService.getQuerySelectManyMedia(`ORDER BY lm.orderIndex ASC`)} AS medias
+                    ${this.mediaService.getQuerySelectManyMedia(mediaLicenseOrder)} AS medias
                 FROM license_media lm
+                JOIN license l1 ON l1.id = lm.licenseId
                 JOIN media m ON m.id = lm.mediaId
                 ${this.mediaService.getQueryJoinMedia()}
                 WHERE lm.licenseId = ?
@@ -98,14 +115,16 @@ export class LicenseService {
                             'selectionType', sel.selectionType,
                             'mediaList', sel_media.medias
                         )
-                        ORDER BY ls.orderIndex
+                        ${selectionLicenseOrder}
                     ) AS selections
                 FROM license_selection ls
+                JOIN license l1 ON l1.id = ls.licenseId
                 JOIN selection sel ON sel.id = ls.selectionId
                 LEFT JOIN (
                     SELECT sm.selectionId,
-                        ${this.mediaService.getQuerySelectManyMedia(`ORDER BY sm.orderIndex ASC`)} AS medias
+                        ${this.mediaService.getQuerySelectManyMedia(mediaSelectionOrder)} AS medias
                     FROM selection_media sm
+                    JOIN selection sel2 ON sel2.id = sm.selectionId
                     JOIN media m ON m.id = sm.mediaId
                     ${this.mediaService.getQueryJoinMedia()}
                     WHERE sm.selectionId IN (
@@ -294,10 +313,10 @@ export class LicenseService {
         }
     }
 
-    public async getEntirelyLicenseById(userId: number, id: number): Promise<License> {
+    public async getEntirelyLicenseById(userId: number, id: number, setOrder: any): Promise<License> {
         const conn = await this.pool.getConnection();
         try {
-            const query: string = this.getQuerySelectLicense(`WHERE lic.id = ?`);
+            const query: string = this.getQuerySelectLicense(`WHERE lic.id = ?`, setOrder);
             const result = await conn.query(query, [userId, userId, userId, id, userId, userId, userId, id, id, id]);
             return this.getFormatedLicense(result[0]);
         } catch (error) {
@@ -315,10 +334,22 @@ export class LicenseService {
                 await conn.beginTransaction();
                 const maxLicense = await conn.query('Select count(id) as orderIndex FROM License');
                 const newOrderIndex = maxLicense[0]?.orderIndex !== null ? Number(maxLicense[0].orderIndex) + 1 : 1000;
-                const queryInsertLicense: string = `INSERT INTO License (name, position, orderIndex) VALUES (?, ?, ?)`;
-                const resultInsertLicense = await conn.query(queryInsertLicense, [newLicense.name.trim(), newLicense.position ? 1 : 0, newOrderIndex]);
+                const queryInsertLicense: string = `INSERT INTO License (
+                                                        name, 
+                                                        position, 
+                                                        isSelectionOrderRandom, 
+                                                        isMediaOrderRandom, 
+                                                        orderIndex
+                                                    )
+                                                    VALUES (?, ?, ?, ?, ?)`;
+                const resultInsertLicense = await conn.query(queryInsertLicense, [
+                                                                newLicense.name.trim(),
+                                                                newLicense.position ? 1 : 0,
+                                                                newLicense.isSelectionOrderRandom ? 1 : 0,
+                                                                newLicense.isMediaOrderRandom ? 1 : 0,
+                                                                newOrderIndex
+                                                            ]);
                 const licenseId: number = Number(resultInsertLicense.insertId);
-                    
                 const formatedPath: string = licenseId.toString();
 
                 const messageMediaLicense: string = await this.insertManyMediasIntoLicense(newLicense.mediaList, licenseId, conn);
@@ -360,14 +391,22 @@ export class LicenseService {
         if (updateLicense.name && updateLicense.name.trim() != "") {
             const conn = await this.pool.getConnection();
             try {
-                const oldLicense: License = await this.getEntirelyLicenseById(-1, updateLicense.id);
+                const oldLicense: License = await this.getEntirelyLicenseById(-1, updateLicense.id, 1);
                 if (oldLicense && oldLicense.id) {
                     const formatedPath: string = oldLicense.id.toString();
                     const queryUpdate: string = `UPDATE LICENSE 
                         SET name = ?,
-                        position = ?
+                        position = ?,
+                        isSelectionOrderRandom = ?,
+                        isMediaOrderRandom = ?
                         WHERE id = ?`
-                    await conn.query(queryUpdate, [updateLicense.name.trim(), updateLicense.position ? 1 : 0, updateLicense.id]);
+                    await conn.query(queryUpdate, [
+                            updateLicense.name.trim(),
+                            updateLicense.position ? 1 : 0, 
+                            updateLicense.isSelectionOrderRandom ? 1 : 0,
+                            updateLicense.isMediaOrderRandom ? 1 : 0,
+                            updateLicense.id
+                        ]);
                     const messageSrcIcon: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcIcon, oldLicense.srcIcon, formatedPath, 'srcIcon', conn);
                     const messageSrcLogo: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcLogo, oldLicense.srcLogo, formatedPath, 'srcLogo', conn);
                     const messageSrcBackground: string = await this.posterService.modifyOrDeletePosterFromLicense(updateLicense.id, updateLicense.srcBackground, oldLicense.srcBackground, formatedPath, 'srcBackground', conn);
