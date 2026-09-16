@@ -5,7 +5,7 @@ import { User } from 'src/user/dto/user.interface';
 import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
-export class AdminUserGuard implements CanActivate {
+export class FamilyUserGuard implements CanActivate {
     
     constructor(private readonly userService: UserService,
         private readonly i18nService: I18nService
@@ -19,11 +19,11 @@ export class AdminUserGuard implements CanActivate {
             throw new UnauthorizedException(this.i18nService.t("common.AUTH.UNAUTHENTICATED_USER"));
         }
 
-        if (user.role !== Role.ADMIN || currentUser.role !== Role.ADMIN) {
-            throw new UnauthorizedException(this.i18nService.t("common.AUTH.USER_ACCOUNT_NOT_ADMIN"));
+        if ((user.role === Role.ADMIN || user.role === Role.ADMIN) && (user.role === Role.FAMILY || user.role === Role.FAMILY)) {
+           return true;
         }
 
-        return true;
+        throw new UnauthorizedException(this.i18nService.t("common.AUTH.USER_ACCOUNT_NOT_ADMIN"));
     }
 
 }

@@ -215,6 +215,39 @@ export class SeriesService extends MediaService {
         }
     }
 
+    public async getEpisodeById(episodeId: number): Promise<Episode | null> {
+        const conn = await this.pool.getConnection();
+        try {
+            const query: string = `SELECT 
+                    e.id,
+                    e.seriesId,
+                    e.seasonId,
+                    e.name,
+                    e.episodeNumber,
+                    e.description,
+                    e.date,
+                    p.name AS srcPoster,
+                    mlib.duration,
+                    mlib.resolution
+                FROM Episode e
+                LEFT JOIN Poster p ON p.id = e.srcPoster
+                LEFT JOIN media_library mlib ON mlib.id = e.mediaLibraryId
+                WHERE e.id = ?`;
+            const result: Episode[] = await conn.query(query, [episodeId]);
+            if (result && result.length > 0) {
+                const episode: Episode = result[0];
+                episode.srcPoster = this.formatPathService.getOneFormatedPosterUrl(episode.seriesId, this.currentMediaType, episode.srcPoster);
+                return episode;
+            } else {
+                return null;
+            }
+        } catch (error) {
+            throw error;
+        } finally {
+            await conn.release();
+        }
+    }
+
     public async getFirstEpisodeBySeason(seriesId: number): Promise<Episode | null> {
         try {
             const query: string = `

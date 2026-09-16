@@ -34,6 +34,11 @@ export class SeriesController {
         return await this.seriesService.getRandomSeries();
     }
 
+    @Get('episode/:episodeId')
+    async getEpisodeById(@Param('episodeId') episodeId: number): Promise<Episode> {
+        return await this.seriesService.getEpisodeById(episodeId);
+    }
+
     @Get('first-episode/:seriesId')
     async getFirstEpisodeBySeason(@Param('seriesId') seriesId: number): Promise<Episode> {
         return await this.seriesService.getFirstEpisodeBySeason(seriesId);

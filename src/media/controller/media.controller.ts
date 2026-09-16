@@ -87,4 +87,21 @@ export class MediaController {
         return await this.mediaService.getMediaWithNullPoster();
     }
 
+    @Get(':id')
+    async getMediaById(
+        @Param('id', ParseIntPipe,) id: number,
+        @CurrentUser('sub') currentUserId: number
+    ): Promise<Media> {
+        const media: Media | null = await this.mediaService.getMediaById(id, currentUserId);
+        if (media) {
+            if (media.mediaType === MediaType.MOVIE) {
+                return this.movieService.getFormatedMovie(media);
+            } else if (media.mediaType === MediaType.SERIES) {
+                return this.seriesService.getFormatedSeries(media);
+            }
+        } else {
+            return null;
+        }
+    }
+
 }

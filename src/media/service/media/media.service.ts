@@ -71,6 +71,19 @@ export class MediaService {
         }
     }
 
+    public async getMediaById(mediaId: number, userId: number): Promise<Media | null> {
+        const conn = await this.pool.getConnection();
+        try {
+            const query: string = this.getQuerySelectMedia(``, `WHERE m.id = ?`, ``, ``);
+            const result: any[] = await conn.query(query, [userId, userId, userId, mediaId]);
+            return result[0].media ?? null;
+        } catch (error) {
+            throw error;
+        } finally {
+            await conn.release();
+        }
+    }
+
     public getQuerySelectOneMedia(ORDER: string = ''): string {
         return `
             JSON_OBJECT(

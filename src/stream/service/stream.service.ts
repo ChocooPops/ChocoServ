@@ -151,12 +151,81 @@ export class StreamService {
             stream.pipe(res);
 
         } catch (error) {
-            console.error(`[streamVideo]`, error); 
+            console.error(`[streamVideo]`, error);
             stream?.destroy();
             if (!res.headersSent) {
                 res.status(500).send('Internal server error');
             }
         }
+    }
+
+    public async downloadMovie(movieId: number, res: Response): Promise<any> {
+        const movie: Movie = await this.movieService.getSimpleMediaById(movieId) as Movie;
+        if (movie) {
+            this.downloadVideo(movie.path, movie.title, res);
+        } else {
+            throw new NotFoundException();
+        }
+    }
+
+    public async downloadEpisode(episodeId: number, res: Response): Promise<any> {
+        const episode: Episode = await this.seriesService.getSimpleEpisodeById(episodeId);
+        if (episode) {
+            this.downloadVideo(episode.path, episode.name, res);
+        } else {
+            throw new NotFoundException();
+        }
+    }
+    
+    private downloadVideo(filePath: string, fileTitle: string, res: Response): void {
+        let stream: fs.ReadStream | null = null;
+
+        try {
+            if (!filePath || !this.fileExists(filePath)) {
+                res.status(404).send('File not found');
+                return;
+            }
+
+            const stat = fs.statSync(filePath);
+            const fileSize = stat.size;
+            const extension = path.extname(filePath) || '.mkv';
+            const fileName = `${this.sanitizeFileName(fileTitle)}${extension}`;
+
+            res.status(200).set({
+                'Content-Length': fileSize,
+                'Content-Type': 'application/octet-stream',
+                'Content-Disposition': `attachment; filename="${fileName}"`,
+            });
+
+            stream = fs.createReadStream(filePath, {
+                highWaterMark: 1024 * 1024, // Lecture par morceaux de 1 Mo
+            });
+
+            stream.on('error', (error: Error) => {
+                console.error(`[downloadVideo] Stream error: ${error.message}`);
+                stream?.destroy();
+                if (!res.headersSent) {
+                    res.status(500).send('Stream error');
+                }
+            });
+
+            res.on('close', () => {
+                stream?.destroy();
+            });
+
+            stream.pipe(res);
+
+        } catch (error) {
+            console.error(`[downloadVideo]`, error);
+            stream?.destroy();
+            if (!res.headersSent) {
+                res.status(500).send('Internal server error');
+            }
+        }
+    }
+
+    private sanitizeFileName(name: string): string {
+        return (name ?? 'video').replace(/[\\/:*?"<>|]/g, '_');
     }
 
 }
