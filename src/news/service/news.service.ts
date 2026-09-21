@@ -10,6 +10,7 @@ import * as mariadb from 'mariadb';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
+import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
 
 @Injectable()
 export class NewsService {
@@ -19,7 +20,8 @@ export class NewsService {
         private readonly mediaService: MediaService,
         private readonly movieService: MovieService,
         private readonly seriesService: SeriesService,
-        private readonly i18nService: I18nService) { }
+        private readonly i18nService: I18nService,
+        private readonly userTabService: UserTabService) { }
 
     private getQuerySelectNews(WHERE: string, isOrderRandom: any): string {
         return `
@@ -60,7 +62,9 @@ export class NewsService {
                     setOrderRandom = isOrderRandom[0].isOrderRandom ? true : false;
                 }   
             }
-            const news: News[] = await conn.query(this.getQuerySelectNews('', setOrderRandom), [userId, userId, userId]);
+            const news: News[] = await conn.query(this.getQuerySelectNews('', setOrderRandom), [
+                ...this.userTabService.getUserTab(userId)    
+            ]);
             news.forEach((item: News, index) => {
                 news[index] = this.getFormatedNews(item);
             });

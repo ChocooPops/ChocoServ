@@ -1,5 +1,5 @@
 import { Controller, ParseIntPipe, Get, UseGuards, Put, Delete, Param, Body } from '@nestjs/common';
-import { UserService } from '../service/user.service';
+import { UserService } from '../service/user/user.service';
 import { CurrentUser } from 'src/guard/current-user.guard';
 import { User } from '../dto/user.interface';
 import { AdminUserGuard } from "src/guard/admin-user.guard";

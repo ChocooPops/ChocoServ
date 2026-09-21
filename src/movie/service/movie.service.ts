@@ -18,6 +18,7 @@ import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
 import { SearchService } from 'src/common-service/search.service';
+import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
 
 @Injectable()
 export class MovieService extends MediaService {
@@ -30,12 +31,13 @@ export class MovieService extends MediaService {
         posterService: PosterService,
         i18nService: I18nService,
         searchService: SearchService,
+        userTabService: UserTabService,
         @Inject(forwardRef(() => SimilarTitleService))
         private readonly similarTitleService: SimilarTitleService,
         private readonly statUserService: StatUserService,
         private readonly creditService: CreditService
     ) {
-        super(pool, verifTimerShowService, formatPathService, posterService, i18nService, searchService);
+        super(pool, verifTimerShowService, formatPathService, posterService, i18nService, searchService, userTabService);
     }
 
     public async getNodesMovie(): Promise<Node[]> {

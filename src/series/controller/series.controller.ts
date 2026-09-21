@@ -35,8 +35,8 @@ export class SeriesController {
     }
 
     @Get('episode/:episodeId')
-    async getEpisodeById(@Param('episodeId') episodeId: number): Promise<Episode> {
-        return await this.seriesService.getEpisodeById(episodeId);
+    async getEpisodeById(@Param('episodeId') episodeId: number, @CurrentUser('sub') userId: number): Promise<Episode> {
+        return await this.seriesService.getEpisodeById(episodeId, userId);
     }
 
     @Get('first-episode/:seriesId')

@@ -18,6 +18,7 @@ import { MediaService } from 'src/media/service/media/media.service';
 import { TmdbService } from 'src/tmdb/service/tmdb.service';
 import { CategoryTmdb } from '../dto/category-tmbd.interface';
 import { I18nService } from 'nestjs-i18n';
+import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
 
 @Injectable()
 export class CategoryService {
@@ -30,7 +31,8 @@ export class CategoryService {
         private readonly seriesService: SeriesService,
         @Inject(forwardRef(() => TmdbService))
         private readonly tmdbService: TmdbService,
-        private readonly i18nService: I18nService
+        private readonly i18nService: I18nService,
+        private readonly userTabService: UserTabService
     ) { }
 
     public async getGraphCategory(): Promise<Graph> {
@@ -155,7 +157,7 @@ export class CategoryService {
             const ORDER: string = `ORDER BY RAND()`;
             const LIMIT: string = `LIMIT 6`;
             const query: string = this.getQuerySelectCategory(ORDER_MEDIA, WHERE, HAVING, ORDER, LIMIT);
-            const categories: CategoryEntirely[] = await conn.query(query, [userId, userId, userId, mediaType]);
+            const categories: CategoryEntirely[] = await conn.query(query, [...this.userTabService.getUserTab(userId), mediaType]);
             categories.forEach((category: CategoryEntirely, index) => {
                 categories[index] = this.getFormatedCategoryWithMedia(category);
             });

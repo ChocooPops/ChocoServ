@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { UserService } from './service/user.service';
+import { UserService } from './service/user/user.service';
 import { UserController } from './controller/user.controller';
 import { DatabaseModule } from 'src/database/database.module';
 import { FormatPathService } from 'src/common-service/format-path.service';

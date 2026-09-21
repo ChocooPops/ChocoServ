@@ -18,6 +18,7 @@ import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
 import { Movie } from 'src/movie/dto/movie.interface';
 import { Series } from 'src/series/dto/series.interface';
+import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -35,7 +36,8 @@ export class NewsVideoRunningService {
         private readonly mediaService: MediaService,
         private readonly movieService: MovieService,
         private readonly seriesService: SeriesService,
-        private readonly i18nService: I18nService) { }
+        private readonly i18nService: I18nService,
+        private readonly userTabService: UserTabService) { }
 
 
     public async getSimpleNewsRunningById(newsId: number): Promise<NewsVideoRunning | null> {
@@ -93,7 +95,7 @@ export class NewsVideoRunningService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectNewsVideoRunning(`WHERE m.mediaType = ? AND activated = 1`, true, false);
-            const news: NewsVideoRunning[] = await conn.query(query, [userId, userId, userId, MediaType.MOVIE]);
+            const news: NewsVideoRunning[] = await conn.query(query, [...this.userTabService.getUserTab(userId), MediaType.MOVIE]);
             if (news.length > 0) {
                 news[0] = this.getFormatedNewsVideoRunning(news[0]);
                 return news[0];
@@ -121,7 +123,7 @@ export class NewsVideoRunningService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectNewsVideoRunning(`WHERE m.mediaType = ? AND activated = 1`, true, false);
-            const news: NewsVideoRunning[] = await conn.query(query, [userId, userId, userId, MediaType.SERIES]);
+            const news: NewsVideoRunning[] = await conn.query(query, [...this.userTabService.getUserTab(userId), MediaType.SERIES]);
             if (news.length > 0) {
                 news[0] = this.getFormatedNewsVideoRunning(news[0]);
                 return news[0];
@@ -149,7 +151,7 @@ export class NewsVideoRunningService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectNewsVideoRunning(`WHERE m.mediaType = ?`, false, getPath);
-            const news: NewsVideoRunning[] = await conn.query(query, [-1, -1, -1, MediaType.MOVIE]);
+            const news: NewsVideoRunning[] = await conn.query(query, [...this.userTabService.getUserTab(-1), MediaType.MOVIE]);
             news.forEach((item: NewsVideoRunning, index) => {
                 news[index] = this.getFormatedNewsVideoRunning(item);
             });
@@ -165,7 +167,7 @@ export class NewsVideoRunningService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectNewsVideoRunning(`WHERE m.mediaType = ?`, false, getPath);
-            const news: NewsVideoRunning[] = await conn.query(query, [-1, -1, -1, MediaType.SERIES]);
+            const news: NewsVideoRunning[] = await conn.query(query, [...this.userTabService.getUserTab(-1), MediaType.SERIES]);
             news.forEach((item: NewsVideoRunning, index) => {
                 news[index] = this.getFormatedNewsVideoRunning(item);
             });

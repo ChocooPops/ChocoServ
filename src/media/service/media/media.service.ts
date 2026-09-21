@@ -14,6 +14,8 @@ import { TranslationTitle } from 'src/media/dto/translation-title.interface';
 import { I18nService } from 'nestjs-i18n';
 import { SearchService } from 'src/common-service/search.service';
 import { ISO_3166_1 } from 'src/media/dto/iso-3166-1.enum';
+import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
+import { Role } from 'src/user/dto/role.enum';
 
 @Injectable()
 export class MediaService {
@@ -26,7 +28,8 @@ export class MediaService {
         protected readonly formatPathService: FormatPathService,
         protected readonly posterService: PosterService,
         protected readonly i18nService: I18nService,
-        protected readonly searchService: SearchService
+        protected readonly searchService: SearchService,
+        protected readonly userTabService: UserTabService
     ) { }
 
     public async getNodesMedia(): Promise<any> {
@@ -75,7 +78,7 @@ export class MediaService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectMedia(``, `WHERE m.id = ?`, ``, ``);
-            const result: any[] = await conn.query(query, [userId, userId, userId, mediaId]);
+            const result: any[] = await conn.query(query, [...this.userTabService.getUserTab(userId), mediaId]);
             return result[0].media ?? null;
         } catch (error) {
             throw error;
@@ -112,6 +115,12 @@ export class MediaService {
 
                 'mediaType', m.mediaType,
                 
+                'bytes',
+                CASE
+                    WHEN userR.role IN ('${Role.ADMIN}', '${Role.FAMILY}') AND m.mediaType = 'MOVIE' THEN mlib.bytes
+                    ELSE NULL
+                END,
+
                 'isRecent',
                 CASE
                     WHEN m.mediaType = 'SERIES' THEN (
@@ -178,6 +187,7 @@ export class MediaService {
             LEFT JOIN Media_Library mlib ON m.mediaLibraryId = mlib.id
             LEFT JOIN poster pl ON pl.id = m.srcLogo
             LEFT JOIN poster pb ON pb.id = m.srcBackground
+            LEFT JOIN User userR ON userR.id = ?
 
             LEFT JOIN (
                 SELECT
@@ -399,7 +409,7 @@ export class MediaService {
                     `ORDER BY FIELD(m.id, ${orderedIds.map(() => '?').join(',')})`,
                     ''
                 ),
-                [userId, userId, userId, ...orderedIds, ...orderedIds]
+                [...this.userTabService.getUserTab(userId), ...orderedIds, ...orderedIds]
             );
 
             return media;
@@ -676,7 +686,7 @@ export class MediaService {
 
             const rows: any[] = await conn.query(
                 this.getQuerySelectMedia(JOIN, WHERE, ORDER, LIMIT),
-                [userId, userId, userId]
+                [...this.userTabService.getUserTab(userId)]
             );
 
             return rows.map((row) => row.media);

@@ -22,6 +22,8 @@ import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
 import { SearchService } from 'src/common-service/search.service';
+import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
+import { Role } from 'src/user/dto/role.enum';
 
 @Injectable()
 export class SeriesService extends MediaService {
@@ -34,12 +36,13 @@ export class SeriesService extends MediaService {
         posterService: PosterService,
         i18nService: I18nService,
         searchService: SearchService,
+        userTabService: UserTabService,
         @Inject(forwardRef(() => SimilarTitleService))
         private readonly similarTitleService: SimilarTitleService,
         private readonly statUserService: StatUserService,
         private readonly creditService: CreditService,
     ) {
-        super(pool, verifTimerShowService, formatPathService, posterService, i18nService, searchService);
+        super(pool, verifTimerShowService, formatPathService, posterService, i18nService, searchService, userTabService);
     }
 
     public async getNodesSeries(): Promise<Node[]> {
@@ -179,6 +182,7 @@ export class SeriesService extends MediaService {
         delete (series as any).quality;
         delete (series as any).watchProgress;
         delete (series as any).stateProgress;
+        delete (series as any).bytes;
         return series;
     }
 
@@ -215,7 +219,7 @@ export class SeriesService extends MediaService {
         }
     }
 
-    public async getEpisodeById(episodeId: number): Promise<Episode | null> {
+    public async getEpisodeById(episodeId: number, userId: number): Promise<Episode | null> {
         const conn = await this.pool.getConnection();
         try {
             const query: string = `SELECT 
@@ -228,12 +232,17 @@ export class SeriesService extends MediaService {
                     e.date,
                     p.name AS srcPoster,
                     mlib.duration,
-                    mlib.resolution
+                    mlib.resolution,
+                    CASE
+                        WHEN u.role IN (?, ?) THEN mlib.bytes
+                        ELSE NULL
+                    END as bytes
                 FROM Episode e
                 LEFT JOIN Poster p ON p.id = e.srcPoster
+                LEFT JOIN User u ON u.id = ?
                 LEFT JOIN media_library mlib ON mlib.id = e.mediaLibraryId
                 WHERE e.id = ?`;
-            const result: Episode[] = await conn.query(query, [episodeId]);
+            const result = await conn.query(query, [Role.ADMIN, Role.FAMILY, userId, episodeId]);
             if (result && result.length > 0) {
                 const episode: Episode = result[0];
                 episode.srcPoster = this.formatPathService.getOneFormatedPosterUrl(episode.seriesId, this.currentMediaType, episode.srcPoster);
@@ -404,16 +413,27 @@ export class SeriesService extends MediaService {
 
                     e.createdAt >= NOW() - INTERVAL ${this.maxDayToRecent} DAY as isRecent,
                     su.watchProgress,
-                    su.state as stateProgress
+                    su.state as stateProgress,
+                    
+                    CASE
+                        WHEN userR.role IN (?, ?) THEN mlib.bytes
+                        ELSE NULL
+                    END as bytes
 
                     FROM episode e
                     LEFT JOIN Media_Library mlib ON mlib.id = e.mediaLibraryId
                     LEFT JOIN poster p ON p.id = e.srcPoster
                     LEFT JOIN media m ON m.id = e.seriesId
                     ${this.statUserService.getQueryJoinStatUserForEpisode()}
+                    LEFT JOIN user userR ON userR.id = ?
                     WHERE e.seriesId = ? AND e.seasonId = ?
                     ORDER BY e.episodeNumber;`
-            const results: any[] = await conn.query(query, [userId, userId, userId, idSeries, idSeason]);
+            const results: any[] = await conn.query(query, [
+                    Role.ADMIN, Role.FAMILY, 
+                    userId, userId, userId, userId, 
+                    idSeries, 
+                    idSeason
+                ]);
             const episodes: Episode[] = [];
             results.forEach((result: any) => {
                 episodes.push({

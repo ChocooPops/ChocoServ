@@ -8,7 +8,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { PUBLIC_KEY } from './public.decorator';
-import { UserService } from 'src/user/service/user.service';
+import { UserService } from 'src/user/service/user/user.service';
 import { jwtConstants } from 'src/auth/constant';
 import { User } from 'src/user/dto/user.interface';
 import { ConfigService } from '@nestjs/config';

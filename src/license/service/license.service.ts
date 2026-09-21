@@ -18,6 +18,7 @@ import { Link } from 'src/common-interface/link.interface';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
 import { SearchService } from 'src/common-service/search.service';
+import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
 
 @Injectable()
 export class LicenseService {
@@ -30,7 +31,8 @@ export class LicenseService {
         private readonly seriesService: SeriesService,
         private readonly selectionService: SelectionService,
         private readonly i18nService: I18nService,
-        private readonly searchService: SearchService) { }
+        private readonly searchService: SearchService,
+        private readonly userTabService: UserTabService) { }
 
     public async getGraphLicense(): Promise<Graph> {
         const conn = await this.pool.getConnection();
@@ -317,7 +319,12 @@ export class LicenseService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectLicense(`WHERE lic.id = ?`, setOrder);
-            const result = await conn.query(query, [userId, userId, userId, id, userId, userId, userId, id, id, id]);
+            const result = await conn.query(query, [
+                    ...this.userTabService.getUserTab(userId), 
+                    id, 
+                    ...this.userTabService.getUserTab(userId), id, id, id
+                ]
+            );
             return this.getFormatedLicense(result[0]);
         } catch (error) {
             return null;

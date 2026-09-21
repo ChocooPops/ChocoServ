@@ -12,6 +12,7 @@ import { Job } from "src/credit/dto/job.enum";
 import { MediaService } from "src/media/service/media/media.service";
 import { CreditService } from "src/credit/service/credit.service";
 import { I18nService } from "nestjs-i18n";
+import { UserTabService } from "src/user/service/user-tab/user-tab.service";
 
 interface MediaRow {
   id: number;
@@ -51,7 +52,8 @@ export class SimilarTitleService {
         private readonly movieService: MovieService,
         @Inject(forwardRef(() => SeriesService))
         private readonly seriesService: SeriesService,
-        private readonly i18nService: I18nService) { }
+        private readonly i18nService: I18nService,
+        private readonly userTabService: UserTabService) { }
 
     public async getLinksSimilarTitle(): Promise<Link[]> {
         const conn = await this.pool.getConnection();
@@ -181,7 +183,7 @@ export class SimilarTitleService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectSimilarMedia(`WHERE st.sourceId = ?`);
-            const results: any = await conn.query(query, [userId, userId, userId, sourceId]);
+            const results: any = await conn.query(query, [...this.userTabService.getUserTab(userId), sourceId]);
             const medias: Media[] = results[0].media;
             medias.forEach((media: Media, index) => {
                 if (media.mediaType === MediaType.MOVIE) {

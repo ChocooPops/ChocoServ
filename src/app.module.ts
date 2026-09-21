@@ -37,6 +37,7 @@ import { DocumentationModule } from './documentation/documentation.module';
 import { CreditModule } from './credit/credit.module';
 import { VersionModule } from './version/version.module';
 import { LibraryModule } from './library/library.module';
+import { UserTabGlobalModule } from './user/user-tab-global.module';
 
 @Module({
   imports: [
@@ -73,7 +74,7 @@ import { LibraryModule } from './library/library.module';
       },
       inject: [ConfigService],
     }),
-
+    UserTabGlobalModule,
     UserModule,
     AuthModule,
     MediaModule,

@@ -1,13 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE_POOL } from 'src/database/database.module';
 import * as mariadb from 'mariadb';
-import { User } from '../dto/user.interface';
-import { RegisterUser } from '../dto/register-user.interface';
-import { Role } from '../dto/role.enum';
+import { User } from '../../dto/user.interface';
+import { RegisterUser } from '../../dto/register-user.interface';
+import { Role } from '../../dto/role.enum';
 import { Media } from 'src/media/dto/media.interface';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { ProfilPhoto } from 'src/profil-photo/dto/profil-photo.interface';
-import { UpdateUser } from '../dto/update-user.interface';
+import { UpdateUser } from '../../dto/update-user.interface';
 import { FormatPathService } from 'src/common-service/format-path.service';
 import { ProfilPhotoService } from 'src/profil-photo/service/profil-photo.service';
 import * as bcrypt from 'bcryptjs';
@@ -17,6 +17,7 @@ import { SeriesService } from 'src/series/service/series.service';
 import { MediaType } from 'src/media/dto/media-type.enum';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService, I18nContext } from 'nestjs-i18n';
+import { UserTabService } from '../user-tab/user-tab.service';
 
 @Injectable()
 export class UserService {
@@ -28,7 +29,8 @@ export class UserService {
         private readonly mediaService: MediaService,
         private readonly movieService: MovieService,
         private readonly seriesService: SeriesService,
-        private readonly i18nService: I18nService) { }
+        private readonly i18nService: I18nService,
+        private readonly userTabService: UserTabService) { }
 
     private getQuerySelectMediaList(WHERE: string): string {
         return `
@@ -141,7 +143,7 @@ export class UserService {
         const conn = await this.pool.getConnection();
         try {
             const query: string = this.getQuerySelectMediaList(`WHERE um.userId = ?`);
-            const results: any[] = await conn.query(query, [userId, userId, userId, userId]);
+            const results: any[] = await conn.query(query, [...this.userTabService.getUserTab(userId), userId]);
             const medias: Media[] = results[0].media;
             medias.forEach((media: Media, index) => {
                 if (media.mediaType === MediaType.MOVIE) {

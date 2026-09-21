@@ -22,6 +22,7 @@ import { FormatPathService } from 'src/common-service/format-path.service';
 import { MediaTypeFilter } from '../dto/media-type-filter.interface';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
+import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
 
 @Injectable()
 export class StatUserService {
@@ -36,7 +37,8 @@ export class StatUserService {
     @Inject(forwardRef(() => SeriesService))
     private readonly seriesService: SeriesService,
     private readonly formatPathService: FormatPathService,
-    private readonly i18nService: I18nService
+    private readonly i18nService: I18nService,
+    private readonly userTabService: UserTabService
   ) {}
 
   public getQuerySelectMediaInProgress(): string {
@@ -114,7 +116,7 @@ export class StatUserService {
   ): Promise<Selection | null> {
     try {
       const query: string = this.getQuerySelectMediaInProgress();
-      const results: any[] = await conn.query(query, [userId, userId, userId, userId]);
+      const results: any[] = await conn.query(query, [...this.userTabService.getUserTab(userId), userId]);
       if (results.length > 0) {
         const medias: Media[] = results[0].media;
         medias.forEach((media: Media, index) => {

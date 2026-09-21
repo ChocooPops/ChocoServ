@@ -19,6 +19,7 @@ import { StatUserService } from 'src/stat-user/service/stat-user.service';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
 import { SearchService } from 'src/common-service/search.service';
+import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
 
 @Injectable()
 export class SelectionService {
@@ -30,7 +31,8 @@ export class SelectionService {
         private readonly categoryService: CategoryService,
         private readonly statUserService: StatUserService,
         private readonly i18nService: I18nService,
-        private readonly searchService: SearchService) { }
+        private readonly searchService: SearchService,
+        private readonly userTabService: UserTabService) { }
 
     public async getGraphSelection(): Promise<Graph> {
         const conn = await this.pool.getConnection();
@@ -147,7 +149,7 @@ export class SelectionService {
                 ORDER,
                 setOrderRandom
             );
-            const selections: any[] | null = await conn.query(query, [userId, userId, userId, page]);
+            const selections: any[] | null = await conn.query(query, [...this.userTabService.getUserTab(userId), page]);
             selections.forEach((selection: Selection, index) => {
                 selections[index] = this.getFormatedSelection(selection);
             });

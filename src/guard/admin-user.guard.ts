@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Role } from 'src/user/dto/role.enum';
-import { UserService } from 'src/user/service/user.service';
+import { UserService } from 'src/user/service/user/user.service';
 import { User } from 'src/user/dto/user.interface';
 import { I18nService } from 'nestjs-i18n';
 

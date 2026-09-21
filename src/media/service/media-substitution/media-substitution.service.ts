@@ -14,6 +14,7 @@ import { MediaCredit } from 'src/credit/dto/media-credit.interface';
 import { FormatPathService } from '../../../common-service/format-path.service';
 import { MediaService } from '../media/media.service';
 import { LogicalOperator } from 'src/media/dto/catalog/logical-operator';
+import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
 
 @Injectable()
 export class MediaSubstitutionSerivce {
@@ -22,7 +23,8 @@ export class MediaSubstitutionSerivce {
     @Inject(DATABASE_POOL) private readonly pool: mariadb.Pool,
     private readonly creditService: CreditService,
     private readonly mediaService: MediaService,
-    private readonly formatPathService: FormatPathService
+    private readonly formatPathService: FormatPathService,
+    private readonly userTabService: UserTabService
   ) {}
 
   private readonly LIMIT_CREDIT: number = 12;
@@ -348,7 +350,13 @@ export class MediaSubstitutionSerivce {
 
       // --- Requête paginée (SELECT complet avec JSON_OBJECT, kw, posters, seas, su2...) ---
       const query: string = this.mediaService.getQuerySelectMedia(JOIN, WHERE, ORDER, LIMIT);
-      const mainParams: any[] = [userId, userId, userId, ...joinParams, ...filterParams, count, offset];
+      const mainParams: any[] = [
+          ...this.userTabService.getUserTab(userId), 
+          ...joinParams, 
+          ...filterParams, 
+          count, 
+          offset
+      ];
 
       // --- Requête de comptage (légère : pas de JSON, pas de jointures de stats) ---
       const countQuery: string = `SELECT COUNT(DISTINCT m.id) AS total FROM Media m ${JOIN} ${WHERE}`;

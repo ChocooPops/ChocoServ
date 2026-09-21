@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { UserService } from 'src/user/service/user.service';
+import { UserService } from 'src/user/service/user/user.service';
 import { VerificationCodeModel } from './dto/verification-code';
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from 'src/common-service/mail.service';
