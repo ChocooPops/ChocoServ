@@ -38,6 +38,7 @@ import { CreditModule } from './credit/credit.module';
 import { VersionModule } from './version/version.module';
 import { LibraryModule } from './library/library.module';
 import { UserTabGlobalModule } from './user/user-tab-global.module';
+import { DownloadModule } from './download/download.module';
 
 @Module({
   imports: [
@@ -95,7 +96,8 @@ import { UserTabGlobalModule } from './user/user-tab-global.module';
     DocumentationModule,
     CreditModule,
     VersionModule,
-    LibraryModule
+    LibraryModule,
+    DownloadModule
   ],
 
   providers: [

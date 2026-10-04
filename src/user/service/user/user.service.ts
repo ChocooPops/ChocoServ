@@ -45,7 +45,7 @@ export class UserService {
 
     public async getRoleByUserId(id: number): Promise<User | null> {
         try {
-            const query: string = `SELECT u.id, u.pseudo, u.role FROM User u WHERE u.id = ?`;
+            const query: string = `SELECT u.id, u.email, u.pseudo, u.role FROM User u WHERE u.id = ?`;
             const user: User[] = await this.pool.query(query, [id]);
             return user[0] ?? null;
         } catch (error) {

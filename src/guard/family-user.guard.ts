@@ -19,8 +19,12 @@ export class FamilyUserGuard implements CanActivate {
             throw new UnauthorizedException(this.i18nService.t("common.AUTH.UNAUTHENTICATED_USER"));
         }
 
-        if ((user.role === Role.ADMIN || user.role === Role.ADMIN) && (user.role === Role.FAMILY || user.role === Role.FAMILY)) {
-           return true;
+        if (user.role === Role.ADMIN && currentUser.role === Role.ADMIN) {
+            return true;
+        }
+
+        if (user.role === Role.FAMILY && currentUser.role === Role.FAMILY) {
+            return true;
         }
 
         throw new UnauthorizedException(this.i18nService.t("common.AUTH.USER_ACCOUNT_NOT_ADMIN"));

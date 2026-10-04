@@ -1,10 +1,9 @@
-import { Controller, Get, Param, ParseIntPipe, Res, Req, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Res, Req, Query } from '@nestjs/common';
 import { StreamService } from '../service/stream.service';
 import { Response, Request } from 'express';
 import { AuthService } from 'src/auth/auth.service';
 import { Public } from 'src/guard/public.decorator';
 import { JwtService } from '@nestjs/jwt';
-import { FamilyUserGuard } from 'src/guard/family-user.guard';
 
 @Controller('stream')
 export class StreamController {
@@ -68,29 +67,4 @@ export class StreamController {
         }
     }
 
-    @UseGuards(FamilyUserGuard)
-    @Get('download-movie/:movieId')
-    async downloadMovie(
-        @Param('movieId', ParseIntPipe) movieId: number,
-        @Res() res: Response
-    ) {
-        try {
-            await this.streamService.downloadMovie(movieId, res);
-        } catch (error) {
-            throw error;
-        }
-    }
-
-    @UseGuards(FamilyUserGuard)
-    @Get('download-episode/:episodeId')
-    async downloadEpisode(
-        @Param('episodeId', ParseIntPipe) episodeId: number,
-        @Res() res: Response
-    ) {
-        try {
-            await this.streamService.downloadEpisode(episodeId, res);
-        } catch (error) {
-            throw error;
-        }
-    }
 }

@@ -60,6 +60,7 @@ async function bootstrap() {
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', headerName],
+    exposedHeaders: ['Content-Disposition', 'Content-Length', 'X-File-Name'],
     credentials: true,
   });
 
