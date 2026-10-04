@@ -1,10 +1,12 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Get } from '@nestjs/common';
 import { TokenModel } from './dto/token.interface';
 import { Public } from '../guard/public.decorator';
 import { AuthModel } from './dto/auth.interface';
 import { AuthService } from './auth.service';
 import { ReturnMessage } from 'src/common-interface/return-message.interface';
 import { RegisterUser } from 'src/user/dto/register-user.interface';
+import { CurrentUser } from 'src/guard/current-user.guard';
+import { Role } from 'src/user/dto/role.enum';
 
 @Controller('auth')
 export class AuthController {
@@ -33,6 +35,13 @@ export class AuthController {
     @Post('resend-verification-code')
     async createNewCodeCodeByEmail(@Body('email') email: string): Promise<ReturnMessage> {
         return await this.authService.createNewCodeCodeByEmail(email)
+    }
+
+    @Get('synch-role-token')
+    async synchTokenWithRoleByUser(
+        @CurrentUser('sub') userId: number,
+        @CurrentUser('role') role: Role): Promise<TokenModel> {
+        return await this.authService.synchTokenWithRoleByUser(userId, role);
     }
 
 }

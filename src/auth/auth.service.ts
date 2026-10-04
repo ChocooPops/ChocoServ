@@ -51,7 +51,7 @@ export class AuthService {
 
     async generateJwt(user: User) {
         const payload = { sub: user.id, email: user.email, pseudo: user.pseudo, role: user.role };
-        return this.jwtService.signAsync(payload);
+        return await this.jwtService.signAsync(payload);
     }
 
     //CODE DE VERIFICATION SendVerificationCode
@@ -233,6 +233,21 @@ export class AuthService {
             throw new UnauthorizedException(this.i18nService.t('common.AUTH.INVALID_EXPIRED_TOKEN'));
         }
         return true;
+    }
+
+    public async synchTokenWithRoleByUser(userId: number, role: Role): Promise<TokenModel> {
+        try {
+            const user: User = await this.userService.getRoleByUserId(userId);
+            if (user && role !== user.role) {
+                return {
+                    access_token: await this.generateJwt(user)
+                };
+            } else {
+                return { access_token: null }
+            }
+        } catch(error) {
+            return { access_token: null }
+        }
     }
 
 }
