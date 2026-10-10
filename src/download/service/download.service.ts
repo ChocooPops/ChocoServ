@@ -10,7 +10,6 @@ import { Response } from 'express';
 @Injectable()
 export class DownloadService {
 
-
     constructor(private readonly movieService: MovieService,
         private readonly seriesService: SeriesService
     ) { }

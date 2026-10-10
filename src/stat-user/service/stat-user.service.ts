@@ -23,10 +23,12 @@ import { MediaTypeFilter } from '../dto/media-type-filter.interface';
 import { MediaService } from 'src/media/service/media/media.service';
 import { I18nService } from 'nestjs-i18n';
 import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
+import { ProgressingStreamMedia } from '../dto/progressing-stream-media.interface';
 
 @Injectable()
 export class StatUserService {
-  private readonly minimumRate: number = 92;
+
+  private readonly MINIMUM_RATE: number = 93;
 
   constructor(
     @Inject(DATABASE_POOL) private pool: mariadb.Pool,
@@ -39,7 +41,7 @@ export class StatUserService {
     private readonly formatPathService: FormatPathService,
     private readonly i18nService: I18nService,
     private readonly userTabService: UserTabService
-  ) {}
+  ) { }
 
   public getQuerySelectMediaInProgress(): string {
     return `
@@ -93,6 +95,7 @@ export class StatUserService {
         su_inner.userId,
         su_inner.watchProgress,
         su_inner.state,
+        su_inner.createdAt,
         su_inner.updatedAt
       FROM Stat_User su_inner
         INNER JOIN (
@@ -145,13 +148,13 @@ export class StatUserService {
     userId: number,
     movieId: number,
     watchProgress: number,
-  ): Promise<void> {
+  ): Promise<ProgressingStreamMedia> {
     const conn = await this.pool.getConnection();
     try {
       await conn.beginTransaction();
 
       const newState =
-        watchProgress >= this.minimumRate
+        watchProgress >= this.MINIMUM_RATE
           ? StatState.FINISHED
           : StatState.IN_PROGRESS;
 
@@ -208,8 +211,15 @@ export class StatUserService {
       }
 
       await conn.commit();
+      
+      return {
+        mediaId: movieId,
+        stateProgress: newState,
+        watchProgress: watchProgress
+      }
     } catch (error) {
       await conn.rollback();
+      return null;
     } finally {
       await conn.release();
     }
@@ -219,13 +229,13 @@ export class StatUserService {
     userId: number,
     episodeId: number,
     watchProgress: number,
-  ): Promise<void> {
+  ): Promise<ProgressingStreamMedia> {
     const conn = await this.pool.getConnection();
     try {
       await conn.beginTransaction();
 
       const newState =
-        watchProgress >= this.minimumRate
+        watchProgress >= this.MINIMUM_RATE
           ? StatState.FINISHED
           : StatState.IN_PROGRESS;
 
@@ -281,8 +291,15 @@ export class StatUserService {
         }
       }
       await conn.commit();
+
+      return {
+        mediaId: episodeId,
+        stateProgress: newState,
+        watchProgress: watchProgress
+      }
     } catch (error) {
       await conn.rollback();
+      return null;
     } finally {
       await conn.release();
     }

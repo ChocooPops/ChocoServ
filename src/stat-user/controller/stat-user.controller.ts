@@ -1,4 +1,4 @@
-import { Controller, ParseIntPipe, Param, Query, Get } from '@nestjs/common';
+import { Controller, ParseIntPipe, Param, Query, Get, Body, Post } from '@nestjs/common';
 import { UserCategoryPreferences } from '../dto/user-category-preferences.interface';
 import { StatUserService } from '../service/stat-user.service';
 import { CurrentUser } from 'src/guard/current-user.guard';
@@ -8,11 +8,30 @@ import { PeriodType } from '../dto/period.type';
 import { ContentType } from '../dto/content.type';
 import { TopMediaResponse } from '../dto/top-media-response.interface';
 import { MediaTypeFilter } from '../dto/media-type-filter.interface';
+import { ProgressingStreamMedia } from '../dto/progressing-stream-media.interface';
 
 @Controller('stat-user')
 export class StatUserController {
 
-  constructor(private statUserService: StatUserService) {}
+  constructor(private readonly statUserService: StatUserService) {}
+
+  @Post('save-watching-progress-movie/:movieId')
+  async saveStatUserForMovie(
+    @CurrentUser('sub') userId: number,
+    @Param('movieId', ParseIntPipe) movieId: number,
+    @Body('watchProgress') watchProgress: number,
+  ): Promise<ProgressingStreamMedia> {
+    return this.statUserService.saveStatUserForMovie(userId, movieId, watchProgress);
+  }
+
+  @Post('save-watching-progress-episode/:episodeId')
+  async saveStatUserForEpisode(
+    @CurrentUser('sub') userId: number,
+    @Param('episodeId', ParseIntPipe) episodeId: number,
+    @Body('watchProgress') watchProgress: number,
+  ): Promise<ProgressingStreamMedia> {
+    return this.statUserService.saveStatUserForEpisode(userId, episodeId, watchProgress);
+  }
 
   @Get(':userId/categories/preferences')
   async getPreferredCategories(

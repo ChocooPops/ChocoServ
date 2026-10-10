@@ -233,6 +233,14 @@ export class SeriesService extends MediaService {
                     p.name AS srcPoster,
                     mlib.duration,
                     mlib.resolution,
+
+                    e.createdAt >= NOW() - INTERVAL ${this.maxDayToRecent} DAY as isRecent,
+                    
+                    su.createdAt,
+                    su.updatedAt,
+                    su.watchProgress,
+                    su.state as stateProgress,
+                    
                     CASE
                         WHEN u.role IN (?, ?) THEN mlib.bytes
                         ELSE NULL
@@ -241,8 +249,13 @@ export class SeriesService extends MediaService {
                 LEFT JOIN Poster p ON p.id = e.srcPoster
                 LEFT JOIN User u ON u.id = ?
                 LEFT JOIN media_library mlib ON mlib.id = e.mediaLibraryId
+                ${this.statUserService.getQueryJoinStatUserForEpisode()}
                 WHERE e.id = ?`;
-            const result = await conn.query(query, [Role.ADMIN, Role.FAMILY, userId, episodeId]);
+            const result = await conn.query(query, [
+                Role.ADMIN, Role.FAMILY, 
+                userId, userId, userId, userId, 
+                episodeId
+            ]);
             if (result && result.length > 0) {
                 const episode: Episode = result[0];
                 episode.srcPoster = this.formatPathService.getOneFormatedPosterUrl(episode.seriesId, this.currentMediaType, episode.srcPoster);
@@ -401,6 +414,8 @@ export class SeriesService extends MediaService {
                     e.name, 
                     e.episodeNumber,
                     e.description,
+                    e.date,
+                    p.name AS srcPoster,
                     mlib.duration,
                     mlib.resolution,
                     ${getOtherField ? `mlib.path,
@@ -408,11 +423,12 @@ export class SeriesService extends MediaService {
                                        mlib.bytes,
                                        mlib.width,
                                        mlib.height,` : ''}
-                    e.date,
-                    p.name AS srcPoster,
 
                     e.createdAt >= NOW() - INTERVAL ${this.maxDayToRecent} DAY as isRecent,
                     su.watchProgress,
+
+                    su.createdAt,
+                    su.updatedAt,
                     su.state as stateProgress,
                     
                     CASE
@@ -452,6 +468,9 @@ export class SeriesService extends MediaService {
                     isRecent: result.isRecent === 1 ? true : false,
                     watchProgress: result.watchProgress ?? 0,
                     stateProgress: result.stateProgress ?? StatState.NOT_WATCHED,
+
+                    createdAt: result.createdAt,
+                    updatedAt: result.updatedAt,
 
                     path: result.path,
                     frames: result.frames,

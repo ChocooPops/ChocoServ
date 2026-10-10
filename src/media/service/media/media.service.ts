@@ -135,21 +135,23 @@ export class MediaService {
                     ELSE m.createdAt >= NOW() - INTERVAL ${this.maxDayToRecent} DAY
                 END,
 
+                'createdAt', su2.createdAt,
+                'updatedAt', su2.updatedAt,
+
                 'watchProgress', 
                 CASE
                     WHEN m.mediaType = 'MOVIE' THEN IFNULL(su2.watchProgress, 0)
+                    ELSE NULL
+                END,
+                'stateProgress', 
+                CASE
+                    WHEN m.mediaType = 'MOVIE' THEN IFNULL(su2.state, '${StatState.NOT_WATCHED}')
                     ELSE NULL
                 END,
 
                 'lastSeasonWatched',
                 CASE
                     WHEN m.mediaType = 'SERIES' THEN lsw.seasonId
-                    ELSE NULL
-                END,
-
-                'stateProgress', 
-                CASE
-                    WHEN m.mediaType = 'MOVIE' THEN IFNULL(su2.state, '${StatState.NOT_WATCHED}')
                     ELSE NULL
                 END,
 
@@ -232,6 +234,7 @@ export class MediaService {
                     su.movieId,
                     su.watchProgress,
                     su.state,
+                    su.createdAt,
                     su.updatedAt
                 FROM Stat_User su
                 INNER JOIN (

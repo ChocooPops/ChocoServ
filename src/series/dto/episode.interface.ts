@@ -17,6 +17,9 @@ export interface Episode {
     watchProgress: number,
     stateProgress: StatState,
 
+    createdAt: Date,
+    updatedAt: Date,
+
     path?: string,
     frames?: number,
     bytes?: number,

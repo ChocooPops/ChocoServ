@@ -1,0 +1,15 @@
+{
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/uploads/**": true,
+    "**/videos/**": true,
+    "**/logs/**": true
+  },
+  "search.exclude": {
+    "**/dist": true,
+    "**/uploads": true,
+    "**/videos": true,
+    "**/logs": true
+  }
+}
