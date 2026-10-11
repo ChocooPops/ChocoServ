@@ -484,6 +484,7 @@ L'API utilise un système d'authentification robuste basé sur JWT (JSON Web Tok
 
 - **JwtAuthGuard** : Vérifie la validité du JWT (appliqué globalement)
 - **AdminUserGuard** : Vérifie que l'utilisateur a le rôle `ADMIN`
+- **FamilyUserGuard** : Vérifie que l'utilisateur a le rôle `ADMIN` ou `FAMILY` (téléchargements)
 - **Public Decorator** : Exempte une route de l'authentification JWT
 
 ### Rôles utilisateur
@@ -591,6 +592,7 @@ export class MovieService {
 | POST | `/auth/send-verification-code` | Envoi du code de vérification par email | ✅ |
 | POST | `/auth/register` | Validation du code et création du compte | ✅ |
 | POST | `/auth/resend-verification-code` | Renvoyer un code de vérification | ✅ |
+| GET | `/auth/synch-role-token` | Regénérer le token si le rôle de l'utilisateur a changé | - |
 
 **Flux d'inscription complet** :
 ```
@@ -643,6 +645,7 @@ export class MovieService {
 | GET | `/series/research/:keyWord` | Recherche de séries par mot-clé | ✅ | - |
 | GET | `/series/episodes/:idSeries/:idSeason` | Épisodes d'une saison pour l'utilisateur courant | ✅ | - |
 | GET | `/series/random-series` | Série aléatoire | ✅ | - |
+| GET | `/series/episode/:episodeId` | Détails d'un épisode pour l'utilisateur courant | ✅ | - |
 | GET | `/series/first-episode/:seriesId` | Premier épisode d'une série | ✅ | - |
 | GET | `/series/last-episode-watched/:seriesId` | Dernier épisode visionné par l'utilisateur | ✅ | - |
 | GET | `/series/watchProgress/:episodeId` | Progression de visionnage d'un épisode | ✅ | - |
@@ -657,14 +660,16 @@ export class MovieService {
 
 | Méthode | Route | Description | Auth | Admin |
 |---------|-------|-------------|------|-------|
+| GET | `/media/nodes` | Liste simplifiée (nodes) de tous les médias | ✅ | - |
 | GET | `/media/research/:keyword` | Recherche globale (films + séries) | ✅ | - |
 | GET | `/media/media-info/:mediaId` | Informations complètes d'un média | ✅ | - |
 | GET | `/media/null-poster` | Médias sans poster (maintenance) | ✅ | ✅ |
+| GET | `/media/:id` | Détails d'un média (film ou série) pour l'utilisateur courant | ✅ | - |
 | POST | `/media/catalog` | Catalogue filtré et trié (body: filtres, query: sort/pagination) | ✅ | - |
 
 **Paramètres de `/media/catalog`** :
 
-Query params : `sortFilter`, `orderDirection`, `count`, `offset`
+Query params : `sortFilter`, `orderDirection`, `count`, `offset`, `userId` (optionnel : catalogue vu par un autre utilisateur)
 
 Body : tableau de filtres `FILTERS[]`
 
@@ -774,6 +779,50 @@ Routes de streaming vidéo sécurisées avec authentification par token query.
 | GET | `/stream/stream-news/:newsId?token=xxx` | Stream d'une vidéo news | ✅ |
 
 **Note** : Ces routes sont publiques mais nécessitent un token JWT valide en query parameter.
+
+---
+
+### ⬇️ Download (`/download`)
+
+Téléchargement des fichiers vidéo. Réservé aux rôles `ADMIN` et `FAMILY` (`FamilyUserGuard`).
+
+| Méthode | Route | Description | Auth | Admin / Family |
+|---------|-------|-------------|------|----------------|
+| GET | `/download/download-movie/:movieId` | Télécharger le fichier d'un film | ✅ | ✅ |
+| GET | `/download/download-episode/:episodeId` | Télécharger le fichier d'un épisode | ✅ | ✅ |
+
+**Note** : Le rôle est vérifié à la fois dans le token et en base de données. Un token dont le rôle n'est plus à jour est refusé (voir `/auth/synch-role-token`).
+
+---
+
+### 📊 Statistiques utilisateur (`/stat-user`)
+
+Suivi de la progression de visionnage et statistiques personnelles.
+
+| Méthode | Route | Description | Auth | Admin |
+|---------|-------|-------------|------|-------|
+| POST | `/stat-user/save-watching-progress-movie/:movieId` | Enregistrer la progression sur un film (body : `watchProgress`) | ✅ | - |
+| POST | `/stat-user/save-watching-progress-episode/:episodeId` | Enregistrer la progression sur un épisode (body : `watchProgress`) | ✅ | - |
+| GET | `/stat-user/:userId/categories/preferences` | Catégories préférées | ✅ | - |
+| GET | `/stat-user/:userId/categories/preferences-weighted` | Catégories préférées (pondérées) | ✅ | - |
+| GET | `/stat-user/:userId/categories/preferences-by-time` | Catégories préférées selon le temps de visionnage | ✅ | - |
+| GET | `/stat-user/users/:userId/watch-time` | Temps de visionnage total | ✅ | - |
+| GET | `/stat-user/users/:userId/watching-history` | Historique de visionnage par période | ✅ | - |
+| GET | `/stat-user/users/:userId/top-media` | Médias les plus regardés | ✅ | - |
+
+**Paramètres** :
+- `:userId` : si `0` (ou négatif), l'utilisateur du token est utilisé
+- `preferences*` : query `limit` (défaut `10`)
+- `watching-history` : query `startDate`, `periodType` (`day` \| `week` \| `month` \| `year`, défaut `month`), `contentType` (`all` \| `movies` \| `series`, défaut `all`)
+- `top-media` : query `mediaType` (`all` \| `MOVIE` \| `SERIES`, défaut `all`)
+
+---
+
+### 📄 Documentation (`/documentation`)
+
+| Méthode | Route | Description | Auth | Admin |
+|---------|-------|-------------|------|-------|
+| GET | `/documentation` | Documentation de l'application (PDF affiché inline) | ✅ | - |
 
 ---
 
