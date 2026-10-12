@@ -1350,4 +1350,4 @@ Projet public - Aucun droit réservé
 
 **Développé avec ❤️ et 🍫 par l'équipe ChocoPlus**
 
-*API Version 2.0.0 - Mai 2026*
+*API Version 3.0.0 - Octobre 2026*
