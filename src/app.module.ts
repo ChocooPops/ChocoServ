@@ -1,4 +1,6 @@
 import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 import { APP_GUARD } from '@nestjs/core';
 import { HttpModule } from '@nestjs/axios';
 import { JwtAuthGuard } from './guard/jwt-auth.guard';
@@ -100,7 +102,10 @@ import { DownloadModule } from './download/download.module';
     DownloadModule
   ],
 
+  controllers: [AppController],
+
   providers: [
+    AppService,
     MailService,
     LoggerService,
 

@@ -13,8 +13,8 @@ export class AuthController {
 
     constructor(private readonly authService: AuthService) { }
 
-    @Post('login')
     @Public()
+    @Post('login')
     async login(@Body() body: AuthModel): Promise<TokenModel> {
         return await this.authService.signIn(body.email, body.password);
     }
