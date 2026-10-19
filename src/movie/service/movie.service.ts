@@ -47,6 +47,11 @@ export class MovieService extends MediaService {
     private getQuerySelectMovies(otherInfos: boolean, WHERE: string, ORDER: string, LIMIT: string): string {
         let SELECT: string = '';
         let JOIN: string = '';
+        if (WHERE.trim() === '') {
+            WHERE = `WHERE m.mediaType like '${this.currentMediaType}'`;
+        } else {
+            WHERE = `${WHERE} AND m.mediaType like '${this.currentMediaType}'`;
+        }
         if (otherInfos) {
             SELECT = `  'otherTitles', ot.otherTitles,
                         'categories', cat.categories,

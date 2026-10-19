@@ -52,6 +52,11 @@ export class SeriesService extends MediaService {
     private getQuerySelectSeries(otherInfos: boolean, WHERE: string, ORDER: string, LIMIT: string): string {
         let SELECT: string = '';
         let JOIN: string = '';
+        if (WHERE.trim() === '') {
+            WHERE = `WHERE m.mediaType like '${this.currentMediaType}'`;
+        } else {
+            WHERE = `${WHERE} AND m.mediaType like '${this.currentMediaType}'`;
+        }
         if (otherInfos) {
             SELECT = `'otherTitles', ot.otherTitles,
                       'categories', cat.categories,
@@ -420,7 +425,6 @@ export class SeriesService extends MediaService {
                     mlib.resolution,
                     ${getOtherField ? `mlib.path,
                                        mlib.frames,
-                                       mlib.bytes,
                                        mlib.width,
                                        mlib.height,` : ''}
 
@@ -432,7 +436,7 @@ export class SeriesService extends MediaService {
                     su.state as stateProgress,
                     
                     CASE
-                        WHEN userR.role IN (?, ?) THEN mlib.bytes
+                        WHEN userR.role IN (?, ?) OR ? THEN mlib.bytes
                         ELSE NULL
                     END as bytes
 
@@ -445,7 +449,7 @@ export class SeriesService extends MediaService {
                     WHERE e.seriesId = ? AND e.seasonId = ?
                     ORDER BY e.episodeNumber;`
             const results: any[] = await conn.query(query, [
-                    Role.ADMIN, Role.FAMILY, 
+                    Role.ADMIN, Role.FAMILY, getOtherField,
                     userId, userId, userId, userId, 
                     idSeries, 
                     idSeason
