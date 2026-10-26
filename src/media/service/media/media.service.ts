@@ -13,6 +13,9 @@ import { MediaType } from 'src/media/dto/media-type.enum';
 import { TranslationTitle } from 'src/media/dto/translation-title.interface';
 import { I18nService } from 'nestjs-i18n';
 import { SearchService } from 'src/common-service/search.service';
+import { SearchQuery } from 'src/common-interface/search-query.interface';
+import { MatchScore } from 'src/common-interface/match-score.interface';
+import { LikePatterns } from 'src/common-interface/like-patterns.interface';
 import { ISO_3166_1 } from 'src/media/dto/iso-3166-1.enum';
 import { UserTabService } from 'src/user/service/user-tab/user-tab.service';
 import { Role } from 'src/user/dto/role.enum';
@@ -21,6 +24,8 @@ import { Role } from 'src/user/dto/role.enum';
 export class MediaService {
 
     protected maxDayToRecent: number = 7;
+    protected maxSearchCandidates: number = 500;
+    protected maxSearchResults: number = 100;
     protected currentMediaType !: MediaType;
 
     constructor(@Inject(DATABASE_POOL) protected readonly pool: mariadb.Pool,
@@ -282,71 +287,53 @@ export class MediaService {
     }
 
     public async getMediaByResearch(userId: number, keyword: string, types: MediaType[]): Promise<Media[]> {
+        const search: SearchQuery = this.searchService.getSearchQuery(keyword);
+        if (search.tokens.length === 0) {
+            return [];
+        }
         const conn = await this.pool.getConnection();
         try {
-            const normalizedKeyword = this.searchService.normalizedKeyword(keyword);
-            const normalizedKeywordNoSpace = normalizedKeyword.replace(/\s+/g, '');
             const languages: ISO_3166_1[] = [ISO_3166_1.VO, ISO_3166_1.FR, ISO_3166_1.US, ISO_3166_1.GB, ISO_3166_1.IT, ISO_3166_1.ES, ISO_3166_1.DE, ISO_3166_1.JP];
-
-            const mainPrefixKeywords: string[] = [
-                normalizedKeyword,
-                ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeyword, 2),
-                ...this.searchService.replaceWithUnderscores(normalizedKeyword, 2)
-            ];
-
-            const translationPrefixKeywords: string[] = [
-                normalizedKeyword,
-                ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeyword, 1),
-                ...this.searchService.replaceWithUnderscores(normalizedKeyword, 1)
-            ];
-
-            const containsKeywords: string[] = [
-                normalizedKeyword,
-                ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeyword, 1),
-                ...this.searchService.replaceWithUnderscores(normalizedKeyword, 1)
-            ];
-
-            const containsKeywordsNoSpace: string[] = [
-                normalizedKeywordNoSpace,
-                ...this.searchService.addUnderscoresAfterEachLetterVariants(normalizedKeywordNoSpace, 1),
-                ...this.searchService.replaceWithUnderscores(normalizedKeywordNoSpace, 1)
-            ];
-
-            const mainLikeConditions = mainPrefixKeywords.map(() => `m.title LIKE ?`).join(' OR ');
-            const translationLikeConditions = translationPrefixKeywords.map(() => `t.title LIKE ?`).join(' OR ');
-            const mainContainsConditions = containsKeywords.map(() => `m.title LIKE ?`).join(' OR ');
-            const translationContainsConditions = containsKeywords.map(() => `t.title LIKE ?`).join(' OR ');
-            const mainNoSpaceConditions = containsKeywordsNoSpace.map(() => `REPLACE(m.title, ' ', '') LIKE ?`).join(' OR ');
-            const translationNoSpaceConditions = containsKeywordsNoSpace.map(() => `REPLACE(t.title, ' ', '') LIKE ?`).join(' OR ');
-
             const languageList = languages.map((lg) => `'${lg}'`).join(', ');
+
+            const likePatterns: LikePatterns = this.searchService.getLikePatterns(search);
+            // Titre dont la ponctuation devient un espace ("E.T." → "E T ") ou disparaît avec les espaces ("WALL·E" → "WALLE"), comme SearchService.normalizedText
+            const spacedTitle = (column: string): string => `REGEXP_REPLACE(${column}, '[^[:alnum:]]+', ' ')`;
+            const noSpaceTitle = (column: string): string => `REGEXP_REPLACE(${column}, '[^[:alnum:]]', '')`;
+
+            const titleConditions = (column: string): string => [
+                ...likePatterns.title.map(() => `${column} LIKE ?`),
+                ...likePatterns.spacedTitle.map(() => `${spacedTitle(column)} LIKE ?`),
+                ...likePatterns.noSpaceTitle.map(() => `${noSpaceTitle(column)} LIKE ?`)
+            ].join(' OR ');
+            const titleParams: string[] = [...likePatterns.title, ...likePatterns.spacedTitle, ...likePatterns.noSpaceTitle];
+
+            // Pré-tri (titre exact, début du titre, début d'un mot) pour que la limite ne coupe pas les meilleurs candidats
+            const titleRank = (column: string): string => `
+                CASE
+                    WHEN ${noSpaceTitle(column)} LIKE ? THEN 0
+                    WHEN ${noSpaceTitle(column)} LIKE ? THEN 1
+                    WHEN ${spacedTitle(column)} LIKE ? THEN 2
+                    ELSE 3
+                END`;
+            const rankParams: string[] = [search.noSpace, `${search.noSpace}%`, `% ${search.text}%`];
 
             const query = `
                 SELECT m.id, m.title, GROUP_CONCAT(t.title SEPARATOR '||') AS translatedTitles
                 FROM MEDIA m
                 LEFT JOIN Translation_Title t ON t.mediaId = m.id AND t.iso_639_1 IN (${languageList})
                 WHERE m.mediaType IN (${types.map(() => '?').join(',')})
-                AND (
-                    (${mainLikeConditions})
-                    OR (${mainContainsConditions})
-                    OR (${mainNoSpaceConditions})
-                    OR (${translationLikeConditions})
-                    OR (${translationContainsConditions})
-                    OR (${translationNoSpaceConditions})
-                )
+                AND ((${titleConditions('m.title')}) OR (${titleConditions('t.title')}))
                 GROUP BY m.id
-                ORDER BY m.id
-                LIMIT 100
+                ORDER BY MIN(LEAST(${titleRank('m.title')}, ${titleRank('t.title')})), CHAR_LENGTH(m.title), m.id
+                LIMIT ${this.maxSearchCandidates}
             `;
 
             const params = [
                 ...types,
-                ...mainPrefixKeywords.map((key) => `${key}%`),
-                ...containsKeywords.map((key) => `%${key}%`),
-                ...containsKeywordsNoSpace.map((key) => `%${key}%`),
-                ...translationPrefixKeywords.map((key) => `${key}%`),
-                ...containsKeywords.map((key) => `%${key}%`),
-                ...containsKeywordsNoSpace.map((key) => `%${key}%`)
+                ...titleParams,
+                ...titleParams,
+                ...rankParams, ...rankParams
             ];
 
             const candidates: { id: number; title: string; translatedTitles: string | null }[] =
@@ -356,54 +343,26 @@ export class MediaService {
                 return [];
             }
 
-            const bestScoreByMedia = new Map<number, { matchType: 0 | 1 | 2; distance: number; titleLength: number }>();
-
-            for (const candidate of candidates) {
-                const translatedTitles = candidate.translatedTitles ? candidate.translatedTitles.split('||') : [];
-                const titlesToCheck = [candidate.title, ...translatedTitles].filter(Boolean) as string[];
-
-                for (const rawTitle of titlesToCheck) {
-                    const normalizedTitle = this.searchService.normalizedKeyword(rawTitle);
-                    const normalizedTitleNoSpace = normalizedTitle.replace(/\s+/g, '');
-
-                    const comparisons = [
-                        { title: normalizedTitle, key: normalizedKeyword },
-                        { title: normalizedTitleNoSpace, key: normalizedKeywordNoSpace }
-                    ];
-
-                    for (const { title, key } of comparisons) {
-                        let matchType: 0 | 1 | 2;
-                        if (title.startsWith(key)) {
-                            matchType = 0;
-                        } else if (title.includes(key)) {
-                            matchType = 1;
-                        } else {
-                            matchType = 2;
-                        }
-
-                        const distance = this.searchService.levenshtein(key, title);
-                        const current = bestScoreByMedia.get(candidate.id);
-
-                        const isBetter =
-                            !current ||
-                            matchType < current.matchType ||
-                            (matchType === current.matchType && distance < current.distance) ||
-                            (matchType === current.matchType && distance === current.distance && title.length < current.titleLength);
-
-                        if (isBetter) {
-                            bestScoreByMedia.set(candidate.id, { matchType, distance, titleLength: title.length });
-                        }
-                    }
-                }
-            }
-
-            const orderedIds = Array.from(bestScoreByMedia.entries())
-                .sort(([, a], [, b]) => {
-                    if (a.matchType !== b.matchType) return a.matchType - b.matchType;
-                    if (a.distance !== b.distance) return a.distance - b.distance;
-                    return a.titleLength - b.titleLength;
+            // Meilleur score parmi le titre principal et ses traductions
+            const scoredMedia = candidates
+                .map((candidate) => {
+                    const translatedTitles = candidate.translatedTitles ? candidate.translatedTitles.split('||') : [];
+                    const score: MatchScore = [candidate.title, ...translatedTitles]
+                        .map((title, index) => this.searchService.getMatchScore(search, title, index > 0))
+                        .sort((a, b) => this.searchService.compareMatchScore(a, b))[0];
+                    return { id: candidate.id, score };
                 })
-                .map(([id]) => id);
+                .sort((a, b) => this.searchService.compareMatchScore(a.score, b.score) || a.id - b.id);
+
+            const bestScore: MatchScore = scoredMedia[0].score;
+            const orderedIds: number[] = scoredMedia
+                .filter(({ score }) => this.searchService.isRelevant(score, bestScore))
+                .slice(0, this.maxSearchResults)
+                .map(({ id }) => id);
+
+            if (orderedIds.length === 0) {
+                return [];
+            }
 
             const media: Media[] = await conn.query(
                 this.getQuerySelectMedia(
